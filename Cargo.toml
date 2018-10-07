@@ -1,0 +1,9 @@
+[package]
+authors = ["Nick Fitzgerald <fitzgen@gmail.com>"]
+edition = "2018"
+name = "walrus"
+version = "0.1.0"
+
+[dependencies]
+failure = "0.1.2"
+parity-wasm = "0.34.0"

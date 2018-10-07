@@ -31,8 +31,8 @@ pub enum Expr {
     Select(ExprId, ExprId),
     Unreachable,
     Phi,
-    BrIf(ExprId),
-    BrTable(ExprId),
+    BrIf(ExprId, BlockId),
+    BrTable(ExprId, Box<[BlockId]>, BlockId),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -255,17 +255,18 @@ fn validate_opcode(
             pop_operands(operands, controls, &expected)?;
         }
         Instruction::BrIf(n) => {
-            if controls.len() < *n as usize {
+            let n = *n as usize;
+            if controls.len() < n {
                 return Err(ErrorKind::InvalidWasm
                     .context("attempt to branch to out-of-bounds block")
                     .into());
             }
 
+            let block = controls[controls.len() - n].block;
             let (_, c) = pop_operand_expected(operands, controls, Some(ValType::I32))?;
-            // TODO: represent where we are branching to.
-            let expr = func.exprs.alloc(Expr::BrIf(c));
+            let expr = func.exprs.alloc(Expr::BrIf(c, block));
 
-            let expected = controls[controls.len() - *n as usize].label_types.clone();
+            let expected = controls[controls.len() - n].label_types.clone();
             pop_operands(operands, controls, &expected)?;
             push_operands(operands, &expected, expr);
         }
@@ -277,13 +278,17 @@ fn validate_opcode(
                     )
                     .into());
             }
-            for n in table.table.iter().cloned() {
-                if controls.len() < n as usize {
+            let default_block = controls[controls.len() - table.default as usize].block;
+
+            let mut blocks = Vec::with_capacity(table.table.len());
+            for n in table.table.iter() {
+                let n = *n as usize;
+                if controls.len() < n {
                     return Err(ErrorKind::InvalidWasm
                         .context("attempt to jump to an out-of-bounds block from a table entry")
                         .into());
                 }
-                if controls[controls.len() - n as usize].label_types
+                if controls[controls.len() - n].label_types
                     != controls[controls.len() - table.default as usize].label_types
                 {
                     return Err(ErrorKind::InvalidWasm
@@ -292,11 +297,12 @@ fn validate_opcode(
                         )
                         .into());
                 }
+                blocks.push(controls[controls.len() - n].block);
             }
+            let blocks = blocks.into_boxed_slice();
 
             let (_, b) = pop_operand_expected(operands, controls, Some(ValType::I32))?;
-            // TODO: represent where we can branch to.
-            let expr = func.exprs.alloc(Expr::BrTable(b));
+            let expr = func.exprs.alloc(Expr::BrTable(b, blocks, default_block));
 
             let expected = controls[controls.len() - table.default as usize]
                 .label_types

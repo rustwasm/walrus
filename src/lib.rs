@@ -13,18 +13,17 @@ use std::fmt;
 
 pub type Result<T> = ::std::result::Result<T, failure::Error>;
 
-
-
 pub struct Function {
     exprs: Arena<Expr>,
     blocks: Arena<Block>,
 }
 
-pub struct Block {
-    exprs: Vec<Id<Expr>>,
-}
-
 pub type ExprId = Id<Expr>;
+pub type BlockId = Id<Block>;
+
+pub struct Block {
+    exprs: Vec<ExprId>,
+}
 
 pub enum Expr {
     I32Const(i32),
@@ -89,6 +88,7 @@ pub struct ControlFrame {
     // If `Some`, then this frame is unreachable, and the expression that makes
     // it unreachable is given.
     unreachable: Option<ExprId>,
+    block: BlockId,
 }
 
 pub type OperandStack = Vec<(Option<ValType>, ExprId)>;
@@ -154,16 +154,19 @@ fn pop_operands(
 }
 
 fn push_control(
+    func: &mut Function,
     controls: &mut ControlStack,
     operands: &OperandStack,
     label_types: Vec<ValType>,
     end_types: Vec<ValType>,
 ) {
+    let block = func.blocks.alloc(Block { exprs: vec![] });
     let frame = ControlFrame {
         label_types,
         end_types,
         height: operands.len(),
         unreachable: None,
+        block,
     };
     controls.push(frame);
 }
@@ -226,16 +229,16 @@ fn validate_opcode(
         }
         Instruction::Block(block_ty) => {
             let t = ValType::from_block_ty(block_ty);
-            push_control(controls, operands, t.clone(), t);
+            push_control(func, controls, operands, t.clone(), t);
         }
         Instruction::Loop(block_ty) => {
             let t = ValType::from_block_ty(block_ty);
-            push_control(controls, operands, vec![], t);
+            push_control(func, controls, operands, vec![], t);
         }
         Instruction::If(block_ty) => {
             pop_operand_expected(operands, controls, Some(ValType::I32))?;
             let t = ValType::from_block_ty(block_ty);
-            push_control(controls, operands, t.clone(), t);
+            push_control(func, controls, operands, t.clone(), t);
         }
         Instruction::Else | Instruction::End => {
             let expr = func.exprs.alloc(Expr::Phi);

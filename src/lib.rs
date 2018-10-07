@@ -182,6 +182,9 @@ fn validate_opcode(
     opcode: &Instruction,
 ) -> Result<()> {
     match opcode {
+        Instruction::I32Const(n) => {
+            push_operand(operands, Some(ValType::I32));
+        }
         Instruction::I32Add => {
             pop_operand_expected(operands, controls, Some(ValType::I32))?;
             pop_operand_expected(operands, controls, Some(ValType::I32))?;

@@ -1,0 +1,13 @@
+[package]
+name = "walrus-tests"
+version = "0.1.0"
+authors = ["Nick Fitzgerald <fitzgen@gmail.com>"]
+edition = "2018"
+
+[build-dependencies]
+walkdir = "2.2.5"
+
+[dev-dependencies]
+failure = "0.1.2"
+parity-wasm = "0.34.0"
+walrus = { path = ".." }

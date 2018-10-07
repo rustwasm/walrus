@@ -311,14 +311,14 @@ fn validate_opcode(
             unreachable(operands, controls, expr);
         }
 
-        _ => unimplemented!(),
+        op => unimplemented!("Have not implemented support for opcode yet: {:?}", op),
     }
 
     Ok(())
 }
 
 impl Function {
-    pub fn new(ty: elements::FunctionType, body: elements::FuncBody) -> Result<Function> {
+    pub fn new(ty: &elements::FunctionType, body: &elements::FuncBody) -> Result<Function> {
         // TODO: context and locals and all that.
         let mut func = Function {
             blocks: Arena::new(),

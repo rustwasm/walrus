@@ -119,6 +119,15 @@ impl<'a> FunctionContext<'a> {
         let idx = self.controls.len() - n - 1;
         &mut self.controls[idx]
     }
+
+    pub fn add_to_block(&mut self, control_frame: usize, expr: ExprId) {
+        let block = self.control(control_frame).block;
+        self.func.blocks.get_mut(block).unwrap().exprs.push(expr);
+    }
+
+    pub fn add_to_current_block(&mut self, expr: ExprId) {
+        self.add_to_block(0, expr);
+    }
 }
 
 fn impl_push_operand(operands: &mut OperandStack, op: Option<ValType>, expr: ExprId) {

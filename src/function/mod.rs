@@ -83,6 +83,7 @@ fn validate_opcode(ctx: &mut FunctionContext, opcode: &Instruction) -> Result<()
         Instruction::Drop => {
             let (_, e) = ctx.pop_operand()?;
             let expr = ctx.func.exprs.alloc(Expr::Drop(e));
+            ctx.add_to_current_block(expr);
         }
         Instruction::Select => {
             ctx.pop_operand_expected(Some(ValType::I32))?;
@@ -94,6 +95,7 @@ fn validate_opcode(ctx: &mut FunctionContext, opcode: &Instruction) -> Result<()
         Instruction::Unreachable => {
             let expr = ctx.func.exprs.alloc(Expr::Unreachable);
             ctx.unreachable(expr);
+            ctx.add_to_current_block(expr);
         }
         Instruction::Block(block_ty) => {
             let t = ValType::from_block_ty(block_ty);
@@ -127,11 +129,12 @@ fn validate_opcode(ctx: &mut FunctionContext, opcode: &Instruction) -> Result<()
                     ErrorKind::InvalidWasm.context("`else` that was not preceded by an `if`")
                 })?;
             let alternative = ctx.push_control(results.clone(), results);
-            ctx.func.exprs.alloc(Expr::IfElse {
+            let expr = ctx.func.exprs.alloc(Expr::IfElse {
                 condition,
                 consequent,
                 alternative,
             });
+            ctx.add_to_block(1, expr);
         }
         Instruction::Br(n) => {
             let n = *n as usize;
@@ -143,7 +146,8 @@ fn validate_opcode(ctx: &mut FunctionContext, opcode: &Instruction) -> Result<()
             let expected = ctx.control(n).label_types.clone();
             let args = ctx.pop_operands(&expected)?.into_boxed_slice();
             let block = ctx.control(n).block;
-            ctx.func.exprs.alloc(Expr::Br { block, args });
+            let expr = ctx.func.exprs.alloc(Expr::Br { block, args });
+            ctx.add_to_current_block(expr);
         }
         Instruction::BrIf(n) => {
             let n = *n as usize;
@@ -210,6 +214,7 @@ fn validate_opcode(ctx: &mut FunctionContext, opcode: &Instruction) -> Result<()
             });
 
             ctx.unreachable(expr);
+            ctx.add_to_current_block(expr);
         }
 
         op => unimplemented!("Have not implemented support for opcode yet: {:?}", op),

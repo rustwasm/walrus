@@ -104,7 +104,11 @@ impl<'a> FunctionContext<'a> {
     }
 
     pub fn pop_control(&mut self) -> Result<Vec<ValType>> {
-        impl_pop_control(&mut self.controls, &mut self.operands)
+        let (results, block, exprs) = impl_pop_control(&mut self.controls, &mut self.operands)?;
+        for e in exprs {
+            self.add_to_block(block, e);
+        }
+        Ok(results)
     }
 
     pub fn unreachable(&mut self, expr: ExprId) {
@@ -121,13 +125,17 @@ impl<'a> FunctionContext<'a> {
         &mut self.controls[idx]
     }
 
-    pub fn add_to_block(&mut self, control_frame: usize, expr: ExprId) {
-        let block = self.control(control_frame).block;
+    pub fn add_to_block(&mut self, block: BlockId, expr: ExprId) {
         self.func.blocks.get_mut(block).unwrap().exprs.push(expr);
     }
 
-    pub fn add_to_current_block(&mut self, expr: ExprId) {
-        self.add_to_block(0, expr);
+    pub fn add_to_frame_block(&mut self, control_frame: usize, expr: ExprId) {
+        let block = self.control(control_frame).block;
+        self.add_to_block(block, expr);
+    }
+
+    pub fn add_to_current_frame_block(&mut self, expr: ExprId) {
+        self.add_to_frame_block(0, expr);
     }
 }
 
@@ -215,11 +223,11 @@ fn impl_push_control(
 fn impl_pop_control(
     controls: &mut ControlStack,
     operands: &mut OperandStack,
-) -> Result<Vec<ValType>> {
+) -> Result<(Vec<ValType>, BlockId, Vec<ExprId>)> {
     let frame = controls.last().ok_or_else(|| {
         ErrorKind::InvalidWasm.context("attempted to pop a frame from an empty control stack")
     })?;
-    impl_pop_operands(operands, controls, &frame.end_types)?;
+    let exprs = impl_pop_operands(operands, controls, &frame.end_types)?;
     if operands.len() != frame.height {
         return Err(ErrorKind::InvalidWasm
             .context(format!(
@@ -231,7 +239,7 @@ fn impl_pop_control(
             .into());
     }
     let frame = controls.pop().unwrap();
-    Ok(frame.end_types)
+    Ok((frame.end_types, frame.block, exprs))
 }
 
 fn impl_unreachable(operands: &mut OperandStack, controls: &mut ControlStack, expr: ExprId) {

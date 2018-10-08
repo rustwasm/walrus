@@ -100,19 +100,23 @@ fn validate_opcode(ctx: &mut FunctionContext, opcode: &Instruction) -> Result<()
         Instruction::Drop => {
             let (_, e) = ctx.pop_operand()?;
             let expr = ctx.func.exprs.alloc(Expr::Drop(e));
-            ctx.add_to_current_block(expr);
+            ctx.add_to_current_frame_block(expr);
         }
         Instruction::Select => {
             let (_, condition) = ctx.pop_operand_expected(Some(ValType::I32))?;
             let (t1, consequent) = ctx.pop_operand()?;
             let (t2, alternative) = ctx.pop_operand_expected(t1)?;
-            let expr = ctx.func.exprs.alloc(Expr::Select { condition, consequent, alternative });
+            let expr = ctx.func.exprs.alloc(Expr::Select {
+                condition,
+                consequent,
+                alternative,
+            });
             ctx.push_operand(t2, expr);
         }
         Instruction::Unreachable => {
             let expr = ctx.func.exprs.alloc(Expr::Unreachable);
             ctx.unreachable(expr);
-            ctx.add_to_current_block(expr);
+            ctx.add_to_current_frame_block(expr);
         }
         Instruction::Block(block_ty) => {
             let t = ValType::from_block_ty(block_ty);
@@ -151,7 +155,7 @@ fn validate_opcode(ctx: &mut FunctionContext, opcode: &Instruction) -> Result<()
                 consequent,
                 alternative,
             });
-            ctx.add_to_block(1, expr);
+            ctx.add_to_frame_block(1, expr);
         }
         Instruction::Br(n) => {
             let n = *n as usize;
@@ -164,7 +168,7 @@ fn validate_opcode(ctx: &mut FunctionContext, opcode: &Instruction) -> Result<()
             let args = ctx.pop_operands(&expected)?.into_boxed_slice();
             let block = ctx.control(n).block;
             let expr = ctx.func.exprs.alloc(Expr::Br { block, args });
-            ctx.add_to_current_block(expr);
+            ctx.add_to_current_frame_block(expr);
         }
         Instruction::BrIf(n) => {
             let n = *n as usize;
@@ -231,7 +235,7 @@ fn validate_opcode(ctx: &mut FunctionContext, opcode: &Instruction) -> Result<()
             });
 
             ctx.unreachable(expr);
-            ctx.add_to_current_block(expr);
+            ctx.add_to_current_frame_block(expr);
         }
 
         op => unimplemented!("Have not implemented support for opcode yet: {:?}", op),

@@ -210,10 +210,7 @@ impl<'a> Dot for (ExprId, &'a Expr) {
                 edge(&mut edges, &self.0, condition, "condition");
                 edge(&mut edges, &self.0, consequent, "consequent");
                 edge(&mut edges, &self.0, alternative, "alternative");
-                write!(out, "if_else ")?;
-                consequent.dot(out)?;
-                write!(out, " ")?;
-                alternative.dot(out)?;
+                write!(out, "if_else")?;
             }
             Expr::BrTable {
                 which,
@@ -222,22 +219,14 @@ impl<'a> Dot for (ExprId, &'a Expr) {
                 args,
             } => {
                 edge(&mut edges, &self.0, which, "which");
-                for block in blocks.iter() {
-                    edge(&mut edges, &self.0, block, "block");
+                for (idx, block) in blocks.iter().enumerate() {
+                    edge(&mut edges, &self.0, block, &format!("block {}", idx));
                 }
                 edge(&mut edges, &self.0, default, "default");
                 for arg in args.iter() {
                     edge(&mut edges, &self.0, arg, "arg");
                 }
-                write!(out, "br_table [")?;
-                for (idx, block) in blocks.iter().enumerate() {
-                    if idx != 0 {
-                        write!(out, " ")?;
-                    }
-                    block.dot(out)?;
-                }
-                write!(out, "] ")?;
-                default.dot(out)?;
+                write!(out, "br_table")?;
             }
             Expr::Loop(block) => {
                 edge(&mut edges, &self.0, block, "block");

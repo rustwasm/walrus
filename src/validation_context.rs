@@ -142,11 +142,54 @@ impl<'a> ValidationContext<'a> {
         })
     }
 
+    /// TODO
+    pub fn for_block(&self, label: elements::BlockType) -> ValidationContext {
+        ValidationContext {
+            labels: ChunkList::with_head_and_tail(vec![label], &self.labels),
+            ..self.nested()
+        }
+    }
+
+    /// TODO
+    pub fn for_loop(&self) -> ValidationContext {
+        ValidationContext {
+            labels: ChunkList::with_head_and_tail(
+                vec![elements::BlockType::NoResult],
+                &self.labels,
+            ),
+            ..self.nested()
+        }
+    }
+
+    /// TODO
+    pub fn for_if_else(&self, label: elements::BlockType) -> ValidationContext {
+        ValidationContext {
+            labels: ChunkList::with_head_and_tail(vec![label], &self.labels),
+            ..self.nested()
+        }
+    }
+
     /// Get the type of the n^th local.
     pub fn local(&self, n: u32) -> Result<ValType> {
         self.locals
             .get(n as usize)
             .map(ValType::from)
+            .ok_or_else(|| {
+                ErrorKind::InvalidWasm
+                    .context(format!(
+                        "local {} is out of bounds ({} locals)",
+                        n,
+                        self.locals.len()
+                    ))
+                    .into()
+            })
+    }
+
+    /// Get the type of the n^th local.
+    pub fn label(&self, n: u32) -> Result<elements::BlockType> {
+        self.labels
+            .get(n as usize)
+            .cloned()
             .ok_or_else(|| {
                 ErrorKind::InvalidWasm
                     .context(format!(

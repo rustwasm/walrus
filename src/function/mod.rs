@@ -46,7 +46,9 @@ impl Function {
             exprs: Arena::new(),
         };
 
-        let mut ctx = FunctionContext::new(&mut func, &validation);
+        let operands = &mut context::OperandStack::new();
+        let controls = &mut context::ControlStack::new();
+        let mut ctx = FunctionContext::new(&mut func, &validation, operands, controls);
 
         let params: Vec<_> = ty.params().iter().map(ValType::from).collect();
         let result: Vec<_> = ty
@@ -57,10 +59,7 @@ impl Function {
             .collect();
 
         ctx.push_control("function entry", params, result);
-
-        for op in body.code().elements() {
-            validate_opcode(&mut ctx, op)?;
-        }
+        validate_expression(&mut ctx, body.code().elements())?;
 
         // Assert that every block ends in some sort of jump, branch, or return.
         if cfg!(debug_assertions) {
@@ -92,6 +91,13 @@ impl Dot for Function {
     }
 }
 
+macro_rules! const_ {
+    ($ctx:ident, $op:ident, $ty:ident, $val:expr) => {
+        let expr = $ctx.func.exprs.alloc(Expr::$op($val));
+        $ctx.push_operand(Some(ValType::$ty), expr);
+    };
+}
+
 macro_rules! binop {
     ($ctx:ident, $op:ident, $ty:ident) => {
         let (_, e1) = $ctx.pop_operand_expected(Some(ValType::$ty))?;
@@ -117,8 +123,66 @@ macro_rules! testop {
     };
 }
 
-fn validate_opcode(ctx: &mut FunctionContext, opcode: &Instruction) -> Result<()> {
-    match opcode {
+fn validate_instruction_sequence<'a>(
+    ctx: &mut FunctionContext,
+    insts: &[Instruction],
+) -> Result<()> {
+    let mut insts = insts;
+    while !insts.is_empty() {
+        insts = validate_instruction(ctx, insts)?;
+    }
+    Ok(())
+}
+
+fn validate_expression(ctx: &mut FunctionContext, expr: &[Instruction]) -> Result<()> {
+    if expr.last() != Some(&Instruction::End) {
+        return Err(ErrorKind::InvalidWasm
+            .context("expression without its final `end`")
+            .into());
+    }
+
+    let len = expr.len();
+    validate_instruction_sequence(ctx, &expr[..len - 1])?;
+    validate_end(ctx, expr.last().unwrap())
+}
+
+fn validate_end(ctx: &mut FunctionContext, opcode: &Instruction) -> Result<()> {
+    debug_assert_eq!(opcode, &Instruction::End);
+    let results = ctx.pop_control()?;
+    let phis: Vec<_> = results
+        .iter()
+        .map(|_| ctx.func.exprs.alloc(Expr::Phi))
+        .collect();
+    ctx.push_operands(&results, &phis);
+    Ok(())
+}
+
+#[inline]
+fn get_index(insts: &[Instruction], at: Instruction) -> Result<usize> {
+    insts.iter().position(|i| i == &at).ok_or_else(|| {
+        ErrorKind::InvalidWasm
+            .context(format!("expected `{}` instruction, but it was missing", at))
+            .into()
+    })
+}
+
+#[inline]
+fn split_inst_seq(
+    insts: &[Instruction],
+    at: Instruction,
+) -> Result<(&[Instruction], &[Instruction])> {
+    let idx = get_index(insts, at)?;
+    let (seq, rest) = insts.split_at(idx);
+    Ok((seq, &rest[1..]))
+}
+
+fn validate_instruction<'a>(
+    ctx: &mut FunctionContext,
+    insts: &'a [Instruction],
+) -> Result<&'a [Instruction]> {
+    assert!(!insts.is_empty());
+    eprintln!("FITZGEN: validate_instruction: {:#?}", insts);
+    match &insts[0] {
         Instruction::GetLocal(n) => {
             let ty = ctx.validation.local(*n).context("invalid get_local")?;
             let expr = ctx.func.exprs.alloc(Expr::GetLocal { ty, local: *n });
@@ -135,8 +199,7 @@ fn validate_opcode(ctx: &mut FunctionContext, opcode: &Instruction) -> Result<()
             ctx.add_to_current_frame_block(expr);
         }
         Instruction::I32Const(n) => {
-            let expr = ctx.func.exprs.alloc(Expr::I32Const(*n));
-            ctx.push_operand(Some(ValType::I32), expr);
+            const_!(ctx, I32Const, I32, *n);
         }
         Instruction::I32Add => {
             binop!(ctx, I32Add, I32);
@@ -172,8 +235,14 @@ fn validate_opcode(ctx: &mut FunctionContext, opcode: &Instruction) -> Result<()
             ctx.add_to_current_frame_block(expr);
         }
         Instruction::Block(block_ty) => {
-            let t = ValType::from_block_ty(block_ty);
-            let block = ctx.push_control("block", t.clone(), t.clone());
+            let validation = ctx.validation.for_block(*block_ty);
+            let mut ctx = ctx.nested(&validation);
+
+            let (seq, rest) = split_inst_seq(&insts[1..], Instruction::End)
+                .context("`block` without matching `end`")?;
+
+            let params = ValType::from_block_ty(block_ty);
+            let block = ctx.push_control("block", params.clone(), params.clone());
             let expr = ctx.func.exprs.alloc(Expr::Br {
                 block,
                 args: vec![].into_boxed_slice(),
@@ -182,12 +251,21 @@ fn validate_opcode(ctx: &mut FunctionContext, opcode: &Instruction) -> Result<()
 
             let continuation = ctx.func.blocks.alloc(Block::new(
                 "block continuation",
-                t.clone().into_boxed_slice(),
-                t.into_boxed_slice(),
+                params.clone().into_boxed_slice(),
+                params.into_boxed_slice(),
             ));
             ctx.control_mut(1).continuation = Some(continuation);
+
+            validate_instruction_sequence(&mut ctx, seq)?;
+            return Ok(rest);
         }
         Instruction::Loop(block_ty) => {
+            let validation = ctx.validation.for_loop();
+            let mut ctx = ctx.nested(&validation);
+
+            let (seq, rest) = split_inst_seq(&insts[..], Instruction::End)
+                .context("`loop` without matching `end`")?;
+
             let t = ValType::from_block_ty(block_ty);
             let block = ctx.push_control("loop", vec![], t.clone());
 
@@ -200,8 +278,19 @@ fn validate_opcode(ctx: &mut FunctionContext, opcode: &Instruction) -> Result<()
                 t.into_boxed_slice(),
             ));
             ctx.control_mut(1).continuation = Some(continuation);
+
+            validate_instruction_sequence(&mut ctx, seq)?;
+            return Ok(rest);
         }
         Instruction::If(block_ty) => {
+            let validation = ctx.validation.for_if_else(*block_ty);
+            let mut ctx = ctx.nested(&validation);
+
+            let (consequent_insts, rest) = split_inst_seq(&insts[1..], Instruction::Else)
+                .context("`if` without a matching `else`")?;
+            let (alternative_insts, rest_rest) = split_inst_seq(rest, Instruction::End)
+                .context("`else` without a matching `end`")?;
+
             let (_, condition) = ctx.pop_operand_expected(Some(ValType::I32))?;
             let ty = ValType::from_block_ty(block_ty);
             let consequent = ctx.push_control("consequent", ty.clone(), ty.clone());
@@ -212,16 +301,9 @@ fn validate_opcode(ctx: &mut FunctionContext, opcode: &Instruction) -> Result<()
                 ty.into_boxed_slice(),
             ));
             ctx.control_mut(1).continuation = Some(continuation);
-        }
-        Instruction::End => {
-            let results = ctx.pop_control()?;
-            let phis: Vec<_> = results
-                .iter()
-                .map(|_| ctx.func.exprs.alloc(Expr::Phi))
-                .collect();
-            ctx.push_operands(&results, &phis);
-        }
-        Instruction::Else => {
+
+            validate_instruction_sequence(&mut ctx, consequent_insts)?;
+
             let entry_block = ctx.control(1).block;
             let results = ctx.pop_control()?;
             let (condition, consequent) = ctx
@@ -240,8 +322,24 @@ fn validate_opcode(ctx: &mut FunctionContext, opcode: &Instruction) -> Result<()
                 alternative,
             });
             ctx.add_to_block(entry_block, expr);
+
+            validate_instruction_sequence(&mut ctx, alternative_insts)?;
+
+            return Ok(rest_rest);
+        }
+        op @ Instruction::End => {
+            validate_end(ctx, op)?;
+        }
+        Instruction::Else => {
+            return Err(ErrorKind::InvalidWasm
+                .context("`else` without a leading `if`")
+                .into());
         }
         Instruction::Br(n) => {
+            ctx.validation
+                .label(*n)
+                .context("`br` to out-of-bounds block")?;
+
             let n = *n as usize;
             if ctx.controls.len() < n {
                 return Err(ErrorKind::InvalidWasm
@@ -252,9 +350,14 @@ fn validate_opcode(ctx: &mut FunctionContext, opcode: &Instruction) -> Result<()
             let args = ctx.pop_operands(&expected)?.into_boxed_slice();
             let block = ctx.control(n).block;
             let expr = ctx.func.exprs.alloc(Expr::Br { block, args });
+            ctx.unreachable(expr);
             ctx.add_to_current_frame_block(expr);
         }
         Instruction::BrIf(n) => {
+            ctx.validation
+                .label(*n)
+                .context("`br_if` to out-of-bounds block")?;
+
             let n = *n as usize;
             if ctx.controls.len() < n {
                 return Err(ErrorKind::InvalidWasm
@@ -275,6 +378,9 @@ fn validate_opcode(ctx: &mut FunctionContext, opcode: &Instruction) -> Result<()
             ctx.push_operands(&expected, &exprs);
         }
         Instruction::BrTable(table) => {
+            ctx.validation
+                .label(table.default)
+                .context("`br_table` with out-of-bounds default block")?;
             if ctx.controls.len() < table.default as usize {
                 return Err(ErrorKind::InvalidWasm
                     .context(
@@ -286,6 +392,9 @@ fn validate_opcode(ctx: &mut FunctionContext, opcode: &Instruction) -> Result<()
 
             let mut blocks = Vec::with_capacity(table.table.len());
             for n in table.table.iter() {
+                ctx.validation
+                    .label(*n)
+                    .context("`br_table` with out-of-bounds block")?;
                 let n = *n as usize;
                 if ctx.controls.len() < n {
                     return Err(ErrorKind::InvalidWasm
@@ -326,5 +435,5 @@ fn validate_opcode(ctx: &mut FunctionContext, opcode: &Instruction) -> Result<()
         op => unimplemented!("Have not implemented support for opcode yet: {:?}", op),
     }
 
-    Ok(())
+    Ok(&insts[1..])
 }

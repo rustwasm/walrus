@@ -30,6 +30,14 @@ impl<'a, T: 'a> ChunkList<'a, T> {
         }
     }
 
+    /// Construct a new chunk list with the given head elements and tail elements.
+    pub fn with_head_and_tail(head: Vec<T>, tail: &'a ChunkList<'a, T>) -> ChunkList<'a, T> {
+        ChunkList {
+            head,
+            tail: Some(tail),
+        }
+    }
+
     /// Get a reference to the idx^th item in this chunk list.
     pub fn get(&self, mut idx: usize) -> Option<&T> {
         let mut chunk = self;

@@ -53,10 +53,10 @@ pub struct FunctionContext<'a> {
     pub validation: &'a ValidationContext<'a>,
 
     /// The operands stack.
-    pub operands: OperandStack,
+    pub operands: &'a mut OperandStack,
 
     /// The control frames stack.
-    pub controls: ControlStack,
+    pub controls: &'a mut ControlStack,
 }
 
 impl<'a> FunctionContext<'a> {
@@ -64,12 +64,23 @@ impl<'a> FunctionContext<'a> {
     pub fn new(
         func: &'a mut Function,
         validation: &'a ValidationContext<'a>,
+        operands: &'a mut OperandStack,
+        controls: &'a mut ControlStack,
     ) -> FunctionContext<'a> {
         FunctionContext {
             func,
             validation,
-            operands: OperandStack::new(),
-            controls: ControlStack::new(),
+            operands,
+            controls,
+        }
+    }
+
+    pub fn nested<'b>(&'b mut self, validation: &'b ValidationContext<'b>) -> FunctionContext<'b> {
+        FunctionContext {
+            func: self.func,
+            validation,
+            operands: self.operands,
+            controls: self.controls,
         }
     }
 

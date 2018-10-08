@@ -4,6 +4,8 @@ use super::chunk_list::ChunkList;
 use super::error::{ErrorKind, Result};
 use failure::{Fail, ResultExt};
 use parity_wasm::elements;
+use std::u16;
+use std::u32;
 
 /// Wasm validation context.
 ///
@@ -141,7 +143,7 @@ impl<'a> ValidationContext<'a> {
 }
 
 fn validate_table(t: &elements::TableType) -> Result<()> {
-    validate_limits(t.limits(), 2_u32.pow(32)).context("when validating a table")?;
+    validate_limits(t.limits(), u32::MAX).context("when validating a table")?;
 
     // Ensure that the table element type is `anyfunc`. This does
     // nothing, but if new wasm versions and future parity-wasm releases
@@ -161,7 +163,7 @@ fn validate_limits(l: &elements::ResizableLimits, k: u32) -> Result<()> {
             ))
             .into()),
         (min, _) => {
-            if min < k {
+            if min <= k {
                 Ok(())
             } else {
                 Err(ErrorKind::InvalidWasm
@@ -173,6 +175,6 @@ fn validate_limits(l: &elements::ResizableLimits, k: u32) -> Result<()> {
 }
 
 fn validate_memory(m: &elements::MemoryType) -> Result<()> {
-    validate_limits(m.limits(), 2_u32.pow(16)).context("when validating a memory")?;
+    validate_limits(m.limits(), u16::MAX as u32).context("when validating a memory")?;
     Ok(())
 }

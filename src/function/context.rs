@@ -84,7 +84,7 @@ impl<'a> FunctionContext<'a> {
         impl_push_operands(&mut self.operands, types, expr)
     }
 
-    pub fn pop_operands(&mut self, expected: &[ValType]) -> Result<()> {
+    pub fn pop_operands(&mut self, expected: &[ValType]) -> Result<Vec<ExprId>> {
         impl_pop_operands(&mut self.operands, &self.controls, expected)
     }
 
@@ -159,11 +159,13 @@ fn impl_pop_operands(
     operands: &mut OperandStack,
     controls: &ControlStack,
     expected: &[ValType],
-) -> Result<()> {
+) -> Result<Vec<ExprId>> {
+    let mut popped = vec![];
     for ty in expected.iter().cloned().rev() {
-        impl_pop_operand_expected(operands, controls, Some(ty))?;
+        let (_, e) = impl_pop_operand_expected(operands, controls, Some(ty))?;
+        popped.push(e);
     }
-    Ok(())
+    Ok(popped)
 }
 
 fn impl_push_control(

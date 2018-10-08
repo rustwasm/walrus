@@ -66,9 +66,9 @@ impl Function {
 fn validate_opcode(ctx: &mut FunctionContext, opcode: &Instruction) -> Result<()> {
     match opcode {
         Instruction::GetLocal(n) => {
-            let t = ctx.validation.local(*n).context("invalid get_local")?;
-            let expr = ctx.func.exprs.alloc(Expr::GetLocal(t, *n));
-            ctx.push_operand(Some(t), expr);
+            let ty = ctx.validation.local(*n).context("invalid get_local")?;
+            let expr = ctx.func.exprs.alloc(Expr::GetLocal { ty, local: *n });
+            ctx.push_operand(Some(ty), expr);
         }
         Instruction::I32Const(n) => {
             let expr = ctx.func.exprs.alloc(Expr::I32Const(*n));
@@ -124,7 +124,9 @@ fn validate_opcode(ctx: &mut FunctionContext, opcode: &Instruction) -> Result<()
                     .into());
             }
             let expected = ctx.controls[ctx.controls.len() - n].label_types.clone();
-            ctx.pop_operands(&expected)?;
+            let args = ctx.pop_operands(&expected)?.into_boxed_slice();
+            let block = ctx.controls[ctx.controls.len() - n].block;
+            ctx.func.exprs.alloc(Expr::Br { block, args });
         }
         Instruction::BrIf(n) => {
             let n = *n as usize;
@@ -135,11 +137,14 @@ fn validate_opcode(ctx: &mut FunctionContext, opcode: &Instruction) -> Result<()
             }
 
             let block = ctx.controls[ctx.controls.len() - n].block;
-            let (_, c) = ctx.pop_operand_expected(Some(ValType::I32))?;
-            let expr = ctx.func.exprs.alloc(Expr::BrIf(c, block));
-
+            let (_, condition) = ctx.pop_operand_expected(Some(ValType::I32))?;
             let expected = ctx.controls[ctx.controls.len() - n].label_types.clone();
-            ctx.pop_operands(&expected)?;
+            let args = ctx.pop_operands(&expected)?.into_boxed_slice();
+            let expr = ctx.func.exprs.alloc(Expr::BrIf {
+                condition,
+                block,
+                args,
+            });
             ctx.push_operands(&expected, expr);
         }
         Instruction::BrTable(table) => {
@@ -150,7 +155,7 @@ fn validate_opcode(ctx: &mut FunctionContext, opcode: &Instruction) -> Result<()
                     )
                     .into());
             }
-            let default_block = ctx.controls[ctx.controls.len() - table.default as usize].block;
+            let default = ctx.controls[ctx.controls.len() - table.default as usize].block;
 
             let mut blocks = Vec::with_capacity(table.table.len());
             for n in table.table.iter() {
@@ -173,16 +178,20 @@ fn validate_opcode(ctx: &mut FunctionContext, opcode: &Instruction) -> Result<()
             }
             let blocks = blocks.into_boxed_slice();
 
-            let (_, b) = ctx.pop_operand_expected(Some(ValType::I32))?;
-            let expr = ctx
-                .func
-                .exprs
-                .alloc(Expr::BrTable(b, blocks, default_block));
+            let (_, which) = ctx.pop_operand_expected(Some(ValType::I32))?;
 
             let expected = ctx.controls[ctx.controls.len() - table.default as usize]
                 .label_types
                 .clone();
-            ctx.pop_operands(&expected)?;
+
+            let args = ctx.pop_operands(&expected)?.into_boxed_slice();
+            let expr = ctx.func.exprs.alloc(Expr::BrTable {
+                which,
+                blocks,
+                default,
+                args,
+            });
+
             ctx.unreachable(expr);
         }
 

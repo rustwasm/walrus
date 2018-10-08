@@ -32,22 +32,59 @@ pub struct Block {
 /// TODO
 #[derive(Debug)]
 pub enum Expr {
-    /// TODO
-    GetLocal(ValType, u32),
+    /// `get_local n`
+    GetLocal {
+        /// The type of this local.
+        ty: ValType,
+        /// The n^th local.
+        local: u32,
+    },
+
     /// TODO
     I32Const(i32),
+
     /// TODO
     I32Add(ExprId, ExprId),
+
     /// TODO
     Select(ExprId, ExprId),
+
     /// TODO
     Unreachable,
+
     /// TODO
     Phi,
+
     /// TODO
-    BrIf(ExprId, BlockId),
+    Br {
+        /// The target block to branch to.
+        block: BlockId,
+        /// The arguments to the block.
+        args: Box<[ExprId]>,
+    },
+
     /// TODO
-    BrTable(ExprId, Box<[BlockId]>, BlockId),
+    BrIf {
+        /// The condition for when to branch.
+        condition: ExprId,
+        /// The target block to branch to when the condition is met.
+        block: BlockId,
+        /// The arguments to the block.
+        args: Box<[ExprId]>,
+    },
+
+    /// TODO
+    BrTable {
+        /// The table index of which block to branch to.
+        which: ExprId,
+        /// The table of target blocks.
+        blocks: Box<[BlockId]>,
+        /// The block that is branched to by default when `which` is out of the
+        /// table's bounds.
+        default: BlockId,
+        /// The arguments to the block.
+        args: Box<[ExprId]>,
+    },
 }
 
 /// TODO

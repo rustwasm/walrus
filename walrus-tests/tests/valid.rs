@@ -21,9 +21,10 @@ macro_rules! assert_valid {
                 .iter()
                 .zip(code_section.bodies().iter())
             {
-                if let Err(e) =
-                    walrus::function::Function::new(&validation, &type_section, func, body)
-                {
+                let result =
+                    walrus::function::Function::new(&validation, &type_section, func, body);
+                eprintln!("result = {:#?}", result);
+                if let Err(e) = result {
                     eprintln!("got an error:");
                     for c in e.iter_chain() {
                         eprintln!("  {}", c);

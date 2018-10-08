@@ -41,7 +41,7 @@ impl<'a, T: 'a> ChunkList<'a, T> {
     /// Get a reference to the idx^th item in this chunk list.
     pub fn get(&self, mut idx: usize) -> Option<&T> {
         let mut chunk = self;
-        while chunk.head.len() < idx {
+        while chunk.head.len() <= idx {
             idx = idx - chunk.head.len();
             chunk = chunk.tail?;
         }

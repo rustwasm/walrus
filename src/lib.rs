@@ -324,8 +324,19 @@ impl Function {
             blocks: Arena::new(),
             exprs: Arena::new(),
         };
+
         let mut controls = ControlStack::new();
         let mut operands = OperandStack::new();
+
+        let params: Vec<_> = ty.params().iter().map(ValType::from).collect();
+        let result: Vec<_> = ty
+            .return_type()
+            .as_ref()
+            .into_iter()
+            .map(ValType::from)
+            .collect();
+        push_control(&mut func, &mut controls, &mut operands, params, result);
+
         for op in body.code().elements() {
             validate_opcode(&mut func, &mut operands, &mut controls, op)?;
         }

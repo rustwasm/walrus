@@ -98,6 +98,9 @@ pub enum Expr {
 
     /// TODO
     Loop(BlockId),
+
+    /// TODO
+    Drop(ExprId),
 }
 
 /// TODO

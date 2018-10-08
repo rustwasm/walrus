@@ -81,7 +81,8 @@ fn validate_opcode(ctx: &mut FunctionContext, opcode: &Instruction) -> Result<()
             ctx.push_operand(Some(ValType::I32), expr);
         }
         Instruction::Drop => {
-            ctx.pop_operand()?;
+            let (_, e) = ctx.pop_operand()?;
+            let expr = ctx.func.exprs.alloc(Expr::Drop(e));
         }
         Instruction::Select => {
             ctx.pop_operand_expected(Some(ValType::I32))?;

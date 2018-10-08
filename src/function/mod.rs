@@ -92,6 +92,31 @@ impl Dot for Function {
     }
 }
 
+macro_rules! binop {
+    ($ctx:ident, $op:ident, $ty:ident) => {
+        let (_, e1) = $ctx.pop_operand_expected(Some(ValType::$ty))?;
+        let (_, e2) = $ctx.pop_operand_expected(Some(ValType::$ty))?;
+        let expr = $ctx.func.exprs.alloc(Expr::$op(e1, e2));
+        $ctx.push_operand(Some(ValType::$ty), expr);
+    };
+}
+
+macro_rules! unop {
+    ($ctx:ident, $op:ident, $ty:ident) => {
+        let (_, e) = $ctx.pop_operand_expected(Some(ValType::$ty))?;
+        let expr = $ctx.func.exprs.alloc(Expr::$op(e));
+        $ctx.push_operand(Some(ValType::$ty), expr);
+    };
+}
+
+macro_rules! testop {
+    ($ctx:ident, $op:ident, $ty:ident) => {
+        let (_, e) = $ctx.pop_operand_expected(Some(ValType::$ty))?;
+        let expr = $ctx.func.exprs.alloc(Expr::$op(e));
+        $ctx.push_operand(Some(ValType::I32), expr);
+    };
+}
+
 fn validate_opcode(ctx: &mut FunctionContext, opcode: &Instruction) -> Result<()> {
     match opcode {
         Instruction::GetLocal(n) => {
@@ -114,21 +139,16 @@ fn validate_opcode(ctx: &mut FunctionContext, opcode: &Instruction) -> Result<()
             ctx.push_operand(Some(ValType::I32), expr);
         }
         Instruction::I32Add => {
-            let (_, e1) = ctx.pop_operand_expected(Some(ValType::I32))?;
-            let (_, e2) = ctx.pop_operand_expected(Some(ValType::I32))?;
-            let expr = ctx.func.exprs.alloc(Expr::I32Add(e1, e2));
-            ctx.push_operand(Some(ValType::I32), expr);
+            binop!(ctx, I32Add, I32);
         }
         Instruction::I32Mul => {
-            let (_, e1) = ctx.pop_operand_expected(Some(ValType::I32))?;
-            let (_, e2) = ctx.pop_operand_expected(Some(ValType::I32))?;
-            let expr = ctx.func.exprs.alloc(Expr::I32Mul(e1, e2));
-            ctx.push_operand(Some(ValType::I32), expr);
+            binop!(ctx, I32Mul, I32);
         }
         Instruction::I32Eqz => {
-            let (_, e) = ctx.pop_operand_expected(Some(ValType::I32))?;
-            let expr = ctx.func.exprs.alloc(Expr::I32Eqz(e));
-            ctx.push_operand(Some(ValType::I32), expr);
+            testop!(ctx, I32Eqz, I32);
+        }
+        Instruction::I32Popcnt => {
+            unop!(ctx, I32Popcnt, I32);
         }
         Instruction::Drop => {
             let (_, e) = ctx.pop_operand()?;
@@ -170,8 +190,10 @@ fn validate_opcode(ctx: &mut FunctionContext, opcode: &Instruction) -> Result<()
         Instruction::Loop(block_ty) => {
             let t = ValType::from_block_ty(block_ty);
             let block = ctx.push_control("loop", vec![], t.clone());
+
             let expr = ctx.func.exprs.alloc(Expr::Loop(block));
             ctx.add_to_frame_block(1, expr);
+
             let continuation = ctx.func.blocks.alloc(Block::new(
                 "post-loop continuation",
                 vec![].into_boxed_slice(),
@@ -193,8 +215,11 @@ fn validate_opcode(ctx: &mut FunctionContext, opcode: &Instruction) -> Result<()
         }
         Instruction::End => {
             let results = ctx.pop_control()?;
-            let expr = ctx.func.exprs.alloc(Expr::Phi);
-            ctx.push_operands(&results, expr);
+            let phis: Vec<_> = results
+                .iter()
+                .map(|_| ctx.func.exprs.alloc(Expr::Phi))
+                .collect();
+            ctx.push_operands(&results, &phis);
         }
         Instruction::Else => {
             let entry_block = ctx.control(1).block;
@@ -237,8 +262,8 @@ fn validate_opcode(ctx: &mut FunctionContext, opcode: &Instruction) -> Result<()
                     .into());
             }
 
-            let block = ctx.control(n).block;
             let (_, condition) = ctx.pop_operand_expected(Some(ValType::I32))?;
+            let block = ctx.control(n).block;
             let expected = ctx.control(n).label_types.clone();
             let args = ctx.pop_operands(&expected)?.into_boxed_slice();
             let expr = ctx.func.exprs.alloc(Expr::BrIf {
@@ -246,7 +271,8 @@ fn validate_opcode(ctx: &mut FunctionContext, opcode: &Instruction) -> Result<()
                 block,
                 args,
             });
-            ctx.push_operands(&expected, expr);
+            let exprs: Vec<_> = expected.iter().map(|_| expr).collect();
+            ctx.push_operands(&expected, &exprs);
         }
         Instruction::BrTable(table) => {
             if ctx.controls.len() < table.default as usize {

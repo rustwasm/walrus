@@ -125,6 +125,9 @@ pub enum Expr {
     /// `i32.eqz`
     I32Eqz(ExprId),
 
+    /// `i32.popcnt`
+    I32Popcnt(ExprId),
+
     /// TODO
     Select {
         /// The condition.
@@ -252,6 +255,10 @@ impl<'a> Dot for (ExprId, &'a Expr) {
             Expr::I32Eqz(e) => {
                 edge(&mut edges, &self.0, e, "value");
                 write!(out, "i32.eqz")?;
+            }
+            Expr::I32Popcnt(e) => {
+                edge(&mut edges, &self.0, e, "value");
+                write!(out, "i32.popcnt")?;
             }
             Expr::Select {
                 condition,

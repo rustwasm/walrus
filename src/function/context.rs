@@ -109,6 +109,16 @@ impl<'a> FunctionContext<'a> {
     pub fn unreachable(&mut self, expr: ExprId) {
         impl_unreachable(&mut self.operands, &mut self.controls, expr)
     }
+
+    pub fn control(&self, n: usize) -> &ControlFrame {
+        let idx = self.controls.len() - n - 1;
+        &self.controls[idx]
+    }
+
+    pub fn control_mut(&mut self, n: usize) -> &mut ControlFrame {
+        let idx = self.controls.len() - n - 1;
+        &mut self.controls[idx]
+    }
 }
 
 fn impl_push_operand(operands: &mut OperandStack, op: Option<ValType>, expr: ExprId) {

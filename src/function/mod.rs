@@ -100,14 +100,14 @@ fn validate_opcode(ctx: &mut FunctionContext, opcode: &Instruction) -> Result<()
         }
         Instruction::Loop(block_ty) => {
             let t = ValType::from_block_ty(block_ty);
-            ctx.push_control(vec![], t);
+            let block = ctx.push_control(vec![], t);
+            ctx.func.exprs.alloc(Expr::Loop(block));
         }
         Instruction::If(block_ty) => {
             let (_, condition) = ctx.pop_operand_expected(Some(ValType::I32))?;
             let ty = ValType::from_block_ty(block_ty);
             let block = ctx.push_control(ty.clone(), ty);
-            let idx = ctx.controls.len() - 2;
-            ctx.controls[idx].if_else = Some((condition, block));
+            ctx.control_mut(1).if_else = Some((condition, block));
         }
         Instruction::End => {
             let expr = ctx.func.exprs.alloc(Expr::Phi);
@@ -139,9 +139,9 @@ fn validate_opcode(ctx: &mut FunctionContext, opcode: &Instruction) -> Result<()
                     .context("attempt to branch to out-of-bounds block")
                     .into());
             }
-            let expected = ctx.controls[ctx.controls.len() - n].label_types.clone();
+            let expected = ctx.control(n).label_types.clone();
             let args = ctx.pop_operands(&expected)?.into_boxed_slice();
-            let block = ctx.controls[ctx.controls.len() - n].block;
+            let block = ctx.control(n).block;
             ctx.func.exprs.alloc(Expr::Br { block, args });
         }
         Instruction::BrIf(n) => {
@@ -152,9 +152,9 @@ fn validate_opcode(ctx: &mut FunctionContext, opcode: &Instruction) -> Result<()
                     .into());
             }
 
-            let block = ctx.controls[ctx.controls.len() - n].block;
+            let block = ctx.control(n).block;
             let (_, condition) = ctx.pop_operand_expected(Some(ValType::I32))?;
-            let expected = ctx.controls[ctx.controls.len() - n].label_types.clone();
+            let expected = ctx.control(n).label_types.clone();
             let args = ctx.pop_operands(&expected)?.into_boxed_slice();
             let expr = ctx.func.exprs.alloc(Expr::BrIf {
                 condition,
@@ -181,7 +181,7 @@ fn validate_opcode(ctx: &mut FunctionContext, opcode: &Instruction) -> Result<()
                         .context("attempt to jump to an out-of-bounds block from a table entry")
                         .into());
                 }
-                if ctx.controls[ctx.controls.len() - n].label_types
+                if ctx.control(n).label_types
                     != ctx.controls[ctx.controls.len() - table.default as usize].label_types
                 {
                     return Err(ErrorKind::InvalidWasm
@@ -190,7 +190,7 @@ fn validate_opcode(ctx: &mut FunctionContext, opcode: &Instruction) -> Result<()
                         )
                         .into());
                 }
-                blocks.push(ctx.controls[ctx.controls.len() - n].block);
+                blocks.push(ctx.control(n).block);
             }
             let blocks = blocks.into_boxed_slice();
 

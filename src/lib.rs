@@ -95,6 +95,9 @@ pub enum Expr {
         /// The arguments to the block.
         args: Box<[ExprId]>,
     },
+
+    /// TODO
+    Loop(BlockId),
 }
 
 /// TODO

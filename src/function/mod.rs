@@ -48,7 +48,7 @@ impl Function {
 
         let operands = &mut context::OperandStack::new();
         let controls = &mut context::ControlStack::new();
-        let mut ctx = FunctionContext::new(&mut func, &validation, operands, controls);
+        let mut ctx = FunctionContext::new(&mut func, &validation, operands, controls, None);
 
         let params: Vec<_> = ty.params().iter().map(ValType::from).collect();
         let result: Vec<_> = ty
@@ -125,29 +125,38 @@ macro_rules! testop {
 
 fn validate_instruction_sequence<'a>(
     ctx: &mut FunctionContext,
-    insts: &[Instruction],
-) -> Result<()> {
+    insts: &'a [Instruction],
+    until: Instruction,
+) -> Result<&'a [Instruction]> {
     let mut insts = insts;
-    while !insts.is_empty() {
-        insts = validate_instruction(ctx, insts)?;
+    loop {
+        match insts.first() {
+            None => {
+                return Err(ErrorKind::InvalidWasm
+                    .context(format!("expected `{}`", until))
+                    .into())
+            }
+            Some(inst) if inst == &until => return Ok(&insts[1..]),
+            Some(_) => {
+                insts = validate_instruction(ctx, insts)?;
+            }
+        }
     }
-    Ok(())
 }
 
 fn validate_expression(ctx: &mut FunctionContext, expr: &[Instruction]) -> Result<()> {
-    if expr.last() != Some(&Instruction::End) {
-        return Err(ErrorKind::InvalidWasm
-            .context("expression without its final `end`")
-            .into());
+    let rest = validate_instruction_sequence(ctx, expr, Instruction::End)?;
+    validate_end(ctx)?;
+    if rest.is_empty() {
+        Ok(())
+    } else {
+        Err(ErrorKind::InvalidWasm
+            .context("trailing instructions")
+            .into())
     }
-
-    let len = expr.len();
-    validate_instruction_sequence(ctx, &expr[..len - 1])?;
-    validate_end(ctx, expr.last().unwrap())
 }
 
-fn validate_end(ctx: &mut FunctionContext, opcode: &Instruction) -> Result<()> {
-    debug_assert_eq!(opcode, &Instruction::End);
+fn validate_end(ctx: &mut FunctionContext) -> Result<()> {
     let results = ctx.pop_control()?;
     let phis: Vec<_> = results
         .iter()
@@ -157,24 +166,24 @@ fn validate_end(ctx: &mut FunctionContext, opcode: &Instruction) -> Result<()> {
     Ok(())
 }
 
-#[inline]
-fn get_index(insts: &[Instruction], at: Instruction) -> Result<usize> {
-    insts.iter().position(|i| i == &at).ok_or_else(|| {
-        ErrorKind::InvalidWasm
-            .context(format!("expected `{}` instruction, but it was missing", at))
-            .into()
-    })
-}
+// #[inline]
+// fn get_index(insts: &[Instruction], at: Instruction) -> Result<usize> {
+//     insts.iter().position(|i| i == &at).ok_or_else(|| {
+//         ErrorKind::InvalidWasm
+//             .context(format!("expected `{}` instruction, but it was missing", at))
+//             .into()
+//     })
+// }
 
-#[inline]
-fn split_inst_seq(
-    insts: &[Instruction],
-    at: Instruction,
-) -> Result<(&[Instruction], &[Instruction])> {
-    let idx = get_index(insts, at)?;
-    let (seq, rest) = insts.split_at(idx);
-    Ok((seq, &rest[1..]))
-}
+// #[inline]
+// fn split_inst_seq(
+//     insts: &[Instruction],
+//     at: Instruction,
+// ) -> Result<(&[Instruction], &[Instruction])> {
+//     let idx = get_index(insts, at)?;
+//     let (seq, rest) = insts.split_at(idx);
+//     Ok((seq, &rest[1..]))
+// }
 
 fn validate_instruction<'a>(
     ctx: &mut FunctionContext,
@@ -236,73 +245,65 @@ fn validate_instruction<'a>(
         }
         Instruction::Block(block_ty) => {
             let validation = ctx.validation.for_block(*block_ty);
-            let mut ctx = ctx.nested(&validation);
-
-            let (seq, rest) = split_inst_seq(&insts[1..], Instruction::End)
-                .context("`block` without matching `end`")?;
 
             let params = ValType::from_block_ty(block_ty);
-            let block = ctx.push_control("block", params.clone(), params.clone());
+            let continuation = ctx.func.blocks.alloc(Block::new(
+                "block continuation",
+                params.clone().into_boxed_slice(),
+                params.clone().into_boxed_slice(),
+            ));
+
+            let mut ctx = ctx.nested(&validation, continuation);
+
+            let block = ctx.push_control("block", params.clone(), params);
             let expr = ctx.func.exprs.alloc(Expr::Br {
                 block,
                 args: vec![].into_boxed_slice(),
             });
             ctx.add_to_frame_block(1, expr);
 
-            let continuation = ctx.func.blocks.alloc(Block::new(
-                "block continuation",
-                params.clone().into_boxed_slice(),
-                params.into_boxed_slice(),
-            ));
-            ctx.control_mut(1).continuation = Some(continuation);
-
-            validate_instruction_sequence(&mut ctx, seq)?;
+            let rest = validate_instruction_sequence(&mut ctx, &insts[1..], Instruction::End)?;
+            validate_end(&mut ctx)?;
             return Ok(rest);
         }
         Instruction::Loop(block_ty) => {
             let validation = ctx.validation.for_loop();
-            let mut ctx = ctx.nested(&validation);
-
-            let (seq, rest) = split_inst_seq(&insts[..], Instruction::End)
-                .context("`loop` without matching `end`")?;
 
             let t = ValType::from_block_ty(block_ty);
-            let block = ctx.push_control("loop", vec![], t.clone());
+            let continuation = ctx.func.blocks.alloc(Block::new(
+                "post-loop continuation",
+                vec![].into_boxed_slice(),
+                t.clone().into_boxed_slice(),
+            ));
+
+            let mut ctx = ctx.nested(&validation, continuation);
+
+            let block = ctx.push_control("loop", vec![], t);
 
             let expr = ctx.func.exprs.alloc(Expr::Loop(block));
             ctx.add_to_frame_block(1, expr);
 
-            let continuation = ctx.func.blocks.alloc(Block::new(
-                "post-loop continuation",
-                vec![].into_boxed_slice(),
-                t.into_boxed_slice(),
-            ));
-            ctx.control_mut(1).continuation = Some(continuation);
-
-            validate_instruction_sequence(&mut ctx, seq)?;
+            let rest = validate_instruction_sequence(&mut ctx, &insts[1..], Instruction::End)?;
+            validate_end(&mut ctx)?;
             return Ok(rest);
         }
         Instruction::If(block_ty) => {
             let validation = ctx.validation.for_if_else(*block_ty);
-            let mut ctx = ctx.nested(&validation);
 
-            let (consequent_insts, rest) = split_inst_seq(&insts[1..], Instruction::Else)
-                .context("`if` without a matching `else`")?;
-            let (alternative_insts, rest_rest) = split_inst_seq(rest, Instruction::End)
-                .context("`else` without a matching `end`")?;
-
-            let (_, condition) = ctx.pop_operand_expected(Some(ValType::I32))?;
             let ty = ValType::from_block_ty(block_ty);
-            let consequent = ctx.push_control("consequent", ty.clone(), ty.clone());
-            ctx.control_mut(1).if_else = Some((condition, consequent));
             let continuation = ctx.func.blocks.alloc(Block::new(
                 "if/else continuation",
                 ty.clone().into_boxed_slice(),
-                ty.into_boxed_slice(),
+                ty.clone().into_boxed_slice(),
             ));
-            ctx.control_mut(1).continuation = Some(continuation);
 
-            validate_instruction_sequence(&mut ctx, consequent_insts)?;
+            let mut ctx = ctx.nested(&validation, continuation);
+
+            let (_, condition) = ctx.pop_operand_expected(Some(ValType::I32))?;
+            let consequent = ctx.push_control("consequent", ty.clone(), ty);
+            ctx.control_mut(1).if_else = Some((condition, consequent));
+
+            let rest = validate_instruction_sequence(&mut ctx, &insts[1..], Instruction::Else)?;
 
             let entry_block = ctx.control(1).block;
             let results = ctx.pop_control()?;
@@ -323,12 +324,12 @@ fn validate_instruction<'a>(
             });
             ctx.add_to_block(entry_block, expr);
 
-            validate_instruction_sequence(&mut ctx, alternative_insts)?;
-
+            let rest_rest = validate_instruction_sequence(&mut ctx, rest, Instruction::End)?;
+            validate_end(&mut ctx)?;
             return Ok(rest_rest);
         }
-        op @ Instruction::End => {
-            validate_end(ctx, op)?;
+        Instruction::End => {
+            validate_end(ctx)?;
         }
         Instruction::Else => {
             return Err(ErrorKind::InvalidWasm

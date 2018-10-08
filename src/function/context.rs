@@ -29,9 +29,6 @@ pub struct ControlFrame {
     /// If `Some`, then we parsed an `if` and its block, and are awaiting the
     /// consequent block to be parsed.
     pub if_else: Option<(ExprId, BlockId)>,
-
-    /// TODO
-    pub continuation: Option<BlockId>,
 }
 
 /// The operand stack.
@@ -57,6 +54,9 @@ pub struct FunctionContext<'a> {
 
     /// The control frames stack.
     pub controls: &'a mut ControlStack,
+
+    /// TODO
+    pub continuation: Option<BlockId>,
 }
 
 impl<'a> FunctionContext<'a> {
@@ -66,21 +66,28 @@ impl<'a> FunctionContext<'a> {
         validation: &'a ValidationContext<'a>,
         operands: &'a mut OperandStack,
         controls: &'a mut ControlStack,
+        continuation: Option<BlockId>,
     ) -> FunctionContext<'a> {
         FunctionContext {
             func,
             validation,
             operands,
             controls,
+            continuation,
         }
     }
 
-    pub fn nested<'b>(&'b mut self, validation: &'b ValidationContext<'b>) -> FunctionContext<'b> {
+    pub fn nested<'b>(
+        &'b mut self,
+        validation: &'b ValidationContext<'b>,
+        continuation: BlockId,
+    ) -> FunctionContext<'b> {
         FunctionContext {
             func: self.func,
             validation,
             operands: self.operands,
             controls: self.controls,
+            continuation: Some(continuation),
         }
     }
 
@@ -134,7 +141,7 @@ impl<'a> FunctionContext<'a> {
             !self.func.exprs.get(e).unwrap().is_jump()
         });
         if last_expr_is_not_jump.unwrap_or(true) {
-            if let Some(continuation) = self.controls.last().and_then(|f| f.continuation) {
+            if let Some(continuation) = self.continuation {
                 let expr = self.func.exprs.alloc(Expr::Br {
                     block: continuation,
                     args: exprs.into_boxed_slice(),
@@ -261,7 +268,6 @@ fn impl_push_control(
         unreachable: None,
         block,
         if_else: None,
-        continuation: None,
     };
     controls.push(frame);
     block

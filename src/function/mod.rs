@@ -107,10 +107,14 @@ fn validate_opcode(ctx: &mut FunctionContext, opcode: &Instruction) -> Result<()
             let t = ValType::from_block_ty(block_ty);
             ctx.push_control(t.clone(), t);
         }
-        Instruction::Else | Instruction::End => {
+        Instruction::End => {
             let expr = ctx.func.exprs.alloc(Expr::Phi);
             let results = ctx.pop_control()?;
             ctx.push_operands(&results, expr);
+        }
+        Instruction::Else => {
+            let results = ctx.pop_control()?;
+            ctx.push_control(results.clone(), results);
         }
         Instruction::Br(n) => {
             let n = *n as usize;

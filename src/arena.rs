@@ -1,8 +1,10 @@
 //! TODO
 
 use std::fmt;
+use std::iter;
 use std::marker::PhantomData;
 use std::ops;
+use std::slice;
 
 /// TODO
 pub struct Id<T> {
@@ -56,6 +58,11 @@ impl<T> Arena<T> {
     pub fn get_mut(&mut self, id: Id<T>) -> Option<&mut T> {
         self.items.get_mut(id.idx)
     }
+
+    /// Iterate over this arena's items and their ids.
+    pub fn iter(&self) -> Iter<T> {
+        IntoIterator::into_iter(self)
+    }
 }
 
 impl<T> ops::Index<Id<T>> for Arena<T> {
@@ -69,5 +76,35 @@ impl<T> ops::Index<Id<T>> for Arena<T> {
 impl<T> ops::IndexMut<Id<T>> for Arena<T> {
     fn index_mut(&mut self, id: Id<T>) -> &mut T {
         &mut self.items[id.idx]
+    }
+}
+
+pub struct Iter<'a, T: 'a> {
+    iter: iter::Enumerate<slice::Iter<'a, T>>,
+}
+
+impl<'a, T: 'a> Iterator for Iter<'a, T> {
+    type Item = (Id<T>, &'a T);
+    fn next(&mut self) -> Option<Self::Item> {
+        self.iter.next().map(|(idx, item)| {
+            (
+                Id {
+                    idx,
+                    _ty: PhantomData,
+                },
+                item,
+            )
+        })
+    }
+}
+
+impl<'a, T> IntoIterator for &'a Arena<T> {
+    type Item = (Id<T>, &'a T);
+    type IntoIter = Iter<'a, T>;
+
+    fn into_iter(self) -> Iter<'a, T> {
+        Iter {
+            iter: self.items.iter().enumerate(),
+        }
     }
 }

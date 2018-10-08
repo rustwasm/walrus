@@ -103,9 +103,11 @@ fn validate_opcode(ctx: &mut FunctionContext, opcode: &Instruction) -> Result<()
             ctx.push_control(vec![], t);
         }
         Instruction::If(block_ty) => {
-            ctx.pop_operand_expected(Some(ValType::I32))?;
-            let t = ValType::from_block_ty(block_ty);
-            ctx.push_control(t.clone(), t);
+            let (_, condition) = ctx.pop_operand_expected(Some(ValType::I32))?;
+            let ty = ValType::from_block_ty(block_ty);
+            let block = ctx.push_control(ty.clone(), ty);
+            let idx = ctx.controls.len() - 2;
+            ctx.controls[idx].if_else = Some((condition, block));
         }
         Instruction::End => {
             let expr = ctx.func.exprs.alloc(Expr::Phi);
@@ -114,7 +116,21 @@ fn validate_opcode(ctx: &mut FunctionContext, opcode: &Instruction) -> Result<()
         }
         Instruction::Else => {
             let results = ctx.pop_control()?;
-            ctx.push_control(results.clone(), results);
+            let (condition, consequent) = ctx
+                .controls
+                .last_mut()
+                .unwrap()
+                .if_else
+                .take()
+                .ok_or_else(|| {
+                    ErrorKind::InvalidWasm.context("`else` that was not preceded by an `if`")
+                })?;
+            let alternative = ctx.push_control(results.clone(), results);
+            ctx.func.exprs.alloc(Expr::IfElse {
+                condition,
+                consequent,
+                alternative,
+            });
         }
         Instruction::Br(n) => {
             let n = *n as usize;

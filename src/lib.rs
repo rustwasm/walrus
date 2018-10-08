@@ -74,6 +74,16 @@ pub enum Expr {
     },
 
     /// TODO
+    IfElse {
+        /// The condition.
+        condition: ExprId,
+        /// The block to execute when the condition is true.
+        consequent: BlockId,
+        /// The block to execute when the condition is false.
+        alternative: BlockId,
+    },
+
+    /// TODO
     BrTable {
         /// The table index of which block to branch to.
         which: ExprId,

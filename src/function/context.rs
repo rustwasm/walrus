@@ -24,6 +24,10 @@ pub struct ControlFrame {
 
     /// The id of this control frame's block.
     pub block: BlockId,
+
+    /// If `Some`, then we parsed an `if` and its block, and are awaiting the
+    /// consequent block to be parsed.
+    pub if_else: Option<(ExprId, BlockId)>,
 }
 
 /// The operand stack.
@@ -88,7 +92,7 @@ impl<'a> FunctionContext<'a> {
         impl_pop_operands(&mut self.operands, &self.controls, expected)
     }
 
-    pub fn push_control(&mut self, label_types: Vec<ValType>, end_types: Vec<ValType>) {
+    pub fn push_control(&mut self, label_types: Vec<ValType>, end_types: Vec<ValType>) -> BlockId {
         impl_push_control(
             self.func,
             &mut self.controls,
@@ -174,7 +178,7 @@ fn impl_push_control(
     operands: &OperandStack,
     label_types: Vec<ValType>,
     end_types: Vec<ValType>,
-) {
+) -> BlockId {
     let block = func.blocks.alloc(Block { exprs: vec![] });
     let frame = ControlFrame {
         label_types,
@@ -182,8 +186,10 @@ fn impl_push_control(
         height: operands.len(),
         unreachable: None,
         block,
+        if_else: None,
     };
     controls.push(frame);
+    block
 }
 
 fn impl_pop_control(

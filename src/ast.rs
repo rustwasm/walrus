@@ -2,7 +2,7 @@
 
 use super::ValType;
 use crate::arena::Id;
-use crate::dot::Dot;
+use crate::dot::{Dot, Port};
 use std::io::{self, Write};
 
 /// TODO
@@ -28,7 +28,24 @@ impl Dot for BlockId {
 /// TODO
 #[derive(Debug)]
 pub struct Block {
+    /// The kind of block this is and why it was created, for debugging
+    /// purposes.
+    pub(crate) kind: &'static str,
+    pub(crate) params: Box<[ValType]>,
+    pub(crate) results: Box<[ValType]>,
     pub(crate) exprs: Vec<ExprId>,
+}
+
+impl Block {
+    /// Construct a new extended basic block.
+    pub fn new(kind: &'static str, params: Box<[ValType]>, results: Box<[ValType]>) -> Block {
+        Block {
+            kind,
+            params,
+            results,
+            exprs: vec![],
+        }
+    }
 }
 
 impl<'a> Dot for (BlockId, &'a Block) {
@@ -36,11 +53,29 @@ impl<'a> Dot for (BlockId, &'a Block) {
         self.0.dot(out)?;
         write!(
             out,
-            " [shape=\"rect\", label=<<table border=\"0\" cellborder=\"0\"><tr><td><b><u>"
+            " [shape=\"rect\", penwidth={}, label=<<table border=\"0\" cellborder=\"0\"><tr><td port=\"title\"><b><u>",
+            if usize::from(self.0) == 0 {
+                "5"
+            } else {
+                "1"
+            }
         )?;
         self.0.dot(out)?;
-        write!(out, "</u></b></td></tr>")?;
-
+        write!(out, "</u></b> ({}) [", self.1.kind)?;
+        for (idx, ty) in self.1.params.iter().enumerate() {
+            if idx != 0 {
+                write!(out, " ")?;
+            }
+            write!(out, "{}", ty)?;
+        }
+        write!(out, "] → [")?;
+        for (idx, ty) in self.1.results.iter().enumerate() {
+            if idx != 0 {
+                write!(out, " ")?;
+            }
+            write!(out, "{}", ty)?;
+        }
+        write!(out, "]</td></tr>")?;
         for (idx, expr) in self.1.exprs.iter().enumerate() {
             write!(out, "<tr><td port=\"e{}\">", idx)?;
             expr.dot(out)?;
@@ -68,11 +103,27 @@ pub enum Expr {
         local: u32,
     },
 
+    /// `set_local n`
+    SetLocal {
+        /// The type of this local.
+        ty: ValType,
+        /// The n^th local.
+        local: u32,
+        /// The value to set the local to.
+        value: ExprId,
+    },
+
     /// TODO
     I32Const(i32),
 
     /// TODO
     I32Add(ExprId, ExprId),
+
+    /// TODO
+    I32Mul(ExprId, ExprId),
+
+    /// `i32.eqz`
+    I32Eqz(ExprId),
 
     /// TODO
     Select {
@@ -138,6 +189,27 @@ pub enum Expr {
 
     /// TODO
     Drop(ExprId),
+
+    /// TODO
+    Return {
+        /// The values being returned.
+        values: Box<[ExprId]>,
+    },
+}
+
+impl Expr {
+    /// Is this expression some sort of unconditional jump?
+    pub fn is_jump(&self) -> bool {
+        match self {
+            Expr::Unreachable
+            | Expr::Br { .. }
+            | Expr::Loop(_)
+            | Expr::IfElse { .. }
+            | Expr::BrTable { .. }
+            | Expr::Return { .. } => true,
+            _ => false,
+        }
+    }
 }
 
 impl<'a> Dot for (ExprId, &'a Expr) {
@@ -145,7 +217,7 @@ impl<'a> Dot for (ExprId, &'a Expr) {
         self.0.dot(out)?;
         write!(
             out,
-            " [label=<<table cellborder=\"0\" border=\"0\"><tr><td><b><u>"
+            " [style=\"dotted\", label=<<table cellborder=\"0\" border=\"0\"><tr><td><b><u>"
         )?;
         self.0.dot(out)?;
         write!(out, "</u></b></td></tr><tr><td><font face=\"monospace\">")?;
@@ -162,11 +234,24 @@ impl<'a> Dot for (ExprId, &'a Expr) {
 
         match self.1 {
             Expr::GetLocal { ty, local } => write!(out, "get_local {} ;; ty = {}", local, ty)?,
+            Expr::SetLocal { ty, local, value } => {
+                edge(&mut edges, &self.0, value, "value");
+                write!(out, "set_local {} ;; ty = {}", local, ty)?;
+            }
             Expr::I32Const(n) => write!(out, "i32.const {}", n)?,
             Expr::I32Add(lhs, rhs) => {
                 edge(&mut edges, &self.0, lhs, "lhs");
                 edge(&mut edges, &self.0, rhs, "rhs");
                 write!(out, "i32.add")?;
+            }
+            Expr::I32Mul(lhs, rhs) => {
+                edge(&mut edges, &self.0, lhs, "lhs");
+                edge(&mut edges, &self.0, rhs, "rhs");
+                write!(out, "i32.mul")?;
+            }
+            Expr::I32Eqz(e) => {
+                edge(&mut edges, &self.0, e, "value");
+                write!(out, "i32.eqz")?;
             }
             Expr::Select {
                 condition,
@@ -182,12 +267,11 @@ impl<'a> Dot for (ExprId, &'a Expr) {
             Expr::Unreachable => write!(out, "unreachable")?,
             Expr::Phi => write!(out, "phi")?,
             Expr::Br { block, args } => {
-                edge(&mut edges, &self.0, block, "block");
+                edge(&mut edges, &self.0, &Port(block, "title"), "block");
                 for arg in args.iter() {
                     edge(&mut edges, &self.0, arg, "arg");
                 }
-                write!(out, "br ")?;
-                block.dot(out)?;
+                write!(out, "br")?;
             }
             Expr::BrIf {
                 condition,
@@ -195,7 +279,7 @@ impl<'a> Dot for (ExprId, &'a Expr) {
                 args,
             } => {
                 edge(&mut edges, &self.0, condition, "condition");
-                edge(&mut edges, &self.0, block, "block");
+                edge(&mut edges, &self.0, &Port(block, "title"), "block");
                 for arg in args.iter() {
                     edge(&mut edges, &self.0, arg, "arg");
                 }
@@ -208,8 +292,18 @@ impl<'a> Dot for (ExprId, &'a Expr) {
                 alternative,
             } => {
                 edge(&mut edges, &self.0, condition, "condition");
-                edge(&mut edges, &self.0, consequent, "consequent");
-                edge(&mut edges, &self.0, alternative, "alternative");
+                edge(
+                    &mut edges,
+                    &self.0,
+                    &Port(consequent, "title"),
+                    "consequent",
+                );
+                edge(
+                    &mut edges,
+                    &self.0,
+                    &Port(alternative, "title"),
+                    "alternative",
+                );
                 write!(out, "if_else")?;
             }
             Expr::BrTable {
@@ -220,21 +314,32 @@ impl<'a> Dot for (ExprId, &'a Expr) {
             } => {
                 edge(&mut edges, &self.0, which, "which");
                 for (idx, block) in blocks.iter().enumerate() {
-                    edge(&mut edges, &self.0, block, &format!("block {}", idx));
+                    edge(
+                        &mut edges,
+                        &self.0,
+                        &Port(block, "title"),
+                        &format!("block {}", idx),
+                    );
                 }
-                edge(&mut edges, &self.0, default, "default");
+                edge(&mut edges, &self.0, &Port(default, "title"), "default");
                 for arg in args.iter() {
                     edge(&mut edges, &self.0, arg, "arg");
                 }
                 write!(out, "br_table")?;
             }
             Expr::Loop(block) => {
-                edge(&mut edges, &self.0, block, "block");
+                edge(&mut edges, &self.0, &Port(block, "title"), "block");
                 write!(out, "loop")?;
             }
             Expr::Drop(e) => {
-                edge(&mut edges, &self.0, e, "e");
+                edge(&mut edges, &self.0, e, "value");
                 write!(out, "drop")?;
+            }
+            Expr::Return { values } => {
+                for (idx, v) in values.iter().enumerate() {
+                    edge(&mut edges, &self.0, v, &format!("return value {}", idx));
+                }
+                write!(out, "return")?;
             }
         }
         writeln!(out, "</font></td></tr></table>>];")?;

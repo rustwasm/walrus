@@ -18,7 +18,6 @@ use failure::Fail;
 use parity_wasm::elements;
 use std::fmt;
 
-
 /// TODO
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum ValType {

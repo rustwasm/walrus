@@ -56,10 +56,22 @@ impl Function {
             .map(ValType::from)
             .collect();
 
-        ctx.push_control(params, result);
+        ctx.push_control("function entry", params, result);
 
         for op in body.code().elements() {
             validate_opcode(&mut ctx, op)?;
+        }
+
+        // Assert that every block ends in some sort of jump, branch, or return.
+        if cfg!(debug_assertions) {
+            for (_, block) in &func.blocks {
+                if let Some(last) = block.exprs.last().cloned() {
+                    assert!(
+                        func.exprs.get(last).unwrap().is_jump(),
+                        "every block should end in a jump"
+                    );
+                }
+            }
         }
 
         Ok(func)
@@ -87,6 +99,16 @@ fn validate_opcode(ctx: &mut FunctionContext, opcode: &Instruction) -> Result<()
             let expr = ctx.func.exprs.alloc(Expr::GetLocal { ty, local: *n });
             ctx.push_operand(Some(ty), expr);
         }
+        Instruction::SetLocal(n) => {
+            let ty = ctx.validation.local(*n).context("invalid set_local")?;
+            let (_, value) = ctx.pop_operand_expected(Some(ty))?;
+            let expr = ctx.func.exprs.alloc(Expr::SetLocal {
+                ty,
+                local: *n,
+                value,
+            });
+            ctx.add_to_current_frame_block(expr);
+        }
         Instruction::I32Const(n) => {
             let expr = ctx.func.exprs.alloc(Expr::I32Const(*n));
             ctx.push_operand(Some(ValType::I32), expr);
@@ -95,6 +117,17 @@ fn validate_opcode(ctx: &mut FunctionContext, opcode: &Instruction) -> Result<()
             let (_, e1) = ctx.pop_operand_expected(Some(ValType::I32))?;
             let (_, e2) = ctx.pop_operand_expected(Some(ValType::I32))?;
             let expr = ctx.func.exprs.alloc(Expr::I32Add(e1, e2));
+            ctx.push_operand(Some(ValType::I32), expr);
+        }
+        Instruction::I32Mul => {
+            let (_, e1) = ctx.pop_operand_expected(Some(ValType::I32))?;
+            let (_, e2) = ctx.pop_operand_expected(Some(ValType::I32))?;
+            let expr = ctx.func.exprs.alloc(Expr::I32Mul(e1, e2));
+            ctx.push_operand(Some(ValType::I32), expr);
+        }
+        Instruction::I32Eqz => {
+            let (_, e) = ctx.pop_operand_expected(Some(ValType::I32))?;
+            let expr = ctx.func.exprs.alloc(Expr::I32Eqz(e));
             ctx.push_operand(Some(ValType::I32), expr);
         }
         Instruction::Drop => {
@@ -120,25 +153,51 @@ fn validate_opcode(ctx: &mut FunctionContext, opcode: &Instruction) -> Result<()
         }
         Instruction::Block(block_ty) => {
             let t = ValType::from_block_ty(block_ty);
-            ctx.push_control(t.clone(), t);
+            let block = ctx.push_control("block", t.clone(), t.clone());
+            let expr = ctx.func.exprs.alloc(Expr::Br {
+                block,
+                args: vec![].into_boxed_slice(),
+            });
+            ctx.add_to_frame_block(1, expr);
+
+            let continuation = ctx.func.blocks.alloc(Block::new(
+                "block continuation",
+                t.clone().into_boxed_slice(),
+                t.into_boxed_slice(),
+            ));
+            ctx.control_mut(1).continuation = Some(continuation);
         }
         Instruction::Loop(block_ty) => {
             let t = ValType::from_block_ty(block_ty);
-            let block = ctx.push_control(vec![], t);
-            ctx.func.exprs.alloc(Expr::Loop(block));
+            let block = ctx.push_control("loop", vec![], t.clone());
+            let expr = ctx.func.exprs.alloc(Expr::Loop(block));
+            ctx.add_to_frame_block(1, expr);
+            let continuation = ctx.func.blocks.alloc(Block::new(
+                "post-loop continuation",
+                vec![].into_boxed_slice(),
+                t.into_boxed_slice(),
+            ));
+            ctx.control_mut(1).continuation = Some(continuation);
         }
         Instruction::If(block_ty) => {
             let (_, condition) = ctx.pop_operand_expected(Some(ValType::I32))?;
             let ty = ValType::from_block_ty(block_ty);
-            let block = ctx.push_control(ty.clone(), ty);
-            ctx.control_mut(1).if_else = Some((condition, block));
+            let consequent = ctx.push_control("consequent", ty.clone(), ty.clone());
+            ctx.control_mut(1).if_else = Some((condition, consequent));
+            let continuation = ctx.func.blocks.alloc(Block::new(
+                "if/else continuation",
+                ty.clone().into_boxed_slice(),
+                ty.into_boxed_slice(),
+            ));
+            ctx.control_mut(1).continuation = Some(continuation);
         }
         Instruction::End => {
-            let expr = ctx.func.exprs.alloc(Expr::Phi);
             let results = ctx.pop_control()?;
+            let expr = ctx.func.exprs.alloc(Expr::Phi);
             ctx.push_operands(&results, expr);
         }
         Instruction::Else => {
+            let entry_block = ctx.control(1).block;
             let results = ctx.pop_control()?;
             let (condition, consequent) = ctx
                 .controls
@@ -149,13 +208,13 @@ fn validate_opcode(ctx: &mut FunctionContext, opcode: &Instruction) -> Result<()
                 .ok_or_else(|| {
                     ErrorKind::InvalidWasm.context("`else` that was not preceded by an `if`")
                 })?;
-            let alternative = ctx.push_control(results.clone(), results);
+            let alternative = ctx.push_control("alternative", results.clone(), results);
             let expr = ctx.func.exprs.alloc(Expr::IfElse {
                 condition,
                 consequent,
                 alternative,
             });
-            ctx.add_to_frame_block(1, expr);
+            ctx.add_to_block(entry_block, expr);
         }
         Instruction::Br(n) => {
             let n = *n as usize;

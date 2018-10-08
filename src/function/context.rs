@@ -4,7 +4,7 @@ use super::super::error::{ErrorKind, Result};
 use super::super::validation_context::ValidationContext;
 use super::Function;
 use super::ValType;
-use crate::ast::{Block, BlockId, ExprId};
+use crate::ast::{Block, BlockId, Expr, ExprId};
 use failure::Fail;
 
 pub struct ControlFrame {
@@ -29,6 +29,9 @@ pub struct ControlFrame {
     /// If `Some`, then we parsed an `if` and its block, and are awaiting the
     /// consequent block to be parsed.
     pub if_else: Option<(ExprId, BlockId)>,
+
+    /// TODO
+    pub continuation: Option<BlockId>,
 }
 
 /// The operand stack.
@@ -93,8 +96,14 @@ impl<'a> FunctionContext<'a> {
         impl_pop_operands(&mut self.operands, &self.controls, expected)
     }
 
-    pub fn push_control(&mut self, label_types: Vec<ValType>, end_types: Vec<ValType>) -> BlockId {
+    pub fn push_control(
+        &mut self,
+        why: &'static str,
+        label_types: Vec<ValType>,
+        end_types: Vec<ValType>,
+    ) -> BlockId {
         impl_push_control(
+            why,
             self.func,
             &mut self.controls,
             &mut self.operands,
@@ -105,9 +114,30 @@ impl<'a> FunctionContext<'a> {
 
     pub fn pop_control(&mut self) -> Result<Vec<ValType>> {
         let (results, block, exprs) = impl_pop_control(&mut self.controls, &mut self.operands)?;
-        for e in exprs {
-            self.add_to_block(block, e);
+
+        // If the last instruction in the current block is not an unconditional
+        // jump, add the jump to the continuation or the return.
+        let last_expr = self.func.blocks.get(block).unwrap().exprs.last().cloned();
+        let last_expr_is_not_jump = last_expr.map(|e| {
+            eprintln!("FITZGEN: e = {:#?}", e);
+            !self.func.exprs.get(e).unwrap().is_jump()
+        });
+        if last_expr_is_not_jump.unwrap_or(true) {
+            if let Some(continuation) = self.controls.last().and_then(|f| f.continuation) {
+                let expr = self.func.exprs.alloc(Expr::Br {
+                    block: continuation,
+                    args: exprs.into_boxed_slice(),
+                });
+                self.add_to_block(block, expr);
+                self.controls.last_mut().unwrap().block = continuation;
+            } else {
+                let expr = self.func.exprs.alloc(Expr::Return {
+                    values: exprs.into_boxed_slice(),
+                });
+                self.add_to_block(block, expr);
+            }
         }
+
         Ok(results)
     }
 
@@ -201,13 +231,18 @@ fn impl_pop_operands(
 }
 
 fn impl_push_control(
+    why: &'static str,
     func: &mut Function,
     controls: &mut ControlStack,
     operands: &OperandStack,
     label_types: Vec<ValType>,
     end_types: Vec<ValType>,
 ) -> BlockId {
-    let block = func.blocks.alloc(Block { exprs: vec![] });
+    let block = func.blocks.alloc(Block::new(
+        why,
+        label_types.clone().into_boxed_slice(),
+        end_types.clone().into_boxed_slice(),
+    ));
     let frame = ControlFrame {
         label_types,
         end_types,
@@ -215,6 +250,7 @@ fn impl_push_control(
         unreachable: None,
         block,
         if_else: None,
+        continuation: None,
     };
     controls.push(frame);
     block

@@ -27,7 +27,7 @@ macro_rules! assert_valid {
                     elements::Type::Function(f) => f,
                 };
 
-                if let Err(e) = walrus::Function::new(&validation, ty, body) {
+                if let Err(e) = walrus::function::Function::new(&validation, ty, body) {
                     eprintln!("got an error:");
                     for c in e.iter_chain() {
                         eprintln!("  {}", c);

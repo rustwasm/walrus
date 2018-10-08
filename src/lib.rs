@@ -1,46 +1,74 @@
+//! TODO
+
+#![deny(missing_debug_implementations)]
+#![deny(missing_docs)]
+
 extern crate failure;
 extern crate parity_wasm;
 
 pub mod arena;
 pub mod error;
+pub mod chunk_list;
 
-use self::error::ErrorKind;
+mod validation_context;
 
 use self::arena::{Arena, Id};
+use self::error::{ErrorKind, Result};
+use self::validation_context::ValidationContext;
 use failure::Fail;
 use parity_wasm::elements::{self, Instruction};
 use std::fmt;
 
-pub type Result<T> = ::std::result::Result<T, failure::Error>;
-
+/// TODO
+#[derive(Debug)]
 pub struct Function {
     exprs: Arena<Expr>,
     blocks: Arena<Block>,
 }
 
+/// TODO
 pub type ExprId = Id<Expr>;
+
+/// TODO
 pub type BlockId = Id<Block>;
 
+/// TODO
+#[derive(Debug)]
 pub struct Block {
     exprs: Vec<ExprId>,
 }
 
+/// TODO
+#[derive(Debug)]
 pub enum Expr {
+    /// TODO
     I32Const(i32),
+    /// TODO
     I32Add(ExprId, ExprId),
+    /// TODO
     Select(ExprId, ExprId),
+    /// TODO
     Unreachable,
+    /// TODO
     Phi,
+    /// TODO
     BrIf(ExprId, BlockId),
+    /// TODO
     BrTable(ExprId, Box<[BlockId]>, BlockId),
 }
 
+/// TODO
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum ValType {
+    /// TODO
     I32,
+    /// TODO
     I64,
+    /// TODO
     F32,
+    /// TODO
     F64,
+    /// TODO
     V128,
 }
 
@@ -81,7 +109,7 @@ impl fmt::Display for ValType {
     }
 }
 
-pub struct ControlFrame {
+struct ControlFrame {
     label_types: Vec<ValType>,
     end_types: Vec<ValType>,
     height: usize,
@@ -96,6 +124,7 @@ type ControlStack = Vec<ControlFrame>;
 
 struct FunctionContext<'a> {
     func: &'a mut Function,
+    validation: &'a ValidationContext<'a>,
     operands: OperandStack,
     controls: ControlStack,
 }
@@ -361,7 +390,12 @@ fn validate_opcode(ctx: &mut FunctionContext, opcode: &Instruction) -> Result<()
 }
 
 impl Function {
-    pub fn new(ty: &elements::FunctionType, body: &elements::FuncBody) -> Result<Function> {
+    /// TODO
+    pub fn new(
+        validation: &ValidationContext,
+        ty: &elements::FunctionType,
+        body: &elements::FuncBody,
+    ) -> Result<Function> {
         // TODO: context and locals and all that.
         let mut func = Function {
             blocks: Arena::new(),
@@ -370,6 +404,7 @@ impl Function {
 
         let mut ctx = FunctionContext {
             func: &mut func,
+            validation,
             operands: OperandStack::new(),
             controls: ControlStack::new(),
         };

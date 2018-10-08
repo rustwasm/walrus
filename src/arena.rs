@@ -1,7 +1,10 @@
+//! TODO
+
 use std::fmt;
 use std::marker::PhantomData;
 use std::ops;
 
+/// TODO
 pub struct Id<T> {
     idx: usize,
     _ty: PhantomData<*const T>,
@@ -22,15 +25,19 @@ impl<T> Clone for Id<T> {
     }
 }
 
+/// TODO
+#[derive(Debug)]
 pub struct Arena<T> {
     items: Vec<T>,
 }
 
 impl<T> Arena<T> {
+    /// TODO
     pub fn new() -> Arena<T> {
         Arena { items: Vec::new() }
     }
 
+    /// TODO
     pub fn alloc(&mut self, item: T) -> Id<T> {
         let idx = self.items.len();
         self.items.push(item);
@@ -40,10 +47,12 @@ impl<T> Arena<T> {
         }
     }
 
+    /// TODO
     pub fn get(&self, id: Id<T>) -> Option<&T> {
         self.items.get(id.idx)
     }
 
+    /// TODO
     pub fn get_mut(&mut self, id: Id<T>) -> Option<&mut T> {
         self.items.get_mut(id.idx)
     }

@@ -1,6 +1,12 @@
+//! TODO
+
 use failure::*;
 use std::fmt::{self, Display};
 
+/// TODO
+pub type Result<T> = ::std::result::Result<T, failure::Error>;
+
+/// TODO
 #[derive(Debug)]
 pub struct Error {
     inner: Context<ErrorKind>,
@@ -22,8 +28,10 @@ impl Display for Error {
     }
 }
 
+/// TODO
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Fail)]
 pub enum ErrorKind {
+    /// TODO
     #[fail(display = "The WebAssembly is invalid")]
     InvalidWasm,
 }

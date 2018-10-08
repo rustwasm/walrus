@@ -65,102 +65,31 @@ impl<'a> FunctionContext<'a> {
         }
     }
 
-    fn impl_push_operand(operands: &mut OperandStack, op: Option<ValType>, expr: ExprId) {
-        operands.push((op, expr));
-    }
     pub fn push_operand(&mut self, op: Option<ValType>, expr: ExprId) {
-        Self::impl_push_operand(&mut self.operands, op, expr);
+        impl_push_operand(&mut self.operands, op, expr);
     }
 
-    fn impl_pop_operand(
-        operands: &mut OperandStack,
-        controls: &ControlStack,
-    ) -> Result<(Option<ValType>, ExprId)> {
-        if operands.len() == controls.last().unwrap().height {
-            if let Some(expr) = controls.last().unwrap().unreachable {
-                return Ok((None, expr));
-            }
-        }
-        if operands.len() == controls.last().unwrap().height {
-            return Err(ErrorKind::InvalidWasm
-                .context("popped operand past control frame height in non-unreachable code")
-                .into());
-        }
-        Ok(operands.pop().unwrap())
-    }
     pub fn pop_operand(&mut self) -> Result<(Option<ValType>, ExprId)> {
-        Self::impl_pop_operand(&mut self.operands, &mut self.controls)
+        impl_pop_operand(&mut self.operands, &mut self.controls)
     }
 
-    fn impl_pop_operand_expected(
-        operands: &mut OperandStack,
-        controls: &ControlStack,
-        expected: Option<ValType>,
-    ) -> Result<(Option<ValType>, ExprId)> {
-        match (Self::impl_pop_operand(operands, controls)?, expected) {
-            ((None, id), expected) => Ok((expected, id)),
-            ((actual, id), None) => Ok((actual, id)),
-            ((Some(actual), id), Some(expected)) => {
-                if actual != expected {
-                    Err(ErrorKind::InvalidWasm
-                        .context(format!("expected type {}", expected))
-                        .context(format!("found type {}", actual))
-                        .into())
-                } else {
-                    Ok((Some(actual), id))
-                }
-            }
-        }
-    }
     pub fn pop_operand_expected(
         &mut self,
         expected: Option<ValType>,
     ) -> Result<(Option<ValType>, ExprId)> {
-        Self::impl_pop_operand_expected(&mut self.operands, &mut self.controls, expected)
+        impl_pop_operand_expected(&mut self.operands, &mut self.controls, expected)
     }
 
-    fn impl_push_operands(operands: &mut OperandStack, types: &[ValType], expr: ExprId) {
-        for ty in types {
-            Self::impl_push_operand(operands, Some(*ty), expr);
-        }
-    }
     pub fn push_operands(&mut self, types: &[ValType], expr: ExprId) {
-        Self::impl_push_operands(&mut self.operands, types, expr)
+        impl_push_operands(&mut self.operands, types, expr)
     }
 
-    fn impl_pop_operands(
-        operands: &mut OperandStack,
-        controls: &ControlStack,
-        expected: &[ValType],
-    ) -> Result<()> {
-        for ty in expected.iter().cloned().rev() {
-            Self::impl_pop_operand_expected(operands, controls, Some(ty))?;
-        }
-        Ok(())
-    }
     pub fn pop_operands(&mut self, expected: &[ValType]) -> Result<()> {
-        Self::impl_pop_operands(&mut self.operands, &self.controls, expected)
+        impl_pop_operands(&mut self.operands, &self.controls, expected)
     }
 
-    fn impl_push_control(
-        func: &mut Function,
-        controls: &mut ControlStack,
-        operands: &OperandStack,
-        label_types: Vec<ValType>,
-        end_types: Vec<ValType>,
-    ) {
-        let block = func.blocks.alloc(Block { exprs: vec![] });
-        let frame = ControlFrame {
-            label_types,
-            end_types,
-            height: operands.len(),
-            unreachable: None,
-            block,
-        };
-        controls.push(frame);
-    }
     pub fn push_control(&mut self, label_types: Vec<ValType>, end_types: Vec<ValType>) {
-        Self::impl_push_control(
+        impl_push_control(
             self.func,
             &mut self.controls,
             &mut self.operands,
@@ -169,37 +98,116 @@ impl<'a> FunctionContext<'a> {
         )
     }
 
-    fn impl_pop_control(
-        controls: &mut ControlStack,
-        operands: &mut OperandStack,
-    ) -> Result<Vec<ValType>> {
-        let frame = controls.last().ok_or_else(|| {
-            ErrorKind::InvalidWasm.context("attempted to pop a frame from an empty control stack")
-        })?;
-        Self::impl_pop_operands(operands, controls, &frame.end_types)?;
-        if operands.len() != frame.height {
-            return Err(ErrorKind::InvalidWasm
-                .context("incorrect number of operands on the stack at the end of a control frame")
-                .into());
-        }
-        let frame = controls.pop().unwrap();
-        Ok(frame.end_types)
-    }
     pub fn pop_control(&mut self) -> Result<Vec<ValType>> {
-        Self::impl_pop_control(&mut self.controls, &mut self.operands)
+        impl_pop_control(&mut self.controls, &mut self.operands)
     }
 
-    fn impl_unreachable(operands: &mut OperandStack, controls: &mut ControlStack, expr: ExprId) {
-        let frame = controls.last_mut().unwrap();
-        frame.unreachable = Some(expr);
-        let height = frame.height;
+    pub fn unreachable(&mut self, expr: ExprId) {
+        impl_unreachable(&mut self.operands, &mut self.controls, expr)
+    }
+}
 
-        operands.truncate(height);
-        for _ in operands.len()..height {
-            operands.push((None, expr));
+fn impl_push_operand(operands: &mut OperandStack, op: Option<ValType>, expr: ExprId) {
+    operands.push((op, expr));
+}
+
+fn impl_pop_operand(
+    operands: &mut OperandStack,
+    controls: &ControlStack,
+) -> Result<(Option<ValType>, ExprId)> {
+    if operands.len() == controls.last().unwrap().height {
+        if let Some(expr) = controls.last().unwrap().unreachable {
+            return Ok((None, expr));
         }
     }
-    pub fn unreachable(&mut self, expr: ExprId) {
-        Self::impl_unreachable(&mut self.operands, &mut self.controls, expr)
+    if operands.len() == controls.last().unwrap().height {
+        return Err(ErrorKind::InvalidWasm
+            .context("popped operand past control frame height in non-unreachable code")
+            .into());
+    }
+    Ok(operands.pop().unwrap())
+}
+
+fn impl_pop_operand_expected(
+    operands: &mut OperandStack,
+    controls: &ControlStack,
+    expected: Option<ValType>,
+) -> Result<(Option<ValType>, ExprId)> {
+    match (impl_pop_operand(operands, controls)?, expected) {
+        ((None, id), expected) => Ok((expected, id)),
+        ((actual, id), None) => Ok((actual, id)),
+        ((Some(actual), id), Some(expected)) => {
+            if actual != expected {
+                Err(ErrorKind::InvalidWasm
+                    .context(format!("expected type {}", expected))
+                    .context(format!("found type {}", actual))
+                    .into())
+            } else {
+                Ok((Some(actual), id))
+            }
+        }
+    }
+}
+
+fn impl_push_operands(operands: &mut OperandStack, types: &[ValType], expr: ExprId) {
+    for ty in types {
+        impl_push_operand(operands, Some(*ty), expr);
+    }
+}
+
+fn impl_pop_operands(
+    operands: &mut OperandStack,
+    controls: &ControlStack,
+    expected: &[ValType],
+) -> Result<()> {
+    for ty in expected.iter().cloned().rev() {
+        impl_pop_operand_expected(operands, controls, Some(ty))?;
+    }
+    Ok(())
+}
+
+fn impl_push_control(
+    func: &mut Function,
+    controls: &mut ControlStack,
+    operands: &OperandStack,
+    label_types: Vec<ValType>,
+    end_types: Vec<ValType>,
+) {
+    let block = func.blocks.alloc(Block { exprs: vec![] });
+    let frame = ControlFrame {
+        label_types,
+        end_types,
+        height: operands.len(),
+        unreachable: None,
+        block,
+    };
+    controls.push(frame);
+}
+
+fn impl_pop_control(
+    controls: &mut ControlStack,
+    operands: &mut OperandStack,
+) -> Result<Vec<ValType>> {
+    let frame = controls.last().ok_or_else(|| {
+        ErrorKind::InvalidWasm.context("attempted to pop a frame from an empty control stack")
+    })?;
+    impl_pop_operands(operands, controls, &frame.end_types)?;
+    if operands.len() != frame.height {
+        return Err(ErrorKind::InvalidWasm
+            .context("incorrect number of operands on the stack at the end of a control frame")
+            .into());
+    }
+    let frame = controls.pop().unwrap();
+    Ok(frame.end_types)
+}
+
+fn impl_unreachable(operands: &mut OperandStack, controls: &mut ControlStack, expr: ExprId) {
+    let frame = controls.last_mut().unwrap();
+    frame.unreachable = Some(expr);
+    let height = frame.height;
+
+    operands.truncate(height);
+    for _ in operands.len()..height {
+        operands.push((None, expr));
     }
 }

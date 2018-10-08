@@ -25,12 +25,10 @@ macro_rules! assert_valid {
                     for c in e.iter_chain() {
                         eprintln!("  {}", c);
                     }
-                    eprintln!("backtrace:\n{}", e.backtrace());
+                    eprintln!("{}", e.backtrace());
                     panic!("constructing a new `walrus::Function` failed");
                 }
             }
-
-            assert!(false);
         }
     }
 }

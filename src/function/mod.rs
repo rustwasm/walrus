@@ -7,7 +7,7 @@ use super::arena::Arena;
 use super::error::{ErrorKind, Result};
 use super::validation_context::ValidationContext;
 use super::{Block, Expr, ValType};
-use failure::Fail;
+use failure::{Fail, ResultExt};
 use parity_wasm::elements::{self, Instruction};
 
 /// TODO
@@ -23,16 +23,27 @@ impl Function {
     /// TODO
     pub fn new(
         validation: &ValidationContext,
-        ty: &elements::FunctionType,
+        types: &elements::TypeSection,
+        func: &elements::Func,
         body: &elements::FuncBody,
     ) -> Result<Function> {
-        // TODO: context and locals and all that.
+        let validation = validation.for_function(func, body)?;
+
+        let ty = func.type_ref();
+        let ty = &types.types().get(ty as usize).ok_or_else(|| {
+            ErrorKind::InvalidWasm
+                .context("function's type is an out-of-bounds reference into the types section")
+        })?;
+        let ty = match ty {
+            elements::Type::Function(f) => f,
+        };
+
         let mut func = Function {
             blocks: Arena::new(),
             exprs: Arena::new(),
         };
 
-        let mut ctx = FunctionContext::new(&mut func, validation);
+        let mut ctx = FunctionContext::new(&mut func, &validation);
 
         let params: Vec<_> = ty.params().iter().map(ValType::from).collect();
         let result: Vec<_> = ty
@@ -54,6 +65,11 @@ impl Function {
 
 fn validate_opcode(ctx: &mut FunctionContext, opcode: &Instruction) -> Result<()> {
     match opcode {
+        Instruction::GetLocal(n) => {
+            let t = ctx.validation.local(*n).context("invalid get_local")?;
+            let expr = ctx.func.exprs.alloc(Expr::GetLocal(t, *n));
+            ctx.push_operand(Some(t), expr);
+        }
         Instruction::I32Const(n) => {
             let expr = ctx.func.exprs.alloc(Expr::I32Const(*n));
             ctx.push_operand(Some(ValType::I32), expr);

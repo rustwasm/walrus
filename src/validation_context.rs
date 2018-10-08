@@ -2,6 +2,7 @@
 
 use super::chunk_list::ChunkList;
 use super::error::{ErrorKind, Result};
+use super::ValType;
 use failure::{Fail, ResultExt};
 use parity_wasm::elements;
 use std::u16;
@@ -17,7 +18,7 @@ pub struct ValidationContext<'a> {
     tables: ChunkList<'a, elements::TableType>,
     mems: ChunkList<'a, elements::MemoryType>,
     globals: ChunkList<'a, elements::GlobalType>,
-    locals: ChunkList<'a, elements::ValueType>,
+    pub(crate) locals: ChunkList<'a, elements::ValueType>,
     labels: ChunkList<'a, elements::BlockType>,
     return_: ChunkList<'a, elements::BlockType>,
 }
@@ -139,6 +140,22 @@ impl<'a> ValidationContext<'a> {
             return_: ChunkList::with_head(return_),
             ..self.nested()
         })
+    }
+
+    /// Get the type of the n^th local.
+    pub fn local(&self, n: u32) -> Result<ValType> {
+        self.locals
+            .get(n as usize)
+            .map(ValType::from)
+            .ok_or_else(|| {
+                ErrorKind::InvalidWasm
+                    .context(format!(
+                        "local {} is out of bounds ({} locals)",
+                        n,
+                        self.locals.len()
+                    ))
+                    .into()
+            })
     }
 }
 

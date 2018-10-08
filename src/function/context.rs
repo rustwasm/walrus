@@ -194,7 +194,12 @@ fn impl_pop_control(
     impl_pop_operands(operands, controls, &frame.end_types)?;
     if operands.len() != frame.height {
         return Err(ErrorKind::InvalidWasm
-            .context("incorrect number of operands on the stack at the end of a control frame")
+            .context(format!(
+                "incorrect number of operands on the stack at the end of a control frame; \
+                 found {}, expected {}",
+                operands.len(),
+                frame.height
+            ))
             .into());
     }
     let frame = controls.pop().unwrap();

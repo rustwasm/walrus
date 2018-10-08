@@ -21,13 +21,9 @@ macro_rules! assert_valid {
                 .iter()
                 .zip(code_section.bodies().iter())
             {
-                let ty = func.type_ref();
-                let ty = &type_section.types()[ty as usize];
-                let ty = match ty {
-                    elements::Type::Function(f) => f,
-                };
-
-                if let Err(e) = walrus::function::Function::new(&validation, ty, body) {
+                if let Err(e) =
+                    walrus::function::Function::new(&validation, &type_section, func, body)
+                {
                     eprintln!("got an error:");
                     for c in e.iter_chain() {
                         eprintln!("  {}", c);

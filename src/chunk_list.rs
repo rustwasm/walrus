@@ -39,4 +39,19 @@ impl<'a, T: 'a> ChunkList<'a, T> {
         }
         chunk.head.get(idx)
     }
+
+    /// Get the total length of this chunk list.
+    pub fn len(&self) -> usize {
+        let mut chunk = self;
+        let mut len = 0;
+        loop {
+            len += chunk.head.len();
+            match chunk.tail {
+                None => return len,
+                Some(tail) => {
+                    chunk = tail;
+                }
+            }
+        }
+    }
 }

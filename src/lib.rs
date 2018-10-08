@@ -33,6 +33,8 @@ pub struct Block {
 #[derive(Debug)]
 pub enum Expr {
     /// TODO
+    GetLocal(ValType, u32),
+    /// TODO
     I32Const(i32),
     /// TODO
     I32Add(ExprId, ExprId),

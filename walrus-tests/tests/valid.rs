@@ -13,14 +13,21 @@ macro_rules! assert_valid {
             let func_section = module.function_section().unwrap();
             let code_section = module.code_section().unwrap();
 
-            for (func, body) in func_section.entries().iter().zip(code_section.bodies().iter()) {
+            let validation = walrus::validation_context::ValidationContext::for_module(&module)
+                .expect("could not create validation context");
+
+            for (func, body) in func_section
+                .entries()
+                .iter()
+                .zip(code_section.bodies().iter())
+            {
                 let ty = func.type_ref();
                 let ty = &type_section.types()[ty as usize];
                 let ty = match ty {
                     elements::Type::Function(f) => f,
                 };
 
-                if let Err(e) = walrus::Function::new(ty, body) {
+                if let Err(e) = walrus::Function::new(&validation, ty, body) {
                     eprintln!("got an error:");
                     for c in e.iter_chain() {
                         eprintln!("  {}", c);
@@ -30,7 +37,7 @@ macro_rules! assert_valid {
                 }
             }
         }
-    }
+    };
 }
 
 include!(concat!(env!("OUT_DIR"), "/valid.rs"));

@@ -1,3 +1,5 @@
+//! TODO
+
 use super::chunk_list::ChunkList;
 use super::error::{ErrorKind, Result};
 use failure::{Fail, ResultExt};
@@ -86,6 +88,7 @@ impl<'a> ValidationContext<'a> {
         })
     }
 
+    /// TODO
     pub fn nested<'b>(&'b self) -> ValidationContext<'b> {
         ValidationContext {
             types: ChunkList::with_tail(&self.types),
@@ -99,6 +102,7 @@ impl<'a> ValidationContext<'a> {
         }
     }
 
+    /// TODO
     pub fn for_function<'b>(
         &'b self,
         func: &elements::Func,

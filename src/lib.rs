@@ -7,10 +7,9 @@ extern crate failure;
 extern crate parity_wasm;
 
 pub mod arena;
-pub mod error;
 pub mod chunk_list;
-
-mod validation_context;
+pub mod error;
+pub mod validation_context;
 
 use self::arena::{Arena, Id};
 use self::error::{ErrorKind, Result};
@@ -24,6 +23,8 @@ use std::fmt;
 pub struct Function {
     exprs: Arena<Expr>,
     blocks: Arena<Block>,
+    // TODO: provenance: ExprId -> offset in code section of the original
+    // instruction
 }
 
 /// TODO

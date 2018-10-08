@@ -7,101 +7,17 @@ extern crate failure;
 extern crate parity_wasm;
 
 pub mod arena;
+pub mod ast;
 pub mod chunk_list;
+pub mod dot;
 pub mod error;
 pub mod function;
 pub mod validation_context;
 
-use self::arena::Id;
 use failure::Fail;
 use parity_wasm::elements;
 use std::fmt;
 
-/// TODO
-pub type ExprId = Id<Expr>;
-
-/// TODO
-pub type BlockId = Id<Block>;
-
-/// TODO
-#[derive(Debug)]
-pub struct Block {
-    exprs: Vec<ExprId>,
-}
-
-/// TODO
-#[derive(Debug)]
-pub enum Expr {
-    /// `get_local n`
-    GetLocal {
-        /// The type of this local.
-        ty: ValType,
-        /// The n^th local.
-        local: u32,
-    },
-
-    /// TODO
-    I32Const(i32),
-
-    /// TODO
-    I32Add(ExprId, ExprId),
-
-    /// TODO
-    Select(ExprId, ExprId),
-
-    /// TODO
-    Unreachable,
-
-    /// TODO
-    Phi,
-
-    /// TODO
-    Br {
-        /// The target block to branch to.
-        block: BlockId,
-        /// The arguments to the block.
-        args: Box<[ExprId]>,
-    },
-
-    /// TODO
-    BrIf {
-        /// The condition for when to branch.
-        condition: ExprId,
-        /// The target block to branch to when the condition is met.
-        block: BlockId,
-        /// The arguments to the block.
-        args: Box<[ExprId]>,
-    },
-
-    /// TODO
-    IfElse {
-        /// The condition.
-        condition: ExprId,
-        /// The block to execute when the condition is true.
-        consequent: BlockId,
-        /// The block to execute when the condition is false.
-        alternative: BlockId,
-    },
-
-    /// TODO
-    BrTable {
-        /// The table index of which block to branch to.
-        which: ExprId,
-        /// The table of target blocks.
-        blocks: Box<[BlockId]>,
-        /// The block that is branched to by default when `which` is out of the
-        /// table's bounds.
-        default: BlockId,
-        /// The arguments to the block.
-        args: Box<[ExprId]>,
-    },
-
-    /// TODO
-    Loop(BlockId),
-
-    /// TODO
-    Drop(ExprId),
-}
 
 /// TODO
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]

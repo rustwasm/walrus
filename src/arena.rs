@@ -27,6 +27,12 @@ impl<T> Clone for Id<T> {
     }
 }
 
+impl<T> From<Id<T>> for usize {
+    fn from(id: Id<T>) -> usize {
+        id.idx
+    }
+}
+
 /// TODO
 #[derive(Debug)]
 pub struct Arena<T> {
@@ -79,6 +85,8 @@ impl<T> ops::IndexMut<Id<T>> for Arena<T> {
     }
 }
 
+/// TODO
+#[derive(Debug)]
 pub struct Iter<'a, T: 'a> {
     iter: iter::Enumerate<slice::Iter<'a, T>>,
 }

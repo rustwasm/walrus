@@ -2,8 +2,9 @@
 
 use super::super::error::{ErrorKind, Result};
 use super::super::validation_context::ValidationContext;
-use super::super::{Block, BlockId, ExprId, ValType};
 use super::Function;
+use super::ValType;
+use crate::ast::{Block, BlockId, ExprId};
 use failure::Fail;
 
 pub struct ControlFrame {

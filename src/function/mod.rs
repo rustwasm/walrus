@@ -4,17 +4,20 @@ mod context;
 
 use self::context::FunctionContext;
 use super::arena::Arena;
+use super::dot::Dot;
 use super::error::{ErrorKind, Result};
 use super::validation_context::ValidationContext;
-use super::{Block, Expr, ValType};
+use super::ValType;
+use crate::ast::{Block, Expr};
 use failure::{Fail, ResultExt};
 use parity_wasm::elements::{self, Instruction};
+use std::io::{self, Write};
 
 /// TODO
 #[derive(Debug)]
 pub struct Function {
-    exprs: Arena<Expr>,
-    blocks: Arena<Block>,
+    pub(crate) exprs: Arena<Expr>,
+    pub(crate) blocks: Arena<Block>,
     // TODO: provenance: ExprId -> offset in code section of the original
     // instruction
 }
@@ -63,6 +66,20 @@ impl Function {
     }
 }
 
+impl Dot for Function {
+    fn dot(&self, out: &mut Write) -> io::Result<()> {
+        writeln!(out, "digraph {{")?;
+        writeln!(out, "rankdir=LR;")?;
+        for expr in &self.exprs {
+            expr.dot(out)?;
+        }
+        for block in &self.blocks {
+            block.dot(out)?;
+        }
+        writeln!(out, "}}")
+    }
+}
+
 fn validate_opcode(ctx: &mut FunctionContext, opcode: &Instruction) -> Result<()> {
     match opcode {
         Instruction::GetLocal(n) => {
@@ -86,10 +103,10 @@ fn validate_opcode(ctx: &mut FunctionContext, opcode: &Instruction) -> Result<()
             ctx.add_to_current_block(expr);
         }
         Instruction::Select => {
-            ctx.pop_operand_expected(Some(ValType::I32))?;
-            let (t1, e1) = ctx.pop_operand()?;
-            let (t2, e2) = ctx.pop_operand_expected(t1)?;
-            let expr = ctx.func.exprs.alloc(Expr::Select(e1, e2));
+            let (_, condition) = ctx.pop_operand_expected(Some(ValType::I32))?;
+            let (t1, consequent) = ctx.pop_operand()?;
+            let (t2, alternative) = ctx.pop_operand_expected(t1)?;
+            let expr = ctx.func.exprs.alloc(Expr::Select { condition, consequent, alternative });
             ctx.push_operand(t2, expr);
         }
         Instruction::Unreachable => {

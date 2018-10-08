@@ -3,6 +3,10 @@ extern crate parity_wasm;
 extern crate walrus;
 
 use parity_wasm::elements;
+use std::env;
+use std::fs;
+use std::path::PathBuf;
+use walrus::dot::Dot;
 
 macro_rules! assert_valid {
     ($name:ident, $path:expr) => {
@@ -24,13 +28,25 @@ macro_rules! assert_valid {
                 let result =
                     walrus::function::Function::new(&validation, &type_section, func, body);
                 eprintln!("result = {:#?}", result);
-                if let Err(e) = result {
-                    eprintln!("got an error:");
-                    for c in e.iter_chain() {
-                        eprintln!("  {}", c);
+                match result {
+                    Err(e) => {
+                        eprintln!("got an error:");
+                        for c in e.iter_chain() {
+                            eprintln!("  {}", c);
+                        }
+                        eprintln!("{}", e.backtrace());
+                        panic!("constructing a new `walrus::Function` failed");
                     }
-                    eprintln!("{}", e.backtrace());
-                    panic!("constructing a new `walrus::Function` failed");
+                    Ok(f) => {
+                        if env::var("WALRUS_TESTS_DOT").is_err() {
+                            return;
+                        }
+                        let mut dot_path = PathBuf::from($path);
+                        dot_path.set_extension("dot");
+                        let mut dot_file =
+                            fs::File::create(dot_path).expect("should create dot file OK");
+                        f.dot(&mut dot_file).expect("should generate dot file OK");
+                    }
                 }
             }
         }

@@ -9,12 +9,18 @@
         get_local 0
         i32.eqz
         br_if 1
-        
+
         ;; local 1 = local 0 * local 1
         get_local 1
         get_local 0
         i32.mul
         set_local 1
+
+        ;; local 0 = local 0 - 1
+        get_local 0
+        i32.const 1
+        i32.sub
+        set_local 0
 
         ;; go back to the start of the loop
         br 0

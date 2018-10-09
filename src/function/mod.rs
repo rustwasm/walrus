@@ -8,7 +8,7 @@ use super::dot::Dot;
 use super::error::{ErrorKind, Result};
 use super::validation_context::ValidationContext;
 use super::ValType;
-use crate::ast::{Block, Expr};
+use crate::ast::{Block, Expr, ExprId};
 use failure::{Fail, ResultExt};
 use parity_wasm::elements::{self, Instruction};
 use std::io::{self, Write};
@@ -46,10 +46,6 @@ impl Function {
             exprs: Arena::new(),
         };
 
-        let operands = &mut context::OperandStack::new();
-        let controls = &mut context::ControlStack::new();
-        let mut ctx = FunctionContext::new(&mut func, &validation, operands, controls, None);
-
         let params: Vec<_> = ty.params().iter().map(ValType::from).collect();
         let result: Vec<_> = ty
             .return_type()
@@ -58,11 +54,32 @@ impl Function {
             .map(ValType::from)
             .collect();
 
-        ctx.push_control("function entry", params, result);
-        validate_expression(&mut ctx, body.code().elements())?;
+        let operands = &mut context::OperandStack::new();
+        let controls = &mut context::ControlStack::new();
+        let exit_block = func.blocks.alloc(Block::new(
+            "function exit block",
+            vec![].into_boxed_slice(),
+            result.clone().into_boxed_slice(),
+        ));
+        let mut ctx = FunctionContext::new(&mut func, &validation, operands, controls, exit_block);
 
-        // Assert that every block ends in some sort of jump, branch, or return.
+        ctx.push_control("function entry", params, result.clone());
+        let values = validate_expression(&mut ctx, body.code().elements())?.into_boxed_slice();
+
+        eprintln!("FITZGEN: in epilog");
+        // let values = ctx.pop_operands(&result)?.into_boxed_slice();
+        eprintln!("FITZGEN: values = {:#?}", values);
+        let ret = ctx.func.exprs.alloc(Expr::Return { values });
+        ctx.add_to_block(exit_block, ret);
+
+        eprintln!("FITZGEN: ctx = {:#?}", ctx);
+
         if cfg!(debug_assertions) {
+            // assert!(ctx.operands.is_empty());
+            // assert!(ctx.controls.is_empty());
+
+            // Assert that every block ends in some sort of jump, branch, or
+            // return.
             for (_, block) in &func.blocks {
                 if let Some(last) = block.exprs.last().cloned() {
                     assert!(
@@ -102,7 +119,7 @@ macro_rules! binop {
     ($ctx:ident, $op:ident, $ty:ident) => {
         let (_, e1) = $ctx.pop_operand_expected(Some(ValType::$ty))?;
         let (_, e2) = $ctx.pop_operand_expected(Some(ValType::$ty))?;
-        let expr = $ctx.func.exprs.alloc(Expr::$op(e1, e2));
+        let expr = $ctx.func.exprs.alloc(Expr::$op(e2, e1));
         $ctx.push_operand(Some(ValType::$ty), expr);
     };
 }
@@ -144,53 +161,43 @@ fn validate_instruction_sequence<'a>(
     }
 }
 
-fn validate_expression(ctx: &mut FunctionContext, expr: &[Instruction]) -> Result<()> {
+fn validate_expression(ctx: &mut FunctionContext, expr: &[Instruction]) -> Result<Vec<ExprId>> {
     let rest = validate_instruction_sequence(ctx, expr, Instruction::End)?;
-    validate_end(ctx)?;
+    let exprs = validate_end(ctx)?;
     if rest.is_empty() {
-        Ok(())
+        Ok(exprs)
     } else {
         Err(ErrorKind::InvalidWasm
-            .context("trailing instructions")
+            .context("trailing instructions after final `end`")
             .into())
     }
 }
 
-fn validate_end(ctx: &mut FunctionContext) -> Result<()> {
-    let results = ctx.pop_control()?;
+fn validate_end(ctx: &mut FunctionContext) -> Result<Vec<ExprId>> {
+    eprintln!("FITZGEN: validate_end");
+    let (results, exprs) = ctx.pop_control()?;
     let phis: Vec<_> = results
         .iter()
         .map(|_| ctx.func.exprs.alloc(Expr::Phi))
+        .map(|p| {
+            eprintln!("FITZGEN: validate_end: alloc phi: {:?}", p);
+            p
+        })
         .collect();
     ctx.push_operands(&results, &phis);
-    Ok(())
+    Ok(exprs)
 }
-
-// #[inline]
-// fn get_index(insts: &[Instruction], at: Instruction) -> Result<usize> {
-//     insts.iter().position(|i| i == &at).ok_or_else(|| {
-//         ErrorKind::InvalidWasm
-//             .context(format!("expected `{}` instruction, but it was missing", at))
-//             .into()
-//     })
-// }
-
-// #[inline]
-// fn split_inst_seq(
-//     insts: &[Instruction],
-//     at: Instruction,
-// ) -> Result<(&[Instruction], &[Instruction])> {
-//     let idx = get_index(insts, at)?;
-//     let (seq, rest) = insts.split_at(idx);
-//     Ok((seq, &rest[1..]))
-// }
 
 fn validate_instruction<'a>(
     ctx: &mut FunctionContext,
     insts: &'a [Instruction],
 ) -> Result<&'a [Instruction]> {
+    eprintln!(
+        "FITZGEN: validate_instruction: block = {:?}, insts = {:#?}",
+        ctx.control(0).block,
+        insts
+    );
     assert!(!insts.is_empty());
-    eprintln!("FITZGEN: validate_instruction: {:#?}", insts);
     match &insts[0] {
         Instruction::GetLocal(n) => {
             let ty = ctx.validation.local(*n).context("invalid get_local")?;
@@ -212,6 +219,9 @@ fn validate_instruction<'a>(
         }
         Instruction::I32Add => {
             binop!(ctx, I32Add, I32);
+        }
+        Instruction::I32Sub => {
+            binop!(ctx, I32Sub, I32);
         }
         Instruction::I32Mul => {
             binop!(ctx, I32Mul, I32);
@@ -247,11 +257,12 @@ fn validate_instruction<'a>(
             let validation = ctx.validation.for_block(*block_ty);
 
             let params = ValType::from_block_ty(block_ty);
-            let continuation = ctx.func.blocks.alloc(Block::new(
-                "block continuation",
-                params.clone().into_boxed_slice(),
-                params.clone().into_boxed_slice(),
-            ));
+            let continuation = ctx.continuation;
+            // let continuation = ctx.func.blocks.alloc(Block::new(
+            //     "block continuation",
+            //     params.clone().into_boxed_slice(),
+            //     params.clone().into_boxed_slice(),
+            // ));
 
             let mut ctx = ctx.nested(&validation, continuation);
 
@@ -270,9 +281,10 @@ fn validate_instruction<'a>(
             let validation = ctx.validation.for_loop();
 
             let t = ValType::from_block_ty(block_ty);
+            // let continuation = ctx.continuation;
             let continuation = ctx.func.blocks.alloc(Block::new(
-                "post-loop continuation",
-                vec![].into_boxed_slice(),
+                "loop continuation block",
+                t.clone().into_boxed_slice(),
                 t.clone().into_boxed_slice(),
             ));
 
@@ -301,22 +313,14 @@ fn validate_instruction<'a>(
 
             let (_, condition) = ctx.pop_operand_expected(Some(ValType::I32))?;
             let consequent = ctx.push_control("consequent", ty.clone(), ty);
-            ctx.control_mut(1).if_else = Some((condition, consequent));
 
             let rest = validate_instruction_sequence(&mut ctx, &insts[1..], Instruction::Else)?;
 
             let entry_block = ctx.control(1).block;
-            let results = ctx.pop_control()?;
-            let (condition, consequent) = ctx
-                .controls
-                .last_mut()
-                .unwrap()
-                .if_else
-                .take()
-                .ok_or_else(|| {
-                    ErrorKind::InvalidWasm.context("`else` that was not preceded by an `if`")
-                })?;
+
+            let (results, _) = ctx.pop_control()?;
             let alternative = ctx.push_control("alternative", results.clone(), results);
+
             let expr = ctx.func.exprs.alloc(Expr::IfElse {
                 condition,
                 consequent,
@@ -367,7 +371,7 @@ fn validate_instruction<'a>(
             }
 
             let (_, condition) = ctx.pop_operand_expected(Some(ValType::I32))?;
-            let block = ctx.control(n).block;
+            let block = ctx.control(n).continuation;
             let expected = ctx.control(n).label_types.clone();
             let args = ctx.pop_operands(&expected)?.into_boxed_slice();
             let expr = ctx.func.exprs.alloc(Expr::BrIf {
@@ -375,8 +379,12 @@ fn validate_instruction<'a>(
                 block,
                 args,
             });
-            let exprs: Vec<_> = expected.iter().map(|_| expr).collect();
-            ctx.push_operands(&expected, &exprs);
+            if expected.is_empty() {
+                ctx.add_to_current_frame_block(expr);
+            } else {
+                let exprs: Vec<_> = expected.iter().map(|_| expr).collect();
+                ctx.push_operands(&expected, &exprs);
+            }
         }
         Instruction::BrTable(table) => {
             ctx.validation

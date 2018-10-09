@@ -7,6 +7,7 @@ use super::ValType;
 use crate::ast::{Block, BlockId, Expr, ExprId};
 use failure::Fail;
 
+#[derive(Debug)]
 pub struct ControlFrame {
     /// The type of the associated label (used to type-check branches).
     pub label_types: Vec<ValType>,
@@ -26,9 +27,8 @@ pub struct ControlFrame {
     /// The id of this control frame's block.
     pub block: BlockId,
 
-    /// If `Some`, then we parsed an `if` and its block, and are awaiting the
-    /// consequent block to be parsed.
-    pub if_else: Option<(ExprId, BlockId)>,
+    /// TODO
+    pub continuation: BlockId,
 }
 
 /// The operand stack.
@@ -42,6 +42,7 @@ pub type OperandStack = Vec<(Option<ValType>, ExprId)>;
 /// The control frame stack.
 pub type ControlStack = Vec<ControlFrame>;
 
+#[derive(Debug)]
 pub struct FunctionContext<'a> {
     /// The function being validated/constructed.
     pub func: &'a mut Function,
@@ -56,7 +57,7 @@ pub struct FunctionContext<'a> {
     pub controls: &'a mut ControlStack,
 
     /// TODO
-    pub continuation: Option<BlockId>,
+    pub continuation: BlockId,
 }
 
 impl<'a> FunctionContext<'a> {
@@ -66,7 +67,7 @@ impl<'a> FunctionContext<'a> {
         validation: &'a ValidationContext<'a>,
         operands: &'a mut OperandStack,
         controls: &'a mut ControlStack,
-        continuation: Option<BlockId>,
+        continuation: BlockId,
     ) -> FunctionContext<'a> {
         FunctionContext {
             func,
@@ -87,7 +88,7 @@ impl<'a> FunctionContext<'a> {
             validation,
             operands: self.operands,
             controls: self.controls,
-            continuation: Some(continuation),
+            continuation,
         }
     }
 
@@ -127,36 +128,39 @@ impl<'a> FunctionContext<'a> {
             &mut self.operands,
             label_types,
             end_types,
+            self.continuation,
         )
     }
 
-    pub fn pop_control(&mut self) -> Result<Vec<ValType>> {
+    pub fn pop_control(&mut self) -> Result<(Vec<ValType>, Vec<ExprId>)> {
         let (results, block, exprs) = impl_pop_control(&mut self.controls, &mut self.operands)?;
+        eprintln!("FITZGEN: pop control: exprs = {:?}", exprs);
 
         // If the last instruction in the current block is not an unconditional
         // jump, add the jump to the continuation or the return.
         let last_expr = self.func.blocks.get(block).unwrap().exprs.last().cloned();
         let last_expr_is_not_jump = last_expr.map(|e| {
-            eprintln!("FITZGEN: e = {:#?}", e);
+            eprintln!("FITZGEN: last_expr = {:?}", e);
             !self.func.exprs.get(e).unwrap().is_jump()
         });
         if last_expr_is_not_jump.unwrap_or(true) {
-            if let Some(continuation) = self.continuation {
-                let expr = self.func.exprs.alloc(Expr::Br {
-                    block: continuation,
-                    args: exprs.into_boxed_slice(),
-                });
-                self.add_to_block(block, expr);
-                self.controls.last_mut().unwrap().block = continuation;
+            let expr = if self.controls.is_empty() {
+                self.func.exprs.alloc(Expr::Return {
+                    values: exprs.clone().into_boxed_slice(),
+                })
             } else {
-                let expr = self.func.exprs.alloc(Expr::Return {
-                    values: exprs.into_boxed_slice(),
-                });
-                self.add_to_block(block, expr);
+                self.func.exprs.alloc(Expr::Br {
+                    block: self.continuation,
+                    args: exprs.clone().into_boxed_slice(),
+                })
+            };
+            self.add_to_block(block, expr);
+            if let Some(last) = self.controls.last_mut() {
+                last.block = self.continuation;
             }
         }
 
-        Ok(results)
+        Ok((results, exprs))
     }
 
     pub fn unreachable(&mut self, expr: ExprId) {
@@ -188,6 +192,7 @@ impl<'a> FunctionContext<'a> {
 }
 
 fn impl_push_operand(operands: &mut OperandStack, op: Option<ValType>, expr: ExprId) {
+    eprintln!("FITZGEN: push op: {:?}, expr = {:?}", op, expr);
     operands.push((op, expr));
 }
 
@@ -195,16 +200,19 @@ fn impl_pop_operand(
     operands: &mut OperandStack,
     controls: &ControlStack,
 ) -> Result<(Option<ValType>, ExprId)> {
-    if operands.len() == controls.last().unwrap().height {
-        if let Some(expr) = controls.last().unwrap().unreachable {
-            return Ok((None, expr));
+    if let Some(height) = controls.last().map(|f| f.height) {
+        if operands.len() == height {
+            if let Some(expr) = controls.last().unwrap().unreachable {
+                return Ok((None, expr));
+            }
+        }
+        if operands.len() == height {
+            return Err(ErrorKind::InvalidWasm
+                .context("popped operand past control frame height in non-unreachable code")
+                .into());
         }
     }
-    if operands.len() == controls.last().unwrap().height {
-        return Err(ErrorKind::InvalidWasm
-            .context("popped operand past control frame height in non-unreachable code")
-            .into());
-    }
+    eprintln!("FITZGEN: pop op: {:?}", operands.last().unwrap());
     Ok(operands.pop().unwrap())
 }
 
@@ -255,6 +263,7 @@ fn impl_push_control(
     operands: &OperandStack,
     label_types: Vec<ValType>,
     end_types: Vec<ValType>,
+    continuation: BlockId,
 ) -> BlockId {
     let block = func.blocks.alloc(Block::new(
         why,
@@ -267,7 +276,7 @@ fn impl_push_control(
         height: operands.len(),
         unreachable: None,
         block,
-        if_else: None,
+        continuation,
     };
     controls.push(frame);
     block
@@ -301,7 +310,4 @@ fn impl_unreachable(operands: &mut OperandStack, controls: &mut ControlStack, ex
     let height = frame.height;
 
     operands.truncate(height);
-    for _ in operands.len()..height {
-        operands.push((None, expr));
-    }
 }

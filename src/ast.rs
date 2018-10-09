@@ -54,7 +54,7 @@ impl<'a> Dot for (BlockId, &'a Block) {
         write!(
             out,
             " [shape=\"rect\", penwidth={}, label=<<table border=\"0\" cellborder=\"0\"><tr><td port=\"title\"><b><u>",
-            if usize::from(self.0) == 0 {
+            if usize::from(self.0) <= 1 {
                 "5"
             } else {
                 "1"
@@ -118,6 +118,8 @@ pub enum Expr {
 
     /// TODO
     I32Add(ExprId, ExprId),
+    /// TODO
+    I32Sub(ExprId, ExprId),
 
     /// TODO
     I32Mul(ExprId, ExprId),
@@ -246,6 +248,11 @@ impl<'a> Dot for (ExprId, &'a Expr) {
                 edge(&mut edges, &self.0, lhs, "lhs");
                 edge(&mut edges, &self.0, rhs, "rhs");
                 write!(out, "i32.add")?;
+            }
+            Expr::I32Sub(lhs, rhs) => {
+                edge(&mut edges, &self.0, lhs, "lhs");
+                edge(&mut edges, &self.0, rhs, "rhs");
+                write!(out, "i32.sub")?;
             }
             Expr::I32Mul(lhs, rhs) => {
                 edge(&mut edges, &self.0, lhs, "lhs");

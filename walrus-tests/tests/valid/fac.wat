@@ -21,9 +21,6 @@
         i32.const 1
         i32.sub
         set_local 0
-
-        ;; go back to the start of the loop
-        br 0
       end
     end
 

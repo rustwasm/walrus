@@ -19,7 +19,7 @@ pub struct ValidationContext<'a> {
     mems: ChunkList<'a, elements::MemoryType>,
     globals: ChunkList<'a, elements::GlobalType>,
     pub(crate) locals: ChunkList<'a, elements::ValueType>,
-    labels: ChunkList<'a, elements::BlockType>,
+    pub(crate) labels: ChunkList<'a, elements::BlockType>,
     return_: ChunkList<'a, elements::BlockType>,
 }
 
@@ -127,12 +127,11 @@ impl<'a> ValidationContext<'a> {
             .chain(body.locals().iter().map(|l| l.value_type()))
             .collect();
 
-        let mut labels = vec![];
-        let mut return_ = vec![];
-        for ty in ty.return_type() {
-            labels.push(elements::BlockType::Value(ty));
-            return_.push(elements::BlockType::Value(ty));
-        }
+        let block_ty = ty.return_type().map_or(elements::BlockType::NoResult, |t| {
+            elements::BlockType::Value(t)
+        });
+        let mut labels = vec![block_ty];
+        let mut return_ = vec![block_ty];
 
         Ok(ValidationContext {
             locals: ChunkList::with_head(locals),
@@ -187,18 +186,15 @@ impl<'a> ValidationContext<'a> {
 
     /// Get the type of the n^th local.
     pub fn label(&self, n: u32) -> Result<elements::BlockType> {
-        self.labels
-            .get(n as usize)
-            .cloned()
-            .ok_or_else(|| {
-                ErrorKind::InvalidWasm
-                    .context(format!(
-                        "local {} is out of bounds ({} locals)",
-                        n,
-                        self.locals.len()
-                    ))
-                    .into()
-            })
+        self.labels.get(n as usize).cloned().ok_or_else(|| {
+            ErrorKind::InvalidWasm
+                .context(format!(
+                    "local {} is out of bounds ({} locals)",
+                    n,
+                    self.locals.len()
+                ))
+                .into()
+        })
     }
 }
 

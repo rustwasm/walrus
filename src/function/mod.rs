@@ -8,7 +8,7 @@ use super::dot::Dot;
 use super::error::{ErrorKind, Result};
 use super::validation_context::ValidationContext;
 use super::ValType;
-use crate::ast::{Block, Expr, ExprId};
+use crate::ast::{Block, BlockId, Expr, ExprId};
 use failure::{Fail, ResultExt};
 use parity_wasm::elements::{self, Instruction};
 use std::io::{self, Write};
@@ -56,41 +56,52 @@ impl Function {
 
         let operands = &mut context::OperandStack::new();
         let controls = &mut context::ControlStack::new();
-        let exit_block = func.blocks.alloc(Block::new(
-            "function exit block",
-            vec![].into_boxed_slice(),
+
+        let mut ctx = FunctionContext::new(&mut func, &validation, operands, controls);
+
+        let func_exit = ctx.func.blocks.alloc(Block::new(
+            "function exit",
+            params.clone().into_boxed_slice(),
             result.clone().into_boxed_slice(),
         ));
-        let mut ctx = FunctionContext::new(&mut func, &validation, operands, controls, exit_block);
+        ctx.push_control("function entry", params, result.clone(), func_exit);
+        let values =
+            validate_expression(&mut ctx, body.code().elements(), func_exit)?.into_boxed_slice();
 
-        ctx.push_control("function entry", params, result.clone());
-        let values = validate_expression(&mut ctx, body.code().elements())?.into_boxed_slice();
+        ctx.func.finish_block(func_exit, Expr::Return { values });
 
-        eprintln!("FITZGEN: in epilog");
-        // let values = ctx.pop_operands(&result)?.into_boxed_slice();
-        eprintln!("FITZGEN: values = {:#?}", values);
-        let ret = ctx.func.exprs.alloc(Expr::Return { values });
-        ctx.add_to_block(exit_block, ret);
+        // if cfg!(debug_assertions) {
+        //     // assert!(ctx.operands.is_empty());
+        //     // assert!(ctx.controls.is_empty());
 
-        eprintln!("FITZGEN: ctx = {:#?}", ctx);
-
-        if cfg!(debug_assertions) {
-            // assert!(ctx.operands.is_empty());
-            // assert!(ctx.controls.is_empty());
-
-            // Assert that every block ends in some sort of jump, branch, or
-            // return.
-            for (_, block) in &func.blocks {
-                if let Some(last) = block.exprs.last().cloned() {
-                    assert!(
-                        func.exprs.get(last).unwrap().is_jump(),
-                        "every block should end in a jump"
-                    );
-                }
-            }
-        }
+        //     // Assert that every block ends in some sort of jump, branch, or
+        //     // return.
+        //     for (_, block) in &func.blocks {
+        //         if let Some(last) = block.exprs.last().cloned() {
+        //             assert!(
+        //                 func.exprs.get(last).unwrap().is_jump(),
+        //                 "every block should end in a jump"
+        //             );
+        //         }
+        //     }
+        // }
 
         Ok(func)
+    }
+
+    fn finish_block(&mut self, block: BlockId, expr: Expr) {
+        assert!(expr.is_jump());
+        let block = self.blocks.get_mut(block).unwrap();
+        match block.exprs.last() {
+            Some(e) => {
+                if self.exprs.get(*e).unwrap().is_jump() {
+                    return;
+                }
+            }
+            _ => {}
+        }
+        let expr = self.exprs.alloc(expr);
+        block.exprs.push(expr);
     }
 }
 
@@ -161,10 +172,22 @@ fn validate_instruction_sequence<'a>(
     }
 }
 
-fn validate_expression(ctx: &mut FunctionContext, expr: &[Instruction]) -> Result<Vec<ExprId>> {
+fn validate_expression(
+    ctx: &mut FunctionContext,
+    expr: &[Instruction],
+    continuation: BlockId,
+) -> Result<Vec<ExprId>> {
     let rest = validate_instruction_sequence(ctx, expr, Instruction::End)?;
+    let block = ctx.control(0).block;
     let exprs = validate_end(ctx)?;
     if rest.is_empty() {
+        ctx.func.finish_block(
+            block,
+            Expr::Br {
+                block: continuation,
+                args: exprs.clone().into_boxed_slice(),
+            },
+        );
         Ok(exprs)
     } else {
         Err(ErrorKind::InvalidWasm
@@ -174,15 +197,10 @@ fn validate_expression(ctx: &mut FunctionContext, expr: &[Instruction]) -> Resul
 }
 
 fn validate_end(ctx: &mut FunctionContext) -> Result<Vec<ExprId>> {
-    eprintln!("FITZGEN: validate_end");
     let (results, exprs) = ctx.pop_control()?;
     let phis: Vec<_> = results
         .iter()
         .map(|_| ctx.func.exprs.alloc(Expr::Phi))
-        .map(|p| {
-            eprintln!("FITZGEN: validate_end: alloc phi: {:?}", p);
-            p
-        })
         .collect();
     ctx.push_operands(&results, &phis);
     Ok(exprs)
@@ -192,11 +210,6 @@ fn validate_instruction<'a>(
     ctx: &mut FunctionContext,
     insts: &'a [Instruction],
 ) -> Result<&'a [Instruction]> {
-    eprintln!(
-        "FITZGEN: validate_instruction: block = {:?}, insts = {:#?}",
-        ctx.control(0).block,
-        insts
-    );
     assert!(!insts.is_empty());
     match &insts[0] {
         Instruction::GetLocal(n) => {
@@ -255,52 +268,82 @@ fn validate_instruction<'a>(
         }
         Instruction::Block(block_ty) => {
             let validation = ctx.validation.for_block(*block_ty);
+            let mut ctx = ctx.nested(&validation);
+
+            let entry_block = ctx.control(0).block;
 
             let params = ValType::from_block_ty(block_ty);
-            let continuation = ctx.continuation;
-            // let continuation = ctx.func.blocks.alloc(Block::new(
-            //     "block continuation",
-            //     params.clone().into_boxed_slice(),
-            //     params.clone().into_boxed_slice(),
-            // ));
+            let continuation = ctx.func.blocks.alloc(Block::new(
+                "block continuation",
+                params.clone().into_boxed_slice(),
+                params.clone().into_boxed_slice(),
+            ));
 
-            let mut ctx = ctx.nested(&validation, continuation);
+            let block = ctx.push_control("block", params.clone(), params, continuation);
 
-            let block = ctx.push_control("block", params.clone(), params);
-            let expr = ctx.func.exprs.alloc(Expr::Br {
-                block,
-                args: vec![].into_boxed_slice(),
-            });
-            ctx.add_to_frame_block(1, expr);
+            ctx.func.finish_block(
+                entry_block,
+                Expr::Br {
+                    block,
+                    args: vec![].into_boxed_slice(),
+                },
+            );
 
             let rest = validate_instruction_sequence(&mut ctx, &insts[1..], Instruction::End)?;
-            validate_end(&mut ctx)?;
+            let values = validate_end(&mut ctx)?;
+
+            ctx.func.finish_block(
+                block,
+                Expr::Br {
+                    block: continuation,
+                    args: values.into_boxed_slice(),
+                },
+            );
+
             return Ok(rest);
         }
         Instruction::Loop(block_ty) => {
             let validation = ctx.validation.for_loop();
+            let mut ctx = ctx.nested(&validation);
+
+            let entry = ctx.control(0).block;
 
             let t = ValType::from_block_ty(block_ty);
-            // let continuation = ctx.continuation;
             let continuation = ctx.func.blocks.alloc(Block::new(
                 "loop continuation block",
                 t.clone().into_boxed_slice(),
                 t.clone().into_boxed_slice(),
             ));
 
-            let mut ctx = ctx.nested(&validation, continuation);
+            let block = ctx.push_control("loop", vec![], t, continuation);
 
-            let block = ctx.push_control("loop", vec![], t);
-
-            let expr = ctx.func.exprs.alloc(Expr::Loop(block));
-            ctx.add_to_frame_block(1, expr);
+            let expr = ctx.func.exprs.alloc(Expr::Br {
+                block,
+                args: vec![].into_boxed_slice(),
+            });
+            ctx.add_to_block(entry, expr);
 
             let rest = validate_instruction_sequence(&mut ctx, &insts[1..], Instruction::End)?;
             validate_end(&mut ctx)?;
+
+            // The loop block branches back to itself.
+            ctx.func.finish_block(
+                block,
+                Expr::Br {
+                    block,
+                    args: vec![].into_boxed_slice(),
+                },
+            );
+
             return Ok(rest);
         }
         Instruction::If(block_ty) => {
             let validation = ctx.validation.for_if_else(*block_ty);
+            let mut ctx = ctx.nested(&validation);
+
+            let (_, condition) = ctx.pop_operand_expected(Some(ValType::I32))?;
+
+            let entry_block = ctx.control(0).block;
 
             let ty = ValType::from_block_ty(block_ty);
             let continuation = ctx.func.blocks.alloc(Block::new(
@@ -308,32 +351,48 @@ fn validate_instruction<'a>(
                 ty.clone().into_boxed_slice(),
                 ty.clone().into_boxed_slice(),
             ));
-
-            let mut ctx = ctx.nested(&validation, continuation);
-
-            let (_, condition) = ctx.pop_operand_expected(Some(ValType::I32))?;
-            let consequent = ctx.push_control("consequent", ty.clone(), ty);
+            let consequent = ctx.push_control("consequent", ty.clone(), ty, continuation);
 
             let rest = validate_instruction_sequence(&mut ctx, &insts[1..], Instruction::Else)?;
+            let (results, values) = ctx.pop_control()?;
 
-            let entry_block = ctx.control(1).block;
+            ctx.func.finish_block(
+                consequent,
+                Expr::Br {
+                    block: continuation,
+                    args: values.into_boxed_slice(),
+                },
+            );
 
-            let (results, _) = ctx.pop_control()?;
-            let alternative = ctx.push_control("alternative", results.clone(), results);
+            let alternative =
+                ctx.push_control("alternative", results.clone(), results, continuation);
 
             let expr = ctx.func.exprs.alloc(Expr::IfElse {
                 condition,
                 consequent,
                 alternative,
             });
+
             ctx.add_to_block(entry_block, expr);
 
             let rest_rest = validate_instruction_sequence(&mut ctx, rest, Instruction::End)?;
-            validate_end(&mut ctx)?;
+            let values = validate_end(&mut ctx)?;
+
+            ctx.func.finish_block(
+                alternative,
+                Expr::Br {
+                    block: continuation,
+                    args: values.into_boxed_slice(),
+                },
+            );
+
             return Ok(rest_rest);
         }
         Instruction::End => {
-            validate_end(ctx)?;
+            unreachable!();
+            // TODO: this call site should encounter an `End` only ever at the
+            // return point, I think?
+            // validate_end(ctx)?;
         }
         Instruction::Else => {
             return Err(ErrorKind::InvalidWasm
@@ -346,15 +405,17 @@ fn validate_instruction<'a>(
                 .context("`br` to out-of-bounds block")?;
 
             let n = *n as usize;
-            if ctx.controls.len() < n {
+            if ctx.controls.len() <= n {
                 return Err(ErrorKind::InvalidWasm
                     .context("attempt to branch to out-of-bounds block")
                     .into());
             }
+
             let expected = ctx.control(n).label_types.clone();
             let args = ctx.pop_operands(&expected)?.into_boxed_slice();
-            let block = ctx.control(n).block;
-            let expr = ctx.func.exprs.alloc(Expr::Br { block, args });
+
+            let to_block = ctx.control(n + 1).block;
+            let expr = ctx.func.exprs.alloc(Expr::Br { block: to_block, args });
             ctx.unreachable(expr);
             ctx.add_to_current_frame_block(expr);
         }
@@ -364,19 +425,22 @@ fn validate_instruction<'a>(
                 .context("`br_if` to out-of-bounds block")?;
 
             let n = *n as usize;
-            if ctx.controls.len() < n {
+            if ctx.controls.len() <= n {
                 return Err(ErrorKind::InvalidWasm
                     .context("attempt to branch to out-of-bounds block")
                     .into());
             }
 
             let (_, condition) = ctx.pop_operand_expected(Some(ValType::I32))?;
-            let block = ctx.control(n).continuation;
+
+
             let expected = ctx.control(n).label_types.clone();
             let args = ctx.pop_operands(&expected)?.into_boxed_slice();
+
+            let to_block = ctx.control(n + 1).block;
             let expr = ctx.func.exprs.alloc(Expr::BrIf {
                 condition,
-                block,
+                block: to_block,
                 args,
             });
             if expected.is_empty() {

@@ -27,7 +27,6 @@ macro_rules! assert_valid {
             {
                 let result =
                     walrus::function::Function::new(&validation, &type_section, func, body);
-                eprintln!("result = {:#?}", result);
                 match result {
                     Err(e) => {
                         eprintln!("got an error:");

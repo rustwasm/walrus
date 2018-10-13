@@ -122,46 +122,8 @@ impl<'a> FunctionContext<'a> {
         )
     }
 
-    pub fn push_initial_control(
-        &mut self,
-        label_types: Vec<ValType>,
-        end_types: Vec<ValType>,
-    ) -> BlockId {
-        impl_push_control(
-            "function entry",
-            self.func,
-            self.controls,
-            self.operands,
-            label_types,
-            end_types,
-        )
-    }
-
     pub fn pop_control(&mut self) -> Result<(Vec<ValType>, Vec<ExprId>)> {
-        let (results, block, exprs) = impl_pop_control(&mut self.controls, &mut self.operands)?;
-
-        // // If the last instruction in the current block is not an unconditional
-        // // jump, add the jump to the continuation or the return.
-        // let last_expr = self.func.blocks.get(block).unwrap().exprs.last().cloned();
-        // let last_expr_is_not_jump = last_expr.map(|e| {
-        //     !self.func.exprs.get(e).unwrap().is_jump()
-        // });
-        // if last_expr_is_not_jump.unwrap_or(true) {
-        //     let expr = if self.controls.is_empty() {
-        //         self.func.exprs.alloc(Expr::Return {
-        //             values: exprs.clone().into_boxed_slice(),
-        //         })
-        //     } else {
-        //         self.func.exprs.alloc(Expr::Br {
-        //             block: self.continuation,
-        //             args: exprs.clone().into_boxed_slice(),
-        //         })
-        //     };
-        //     self.add_to_block(block, expr);
-        //     if let Some(last) = self.controls.last_mut() {
-        //         last.block = self.continuation;
-        //     }
-        // }
+        let (results, _block, exprs) = impl_pop_control(&mut self.controls, &mut self.operands)?;
 
         Ok((results, exprs))
     }

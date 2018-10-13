@@ -130,8 +130,8 @@ impl<'a> ValidationContext<'a> {
         let block_ty = ty.return_type().map_or(elements::BlockType::NoResult, |t| {
             elements::BlockType::Value(t)
         });
-        let mut labels = vec![block_ty];
-        let mut return_ = vec![block_ty];
+        let labels = vec![block_ty];
+        let return_ = vec![block_ty];
 
         Ok(ValidationContext {
             locals: ChunkList::with_head(locals),

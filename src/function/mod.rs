@@ -1,6 +1,7 @@
 //! TODO
 
 mod context;
+pub mod display;
 
 use self::context::FunctionContext;
 use super::arena::Arena;
@@ -11,6 +12,7 @@ use super::ValType;
 use crate::ast::{Block, BlockId, Expr, ExprId};
 use failure::{Fail, ResultExt};
 use parity_wasm::elements::{self, Instruction};
+use std::fmt;
 use std::io::{self, Write};
 
 /// TODO
@@ -102,6 +104,13 @@ impl Function {
         }
         let expr = self.exprs.alloc(expr);
         block.exprs.push(expr);
+    }
+}
+
+impl fmt::Display for Function {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use self::display::DisplayIr;
+        self.display_ir(f, &())
     }
 }
 
@@ -415,7 +424,10 @@ fn validate_instruction<'a>(
             let args = ctx.pop_operands(&expected)?.into_boxed_slice();
 
             let to_block = ctx.control(n + 1).block;
-            let expr = ctx.func.exprs.alloc(Expr::Br { block: to_block, args });
+            let expr = ctx.func.exprs.alloc(Expr::Br {
+                block: to_block,
+                args,
+            });
             ctx.unreachable(expr);
             ctx.add_to_current_frame_block(expr);
         }
@@ -432,7 +444,6 @@ fn validate_instruction<'a>(
             }
 
             let (_, condition) = ctx.pop_operand_expected(Some(ValType::I32))?;
-
 
             let expected = ctx.control(n).label_types.clone();
             let args = ctx.pop_operands(&expected)?.into_boxed_slice();

@@ -7,11 +7,11 @@ extern crate failure;
 extern crate parity_wasm;
 
 pub mod arena;
-pub mod ast;
 pub mod chunk_list;
 pub mod dot;
 pub mod error;
 pub mod function;
+pub mod ir;
 pub mod validation_context;
 
 use failure::Fail;

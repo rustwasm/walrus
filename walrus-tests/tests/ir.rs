@@ -46,7 +46,8 @@ macro_rules! assert_ir {
                             dot_path.set_extension("dot");
                             let mut dot_file =
                                 fs::File::create(dot_path).expect("should create dot file OK");
-                            func.dot(&mut dot_file).expect("should generate dot file OK");
+                            func.dot(&mut dot_file)
+                                .expect("should generate dot file OK");
                         }
 
                         output.push_str(&func.to_string());

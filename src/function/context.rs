@@ -4,7 +4,7 @@ use super::super::error::{ErrorKind, Result};
 use super::super::validation_context::ValidationContext;
 use super::Function;
 use super::ValType;
-use crate::ast::{Block, BlockId, ExprId};
+use crate::ir::{Block, BlockId, ExprId};
 use failure::Fail;
 
 #[derive(Debug)]
@@ -222,10 +222,9 @@ fn impl_push_control(
     label_types: Vec<ValType>,
     end_types: Vec<ValType>,
 ) -> BlockId {
-    let block = func.blocks.alloc(Block::new(
-        why,
-        label_types.clone().into_boxed_slice(),
-    ));
+    let block = func
+        .blocks
+        .alloc(Block::new(why, label_types.clone().into_boxed_slice()));
     let frame = ControlFrame {
         label_types,
         end_types,

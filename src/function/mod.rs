@@ -9,7 +9,7 @@ use super::dot::Dot;
 use super::error::{ErrorKind, Result};
 use super::validation_context::ValidationContext;
 use super::ValType;
-use crate::ast::{Block, BlockId, Expr, ExprId};
+use crate::ir::{Block, BlockId, Expr, ExprId};
 use failure::{Fail, ResultExt};
 use parity_wasm::elements::{self, Instruction};
 use std::fmt;

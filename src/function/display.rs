@@ -178,7 +178,11 @@ impl DisplayIr for Expr {
                 }
                 write!(f, "))")?;
             }
-            Expr::Select { condition, consequent, alternative } => {
+            Expr::Select {
+                condition,
+                consequent,
+                alternative,
+            } => {
                 write!(f, "(select ")?;
                 func.exprs.get(*condition).unwrap().display_ir(f, func)?;
                 write!(f, " ")?;
@@ -187,7 +191,11 @@ impl DisplayIr for Expr {
                 func.exprs.get(*alternative).unwrap().display_ir(f, func)?;
                 write!(f, ")")?;
             }
-            Expr::SetLocal { ty: _, value, local } => {
+            Expr::SetLocal {
+                ty: _,
+                value,
+                local,
+            } => {
                 write!(f, "(set_local {} ", local)?;
                 func.exprs.get(*value).unwrap().display_ir(f, func)?;
                 write!(f, ")")?;

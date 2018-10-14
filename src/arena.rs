@@ -1,6 +1,7 @@
 //! TODO
 
 use std::fmt;
+use std::hash::{Hash, Hasher};
 use std::iter;
 use std::marker::PhantomData;
 use std::ops;
@@ -27,9 +28,32 @@ impl<T> Clone for Id<T> {
     }
 }
 
+impl<T> PartialEq for Id<T> {
+    fn eq(&self, rhs: &Self) -> bool {
+        self.idx == rhs.idx
+    }
+}
+
+impl<T> Eq for Id<T> {}
+
+impl<T> Hash for Id<T> {
+    fn hash<H: Hasher>(&self, h: &mut H) {
+        self.idx.hash(h)
+    }
+}
+
 impl<T> From<Id<T>> for usize {
     fn from(id: Id<T>) -> usize {
         id.idx
+    }
+}
+
+impl<T> From<usize> for Id<T> {
+    fn from(idx: usize) -> Id<T> {
+        Id {
+            idx,
+            _ty: PhantomData,
+        }
     }
 }
 
@@ -68,6 +92,11 @@ impl<T> Arena<T> {
     /// Iterate over this arena's items and their ids.
     pub fn iter(&self) -> Iter<T> {
         IntoIterator::into_iter(self)
+    }
+
+    /// Get the length of this arena.
+    pub fn len(&self) -> usize {
+        self.items.len()
     }
 }
 

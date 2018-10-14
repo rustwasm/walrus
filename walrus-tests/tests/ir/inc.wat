@@ -8,11 +8,11 @@
   (memory (;0;) 16))
 
 ;; CHECK: func {
-;; NEXT:    ;; function exit
-;; NEXT:    block_0(i32):
-;; NEXT:      (return ((i32.add (get_local 0) (i32.const 1))))
-;; NEXT:  
 ;; NEXT:    ;; function entry
 ;; NEXT:    block_1():
 ;; NEXT:      (br block_0 ((i32.add (get_local 0) (i32.const 1))))
+;; NEXT:  
+;; NEXT:    ;; function exit
+;; NEXT:    block_0(i32):
+;; NEXT:      (return ((i32.add (get_local 0) (i32.const 1))))
 ;; NEXT:  }

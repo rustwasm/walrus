@@ -20,7 +20,7 @@ pub struct ValidationContext<'a> {
     globals: ChunkList<'a, elements::GlobalType>,
     pub(crate) locals: ChunkList<'a, elements::ValueType>,
     pub(crate) labels: ChunkList<'a, elements::BlockType>,
-    return_: ChunkList<'a, elements::BlockType>,
+    pub(crate) return_: ChunkList<'a, elements::BlockType>,
 }
 
 impl<'a> ValidationContext<'a> {

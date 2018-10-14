@@ -2,6 +2,7 @@
 
 mod context;
 pub mod display;
+mod graph;
 
 use self::context::FunctionContext;
 use super::arena::Arena;
@@ -102,6 +103,21 @@ impl Function {
         }
         let expr = self.exprs.alloc(expr);
         block.exprs.push(expr);
+    }
+
+    /// Get the control-flow graph for this function.
+    pub fn cfg(&self) -> graph::ControlFlowGraph {
+        graph::ControlFlowGraph::new(self)
+    }
+
+    /// Get the id of this function's entry block.
+    pub fn entry_block(&self) -> BlockId {
+        BlockId::from(1)
+    }
+
+    /// Get the id of this function's exit block.
+    pub fn exit_block(&self) -> BlockId {
+        BlockId::from(0)
     }
 }
 
@@ -267,6 +283,18 @@ fn validate_instruction<'a>(
                 alternative,
             });
             ctx.push_operand(t2, expr);
+        }
+        Instruction::Return => {
+            let expected: Vec<_> = ctx
+                .validation
+                .return_
+                .iter()
+                .flat_map(|b| ValType::from_block_ty(b))
+                .collect();
+            let values = ctx.pop_operands(&expected)?.into_boxed_slice();
+            let expr = ctx.func.exprs.alloc(Expr::Return { values });
+            ctx.unreachable(expr);
+            ctx.add_to_current_frame_block(expr);
         }
         Instruction::Unreachable => {
             let expr = ctx.func.exprs.alloc(Expr::Unreachable);
@@ -467,7 +495,7 @@ fn validate_instruction<'a>(
                     )
                     .into());
             }
-            let default = ctx.controls[ctx.controls.len() - table.default as usize].block;
+            let default = ctx.control(table.default as usize + 1).block;
 
             let mut blocks = Vec::with_capacity(table.table.len());
             for n in table.table.iter() {
@@ -480,24 +508,20 @@ fn validate_instruction<'a>(
                         .context("attempt to jump to an out-of-bounds block from a table entry")
                         .into());
                 }
-                if ctx.control(n).label_types
-                    != ctx.controls[ctx.controls.len() - table.default as usize].label_types
-                {
+                if ctx.control(n).label_types != ctx.control(table.default as usize).label_types {
                     return Err(ErrorKind::InvalidWasm
                         .context(
                             "attempt to jump to block non-matching label types from a table entry",
                         )
                         .into());
                 }
-                blocks.push(ctx.control(n).block);
+                blocks.push(ctx.control(n + 1).block);
             }
             let blocks = blocks.into_boxed_slice();
 
             let (_, which) = ctx.pop_operand_expected(Some(ValType::I32))?;
 
-            let expected = ctx.controls[ctx.controls.len() - table.default as usize]
-                .label_types
-                .clone();
+            let expected = ctx.control(table.default as usize).label_types.clone();
 
             let args = ctx.pop_operands(&expected)?.into_boxed_slice();
             let expr = ctx.func.exprs.alloc(Expr::BrTable {

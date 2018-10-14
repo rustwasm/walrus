@@ -29,30 +29,27 @@
   (export "fac" (func 0)))
 
 ;; CHECK: func {
-;; NEXT:    ;; function exit
-;; NEXT:    block_0(i32):
-;; NEXT:      (return ((get_local 1)))
-;; NEXT:  
 ;; NEXT:    ;; function entry
 ;; NEXT:    block_1():
 ;; NEXT:      (br block_3 ())
-;; NEXT:  
-;; NEXT:    ;; block continuation
-;; NEXT:    block_2():
-;; NEXT:      (br block_0 ((get_local 1)))
-;; NEXT:  
+;; NEXT: 
 ;; NEXT:    ;; block
 ;; NEXT:    block_3():
 ;; NEXT:      (set_local 1 (get_local 0))
 ;; NEXT:      (br block_5 ())
-;; NEXT:  
-;; NEXT:    ;; post-loop continuation block
-;; NEXT:    block_4():
-;; NEXT:  
+;; NEXT: 
 ;; NEXT:    ;; loop
 ;; NEXT:    block_5():
 ;; NEXT:      (br_if (i32.eqz (get_local 0)) block_2 ())
 ;; NEXT:      (set_local 1 (i32.mul (get_local 1) (get_local 0)))
 ;; NEXT:      (set_local 0 (i32.sub (get_local 0) (i32.const 1)))
 ;; NEXT:      (br block_5 ())
+;; NEXT: 
+;; NEXT:    ;; block continuation
+;; NEXT:    block_2():
+;; NEXT:      (br block_0 ((get_local 1)))
+;; NEXT: 
+;; NEXT:    ;; function exit
+;; NEXT:    block_0(i32):
+;; NEXT:      (return ((get_local 1)))
 ;; NEXT:  }

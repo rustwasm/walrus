@@ -7,8 +7,7 @@ version = "0.1.0"
 [dependencies]
 failure = "0.1.2"
 parity-wasm = "0.34.0"
+petgraph = "0.4.13"
 
 [workspace]
-members = [
-  "./walrus-tests"
-]
+members = ["./walrus-tests"]

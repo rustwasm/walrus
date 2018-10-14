@@ -1,5 +1,7 @@
 //! TODO
 
+use std::slice;
+
 /// TODO
 #[derive(Debug)]
 pub struct ChunkList<'a, T: 'a> {
@@ -60,6 +62,39 @@ impl<'a, T: 'a> ChunkList<'a, T> {
                     chunk = tail;
                 }
             }
+        }
+    }
+
+    /// Iterate over the items in this chunk list.
+    pub fn iter<'me>(&'me self) -> Iter<'me, 'a, T> {
+        Iter {
+            iter: self.head.iter(),
+            list: self,
+        }
+    }
+}
+
+/// An iterator over a chunk list.
+#[derive(Clone, Debug)]
+pub struct Iter<'a, 'b, T> {
+    iter: slice::Iter<'a, T>,
+    list: &'a ChunkList<'b, T>,
+}
+
+impl<'a, 'b, T> Iterator for Iter<'a, 'b, T> {
+    type Item = &'a T;
+
+    fn next(&mut self) -> Option<&'a T> {
+        loop {
+            if let Some(x) = self.iter.next() {
+                return Some(x);
+            }
+
+            self.list = match self.list.tail {
+                None => return None,
+                Some(t) => t
+            };
+            self.iter = self.list.head.iter();
         }
     }
 }

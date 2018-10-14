@@ -1,7 +1,8 @@
 //! Displaying IR.
 
-use super::super::ast::{Block, Expr, ExprId};
+use super::super::ir::{Block, Expr, ExprId};
 use super::Function;
+use petgraph::visit;
 use std::fmt;
 
 /// A trait for displaying our parsed IR.
@@ -17,13 +18,24 @@ impl DisplayIr for Function {
     type Context = ();
 
     fn display_ir(&self, f: &mut fmt::Formatter, _: &()) -> fmt::Result {
+        // We iterate over the blocks in reverse post order because it reads
+        // more naturally.
+        let cfg = self.cfg();
+        let mut dfs = visit::DfsPostOrder::new(&cfg, self.entry_block());
+        let mut blocks = vec![];
+
+        while let Some(b) = dfs.next(&cfg) {
+            blocks.push(b);
+        }
+
         writeln!(f, "func {{")?;
-        for (i, (id, block)) in self.blocks.iter().enumerate() {
+        for (i, id) in blocks.iter().rev().enumerate() {
+            let block = &self.blocks[*id];
             if i != 0 {
                 write!(f, "\n")?;
             }
             writeln!(f, "  ;; {}", block.kind)?;
-            write!(f, "  block_{}(", usize::from(id))?;
+            write!(f, "  block_{}(", usize::from(*id))?;
             for (i, p) in block.params.iter().enumerate() {
                 if i != 0 {
                     write!(f, " ")?;
@@ -109,7 +121,7 @@ impl DisplayIr for Expr {
             } => {
                 write!(f, "(br_table ")?;
                 func.exprs.get(*which).unwrap().display_ir(f, func)?;
-                write!(f, "[")?;
+                write!(f, " [")?;
                 for (i, b) in blocks.iter().enumerate() {
                     if i != 0 {
                         write!(f, " ")?;

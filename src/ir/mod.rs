@@ -1,9 +1,12 @@
 //! TODO
 
+pub mod matcher;
+
 use super::ValType;
 use crate::arena::Id;
 use crate::dot::{Dot, Port};
 use std::io::{self, Write};
+use walrus_derive::WalrusExpr;
 
 /// TODO
 pub type ExprId = Id<Expr>;
@@ -84,7 +87,7 @@ impl<'a> Dot for (BlockId, &'a Block) {
 }
 
 /// TODO
-#[derive(Debug)]
+#[derive(Debug, WalrusExpr)]
 pub enum Expr {
     /// `get_local n`
     GetLocal {

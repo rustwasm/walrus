@@ -8,6 +8,10 @@ version = "0.1.0"
 failure = "0.1.2"
 parity-wasm = "0.34.0"
 petgraph = "0.4.13"
+walrus-derive = { version = "=0.1.0", path = "./walrus-derive" }
 
 [workspace]
-members = ["./walrus-tests"]
+members = [
+  "./walrus-derive",
+  "./walrus-tests",
+]

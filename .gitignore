@@ -4,3 +4,4 @@ Cargo.lock
 
 walrus-tests/tests/**/*.wasm
 walrus-tests/tests/**/*.dot
+walrus-tests/tests/**/*.out

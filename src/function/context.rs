@@ -137,11 +137,6 @@ impl<'a> FunctionContext<'a> {
         &self.controls[idx]
     }
 
-    pub fn control_mut(&mut self, n: usize) -> &mut ControlFrame {
-        let idx = self.controls.len() - n - 1;
-        &mut self.controls[idx]
-    }
-
     pub fn add_to_block(&mut self, block: BlockId, expr: ExprId) {
         self.func.blocks.get_mut(block).unwrap().exprs.push(expr);
     }
@@ -230,7 +225,6 @@ fn impl_push_control(
     let block = func.blocks.alloc(Block::new(
         why,
         label_types.clone().into_boxed_slice(),
-        end_types.clone().into_boxed_slice(),
     ));
     let frame = ControlFrame {
         label_types,

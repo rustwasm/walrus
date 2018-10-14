@@ -32,17 +32,15 @@ pub struct Block {
     /// purposes.
     pub(crate) kind: &'static str,
     pub(crate) params: Box<[ValType]>,
-    pub(crate) results: Box<[ValType]>,
     pub(crate) exprs: Vec<ExprId>,
 }
 
 impl Block {
     /// Construct a new extended basic block.
-    pub fn new(kind: &'static str, params: Box<[ValType]>, results: Box<[ValType]>) -> Block {
+    pub fn new(kind: &'static str, params: Box<[ValType]>) -> Block {
         Block {
             kind,
             params,
-            results,
             exprs: vec![],
         }
     }
@@ -63,13 +61,6 @@ impl<'a> Dot for (BlockId, &'a Block) {
         self.0.dot(out)?;
         write!(out, "</u></b> ({}) [", self.1.kind)?;
         for (idx, ty) in self.1.params.iter().enumerate() {
-            if idx != 0 {
-                write!(out, " ")?;
-            }
-            write!(out, "{}", ty)?;
-        }
-        write!(out, "] → [")?;
-        for (idx, ty) in self.1.results.iter().enumerate() {
             if idx != 0 {
                 write!(out, " ")?;
             }
@@ -190,9 +181,6 @@ pub enum Expr {
     },
 
     /// TODO
-    Loop(BlockId),
-
-    /// TODO
     Drop(ExprId),
 
     /// TODO
@@ -208,7 +196,6 @@ impl Expr {
         match self {
             Expr::Unreachable
             | Expr::Br { .. }
-            | Expr::Loop(_)
             | Expr::IfElse { .. }
             | Expr::BrTable { .. }
             | Expr::Return { .. } => true,
@@ -340,10 +327,6 @@ impl<'a> Dot for (ExprId, &'a Expr) {
                     edge(&mut edges, &self.0, arg, "arg");
                 }
                 write!(out, "br_table")?;
-            }
-            Expr::Loop(block) => {
-                edge(&mut edges, &self.0, &Port(block, "title"), "block");
-                write!(out, "loop")?;
             }
             Expr::Drop(e) => {
                 edge(&mut edges, &self.0, e, "value");

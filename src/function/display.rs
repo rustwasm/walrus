@@ -30,16 +30,8 @@ impl DisplayIr for Function {
                 }
                 write!(f, "{}", p)?;
             }
-            write!(f, ") -> (")?;
-            for (i, r) in block.results.iter().enumerate() {
-                if i != 0 {
-                    write!(f, " ")?;
-                }
-                write!(f, "{}", r)?;
-            }
-            writeln!(f, ") {{")?;
+            writeln!(f, "):")?;
             block.display_ir(f, self)?;
-            writeln!(f, "  }}")?;
         }
         writeln!(f, "}}")
     }
@@ -124,7 +116,7 @@ impl DisplayIr for Expr {
                     }
                     write!(f, "block_{}", usize::from(*b))?;
                 }
-                write!(f, "] (")?;
+                write!(f, "] block_{} (", usize::from(*default))?;
                 for (i, a) in args.iter().enumerate() {
                     if i != 0 {
                         write!(f, " ")?;
@@ -172,9 +164,6 @@ impl DisplayIr for Expr {
                     usize::from(*consequent),
                     usize::from(*alternative)
                 )?;
-            }
-            Expr::Loop(block) => {
-                write!(f, "(loop block_{})", usize::from(*block))?;
             }
             Expr::Phi => {
                 write!(f, "(phi)")?;

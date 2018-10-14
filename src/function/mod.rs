@@ -48,7 +48,6 @@ impl Function {
             exprs: Arena::new(),
         };
 
-        let params: Vec<_> = ty.params().iter().map(ValType::from).collect();
         let result: Vec<_> = ty
             .return_type()
             .as_ref()
@@ -63,30 +62,29 @@ impl Function {
 
         let func_exit = ctx.func.blocks.alloc(Block::new(
             "function exit",
-            params.clone().into_boxed_slice(),
             result.clone().into_boxed_slice(),
         ));
-        ctx.push_control("function entry", params, result.clone(), func_exit);
+        ctx.push_control("function entry", vec![], result.clone(), func_exit);
         let values =
             validate_expression(&mut ctx, body.code().elements(), func_exit)?.into_boxed_slice();
 
         ctx.func.finish_block(func_exit, Expr::Return { values });
 
-        // if cfg!(debug_assertions) {
-        //     // assert!(ctx.operands.is_empty());
-        //     // assert!(ctx.controls.is_empty());
+        if cfg!(debug_assertions) {
+            assert_eq!(ctx.operands.len(), result.len());
+            assert!(ctx.controls.is_empty());
 
-        //     // Assert that every block ends in some sort of jump, branch, or
-        //     // return.
-        //     for (_, block) in &func.blocks {
-        //         if let Some(last) = block.exprs.last().cloned() {
-        //             assert!(
-        //                 func.exprs.get(last).unwrap().is_jump(),
-        //                 "every block should end in a jump"
-        //             );
-        //         }
-        //     }
-        // }
+            // Assert that every block ends in some sort of jump, branch, or
+            // return.
+            for (_, block) in &func.blocks {
+                if let Some(last) = block.exprs.last().cloned() {
+                    assert!(
+                        func.exprs.get(last).unwrap().is_jump(),
+                        "every block should end in a jump"
+                    );
+                }
+            }
+        }
 
         Ok(func)
     }
@@ -285,7 +283,6 @@ fn validate_instruction<'a>(
             let continuation = ctx.func.blocks.alloc(Block::new(
                 "block continuation",
                 params.clone().into_boxed_slice(),
-                params.clone().into_boxed_slice(),
             ));
 
             let block = ctx.push_control("block", params.clone(), params, continuation);
@@ -319,8 +316,7 @@ fn validate_instruction<'a>(
 
             let t = ValType::from_block_ty(block_ty);
             let continuation = ctx.func.blocks.alloc(Block::new(
-                "loop continuation block",
-                t.clone().into_boxed_slice(),
+                "post-loop continuation block",
                 t.clone().into_boxed_slice(),
             ));
 
@@ -357,7 +353,6 @@ fn validate_instruction<'a>(
             let ty = ValType::from_block_ty(block_ty);
             let continuation = ctx.func.blocks.alloc(Block::new(
                 "if/else continuation",
-                ty.clone().into_boxed_slice(),
                 ty.clone().into_boxed_slice(),
             ));
             let consequent = ctx.push_control("consequent", ty.clone(), ty, continuation);

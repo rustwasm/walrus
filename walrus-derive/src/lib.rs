@@ -1,4 +1,4 @@
-#![recursion_limit="128"]
+#![recursion_limit = "128"]
 
 extern crate proc_macro;
 
@@ -205,7 +205,7 @@ fn create_matchers(variants: &[syn::Variant]) -> impl quote::ToTokens {
                         generic_tys.push(ty);
                     }
                     let args = &args;
-                    pattern = quote! { { #( #args ),* , .. } };
+                    pattern = quote! { { #( #args , )* .. } };
                 }
                 syn::Fields::Unnamed(fs) => {
                     for (i, _) in fs
@@ -227,10 +227,10 @@ fn create_matchers(variants: &[syn::Variant]) -> impl quote::ToTokens {
                         generic_tys.push(ty);
                     }
                     let args = &args;
-                    pattern = quote! { ( #( #args ),* , .. ) };
+                    pattern = quote! { ( #( #args , )* .. ) };
                 }
                 syn::Fields::Unit => {
-                    pattern = quote! {};
+                    pattern = quote!{};
                 }
             };
 
@@ -261,9 +261,11 @@ fn create_matchers(variants: &[syn::Variant]) -> impl quote::ToTokens {
                 impl< #( #generics ),* > Matcher for #name < #( #generic_tys ),* > {
                     fn is_match(&self, func: &Function, expr: &Expr) -> bool {
                         match expr {
-                            Expr::#expr #pattern => true #(
-                                && #self_args.is_match(func, &func.exprs[#args])
-                            )*,
+                            Expr::#expr #pattern => {
+                                true #(
+                                    && #self_args.is_match(func, &func.exprs[*#args])
+                                )*
+                            }
                             _ => false,
                         }
                     }
@@ -274,6 +276,8 @@ fn create_matchers(variants: &[syn::Variant]) -> impl quote::ToTokens {
 
     quote! {
         pub(crate) mod generated_matchers {
+            use crate::ir::Expr;
+            use crate::function::Function;
             use super::matcher::Matcher;
 
             #( #matchers )*

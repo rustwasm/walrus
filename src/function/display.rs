@@ -35,7 +35,7 @@ impl DisplayIr for Function {
                 write!(f, "\n")?;
             }
             writeln!(f, "  ;; {}", block.kind)?;
-            write!(f, "  block_{}(", usize::from(*id))?;
+            write!(f, "  block_{}(", id.index())?;
             for (i, p) in block.params.iter().enumerate() {
                 if i != 0 {
                     write!(f, " ")?;
@@ -88,7 +88,7 @@ impl DisplayIr for Expr {
     fn display_ir(&self, f: &mut fmt::Formatter, func: &Function) -> fmt::Result {
         match self {
             Expr::Br { block, args } => {
-                write!(f, "(br block_{} (", usize::from(*block))?;
+                write!(f, "(br block_{} (", block.index())?;
                 for (i, a) in args.iter().enumerate() {
                     if i != 0 {
                         write!(f, " ")?;
@@ -104,7 +104,7 @@ impl DisplayIr for Expr {
             } => {
                 write!(f, "(br_if ")?;
                 func.exprs.get(*condition).unwrap().display_ir(f, func)?;
-                write!(f, " block_{} (", usize::from(*block))?;
+                write!(f, " block_{} (", block.index())?;
                 for (i, a) in args.iter().enumerate() {
                     if i != 0 {
                         write!(f, " ")?;
@@ -126,9 +126,9 @@ impl DisplayIr for Expr {
                     if i != 0 {
                         write!(f, " ")?;
                     }
-                    write!(f, "block_{}", usize::from(*b))?;
+                    write!(f, "block_{}", b.index())?;
                 }
-                write!(f, "] block_{} (", usize::from(*default))?;
+                write!(f, "] block_{} (", default.index())?;
                 for (i, a) in args.iter().enumerate() {
                     if i != 0 {
                         write!(f, " ")?;
@@ -173,8 +173,8 @@ impl DisplayIr for Expr {
                 write!(
                     f,
                     " block_{} block_{})",
-                    usize::from(*consequent),
-                    usize::from(*alternative)
+                    consequent.index(),
+                    alternative.index()
                 )?;
             }
             Expr::Phi => {

@@ -5,13 +5,13 @@ pub mod display;
 mod graph;
 
 use self::context::FunctionContext;
-use super::arena::Arena;
 use super::dot::Dot;
 use super::error::{ErrorKind, Result};
 use super::validation_context::ValidationContext;
 use super::ValType;
 use crate::ir::{Block, BlockId, Expr, ExprId};
 use failure::{Fail, ResultExt};
+use id_arena::Arena;
 use parity_wasm::elements::{self, Instruction};
 use std::fmt;
 use std::io::{self, Write};
@@ -21,6 +21,8 @@ use std::io::{self, Write};
 pub struct Function {
     pub(crate) exprs: Arena<Expr>,
     pub(crate) blocks: Arena<Block>,
+    exit_block: Option<BlockId>,
+    entry_block: Option<BlockId>,
     // TODO: provenance: ExprId -> offset in code section of the original
     // instruction
 }
@@ -47,6 +49,8 @@ impl Function {
         let mut func = Function {
             blocks: Arena::new(),
             exprs: Arena::new(),
+            entry_block: None,
+            exit_block: None,
         };
 
         let result: Vec<_> = ty
@@ -65,7 +69,11 @@ impl Function {
             "function exit",
             result.clone().into_boxed_slice(),
         ));
-        ctx.push_control("function entry", vec![], result.clone(), func_exit);
+        ctx.func.exit_block = Some(func_exit);
+
+        let func_entry = ctx.push_control("function entry", vec![], result.clone(), func_exit);
+        ctx.func.entry_block = Some(func_entry);
+
         let values =
             validate_expression(&mut ctx, body.code().elements(), func_exit)?.into_boxed_slice();
 
@@ -112,12 +120,12 @@ impl Function {
 
     /// Get the id of this function's entry block.
     pub fn entry_block(&self) -> BlockId {
-        BlockId::from(1)
+        self.entry_block.unwrap()
     }
 
     /// Get the id of this function's exit block.
     pub fn exit_block(&self) -> BlockId {
-        BlockId::from(0)
+        self.exit_block.unwrap()
     }
 }
 

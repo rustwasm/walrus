@@ -3,7 +3,7 @@
 pub mod matcher;
 
 use super::ValType;
-use crate::arena::Id;
+use id_arena::Id;
 use crate::dot::{Dot, Port};
 use std::io::{self, Write};
 use walrus_derive::WalrusExpr;
@@ -13,8 +13,7 @@ pub type ExprId = Id<Expr>;
 
 impl Dot for ExprId {
     fn dot(&self, out: &mut Write) -> io::Result<()> {
-        let n: usize = (*self).into();
-        write!(out, "expr_{}", n)
+        write!(out, "expr_{}", self.index())
     }
 }
 
@@ -23,8 +22,7 @@ pub type BlockId = Id<Block>;
 
 impl Dot for BlockId {
     fn dot(&self, out: &mut Write) -> io::Result<()> {
-        let n: usize = (*self).into();
-        write!(out, "block_{}", n)
+        write!(out, "block_{}", self.index())
     }
 }
 
@@ -55,7 +53,7 @@ impl<'a> Dot for (BlockId, &'a Block) {
         write!(
             out,
             " [shape=\"rect\", penwidth={}, label=<<table border=\"0\" cellborder=\"0\"><tr><td port=\"title\"><b><u>",
-            if usize::from(self.0) <= 1 {
+            if self.0.index() <= 1 {
                 "5"
             } else {
                 "1"

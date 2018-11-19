@@ -3,10 +3,6 @@
 #![deny(missing_debug_implementations)]
 #![deny(missing_docs)]
 
-extern crate failure;
-extern crate parity_wasm;
-
-pub mod arena;
 pub mod chunk_list;
 pub mod dot;
 pub mod error;

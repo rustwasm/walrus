@@ -6,12 +6,16 @@ version = "0.1.0"
 
 [dependencies]
 failure = "0.1.2"
+id-arena = "1.0.1"
 parity-wasm = "0.34.0"
 petgraph = "0.4.13"
-walrus-derive = { version = "=0.1.0", path = "./walrus-derive" }
+
+[dependencies.walrus-derive]
+path = "./walrus-derive"
+version = "=0.1.0"
 
 [workspace]
 members = [
-  "./walrus-derive",
-  "./walrus-tests",
+    "./walrus-derive",
+    "./walrus-tests",
 ]

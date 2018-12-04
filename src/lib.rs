@@ -10,7 +10,6 @@ pub mod function;
 pub mod ir;
 pub mod validation_context;
 
-use failure::Fail;
 use parity_wasm::elements;
 use std::fmt;
 

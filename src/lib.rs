@@ -8,6 +8,7 @@ pub mod dot;
 pub mod error;
 pub mod function;
 pub mod ir;
+pub mod module;
 pub mod validation_context;
 
 use parity_wasm::elements;

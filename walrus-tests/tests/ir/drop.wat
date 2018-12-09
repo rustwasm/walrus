@@ -4,13 +4,10 @@
     i32.const 42
     drop))
 
-;; CHECK: func {
-;; NEXT:    ;; function entry
-;; NEXT:    block_1():
-;; NEXT:      (drop (i32.const 42))
-;; NEXT:      (br block_0 ())
-;; NEXT:  
-;; NEXT:    ;; function exit
-;; NEXT:    block_0():
-;; NEXT:      (return ())
-;; NEXT:  }
+;; CHECK: (func
+;; NEXT:    (block ;; e0 (function entry)
+;; NEXT:      (drop
+;; NEXT:        (i32.const 42)
+;; NEXT:      )
+;; NEXT:    )
+;; NEXT:  )

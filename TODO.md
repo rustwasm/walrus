@@ -1,3 +1,9 @@
+* locals should be referenced by id
+* functions should be referenced by id
+* use wasmparser
+
+-------------------
+
 * implement CFG simplification pass
 * implement call to imported function -> expression transformation
   * remove an argument

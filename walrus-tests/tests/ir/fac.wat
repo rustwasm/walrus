@@ -28,28 +28,37 @@
     get_local 1)
   (export "fac" (func 0)))
 
-;; CHECK: func {
-;; NEXT:    ;; function entry
-;; NEXT:    block_1():
-;; NEXT:      (br block_3 ())
-;; NEXT: 
-;; NEXT:    ;; block
-;; NEXT:    block_3():
-;; NEXT:      (set_local 1 (get_local 0))
-;; NEXT:      (br block_5 ())
-;; NEXT: 
-;; NEXT:    ;; loop
-;; NEXT:    block_5():
-;; NEXT:      (br_if (i32.eqz (get_local 0)) block_2 ())
-;; NEXT:      (set_local 1 (i32.mul (get_local 1) (get_local 0)))
-;; NEXT:      (set_local 0 (i32.sub (get_local 0) (i32.const 1)))
-;; NEXT:      (br block_5 ())
-;; NEXT: 
-;; NEXT:    ;; block continuation
-;; NEXT:    block_2():
-;; NEXT:      (br block_0 ((get_local 1)))
-;; NEXT: 
-;; NEXT:    ;; function exit
-;; NEXT:    block_0(i32):
-;; NEXT:      (return ((get_local 1)))
-;; NEXT:  }
+;; CHECK: (func
+;; NEXT:    (block ;; e0 (function entry)
+;; NEXT:      (block ;; e1 (block)
+;; NEXT:        (set_local
+;; NEXT:          1
+;; NEXT:          (get_local 0)
+;; NEXT:        )
+;; NEXT:        (loop ;; e4 (loop)
+;; NEXT:          (br_if
+;; NEXT:            e0
+;; NEXT:            (i32.eqz
+;; NEXT:              (get_local 0)
+;; NEXT:            )
+;; NEXT:            ()
+;; NEXT:          )
+;; NEXT:          (set_local
+;; NEXT:            1
+;; NEXT:            (i32.mul
+;; NEXT:              (get_local 1)
+;; NEXT:              (get_local 0)
+;; NEXT:            )
+;; NEXT:          )
+;; NEXT:          (set_local
+;; NEXT:            0
+;; NEXT:            (i32.sub
+;; NEXT:              (get_local 0)
+;; NEXT:              (i32.const 1)
+;; NEXT:            )
+;; NEXT:          )
+;; NEXT:        )
+;; NEXT:      )
+;; NEXT:      (get_local 1)
+;; NEXT:    )
+;; NEXT:  )

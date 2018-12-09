@@ -4,7 +4,7 @@ use super::super::error::{ErrorKind, Result};
 use super::super::validation_context::ValidationContext;
 use super::Function;
 use super::ValType;
-use crate::ir::{Block, BlockId, ExprId};
+use crate::ir::{Block, BlockId, BlockKind, ExprId};
 use failure::Fail;
 
 #[derive(Debug)]
@@ -79,7 +79,10 @@ impl<'a> FunctionContext<'a> {
         }
     }
 
-    pub fn push_operand(&mut self, op: Option<ValType>, expr: ExprId) {
+    pub fn push_operand<E>(&mut self, op: Option<ValType>, expr: E)
+    where
+        E: Copy + Into<ExprId>,
+    {
         impl_push_operand(&mut self.operands, op, expr);
     }
 
@@ -94,7 +97,10 @@ impl<'a> FunctionContext<'a> {
         impl_pop_operand_expected(&mut self.operands, &mut self.controls, expected)
     }
 
-    pub fn push_operands(&mut self, types: &[ValType], exprs: &[ExprId]) {
+    pub fn push_operands<E>(&mut self, types: &[ValType], exprs: &[E])
+    where
+        E: Copy + Into<ExprId>,
+    {
         impl_push_operands(&mut self.operands, types, exprs)
     }
 
@@ -105,15 +111,13 @@ impl<'a> FunctionContext<'a> {
     pub fn push_control(
         &mut self,
         why: &'static str,
+        kind: BlockKind,
         label_types: Vec<ValType>,
         end_types: Vec<ValType>,
-        continuation: BlockId,
     ) -> BlockId {
-        if let Some(frame) = self.controls.last_mut() {
-            frame.block = continuation;
-        }
         impl_push_control(
             why,
+            kind,
             self.func,
             self.controls,
             self.operands,
@@ -123,12 +127,16 @@ impl<'a> FunctionContext<'a> {
     }
 
     pub fn pop_control(&mut self) -> Result<(Vec<ValType>, Vec<ExprId>)> {
+        let block = self.control(0).block;
         let (results, _block, exprs) = impl_pop_control(&mut self.controls, &mut self.operands)?;
-
+        self.func.block_mut(block).exprs.extend(exprs.iter().cloned());
         Ok((results, exprs))
     }
 
-    pub fn unreachable(&mut self, expr: ExprId) {
+    pub fn unreachable<E>(&mut self, expr: E)
+    where
+        E: Into<ExprId>,
+    {
         impl_unreachable(&mut self.operands, &mut self.controls, expr)
     }
 
@@ -137,22 +145,35 @@ impl<'a> FunctionContext<'a> {
         &self.controls[idx]
     }
 
-    pub fn add_to_block(&mut self, block: BlockId, expr: ExprId) {
-        self.func.blocks.get_mut(block).unwrap().exprs.push(expr);
+    pub fn add_to_block<E>(&mut self, block: BlockId, expr: E)
+    where
+        E: Into<ExprId>,
+    {
+        let block = self.func.exprs[block.into()].unwrap_block_mut();
+        block.exprs.push(expr.into());
     }
 
-    pub fn add_to_frame_block(&mut self, control_frame: usize, expr: ExprId) {
+    pub fn add_to_frame_block<E>(&mut self, control_frame: usize, expr: E)
+    where
+        E: Into<ExprId>,
+    {
         let block = self.control(control_frame).block;
         self.add_to_block(block, expr);
     }
 
-    pub fn add_to_current_frame_block(&mut self, expr: ExprId) {
+    pub fn add_to_current_frame_block<E>(&mut self, expr: E)
+    where
+        E: Into<ExprId>,
+    {
         self.add_to_frame_block(0, expr);
     }
 }
 
-fn impl_push_operand(operands: &mut OperandStack, op: Option<ValType>, expr: ExprId) {
-    operands.push((op, expr));
+fn impl_push_operand<E>(operands: &mut OperandStack, op: Option<ValType>, expr: E)
+where
+    E: Into<ExprId>,
+{
+    operands.push((op, expr.into()));
 }
 
 fn impl_pop_operand(
@@ -195,7 +216,10 @@ fn impl_pop_operand_expected(
     }
 }
 
-fn impl_push_operands(operands: &mut OperandStack, types: &[ValType], exprs: &[ExprId]) {
+fn impl_push_operands<E>(operands: &mut OperandStack, types: &[ValType], exprs: &[E])
+where
+    E: Copy + Into<ExprId>,
+{
     for (ty, expr) in types.iter().zip(exprs.iter()) {
         impl_push_operand(operands, Some(*ty), *expr);
     }
@@ -216,15 +240,19 @@ fn impl_pop_operands(
 
 fn impl_push_control(
     why: &'static str,
+    kind: BlockKind,
     func: &mut Function,
     controls: &mut ControlStack,
     operands: &OperandStack,
     label_types: Vec<ValType>,
     end_types: Vec<ValType>,
 ) -> BlockId {
-    let block = func
-        .blocks
-        .alloc(Block::new(why, label_types.clone().into_boxed_slice()));
+    let block = func.alloc(Block::new(
+        why,
+        kind,
+        label_types.clone().into_boxed_slice(),
+        end_types.clone().into_boxed_slice(),
+    ));
     let frame = ControlFrame {
         label_types,
         end_types,
@@ -258,9 +286,12 @@ fn impl_pop_control(
     Ok((frame.end_types, frame.block, exprs))
 }
 
-fn impl_unreachable(operands: &mut OperandStack, controls: &mut ControlStack, expr: ExprId) {
+fn impl_unreachable<E>(operands: &mut OperandStack, controls: &mut ControlStack, expr: E)
+where
+    E: Into<ExprId>,
+{
     let frame = controls.last_mut().unwrap();
-    frame.unreachable = Some(expr);
+    frame.unreachable = Some(expr.into());
     let height = frame.height;
 
     operands.truncate(height);

@@ -9,16 +9,20 @@ use quote::quote;
 use std::iter::FromIterator;
 use syn::{parse_macro_input, DeriveInput};
 
-#[proc_macro_derive(WalrusExpr)]
-pub fn walrus_expr(input: TokenStream) -> TokenStream {
+#[proc_macro_attribute]
+pub fn walrus_expr(_attr: TokenStream, input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
 
     let variants = get_enum_variants(&input);
 
-    let visit = create_visit(&input.ident, &variants);
+    assert_eq!(input.ident.to_string(), "Expr");
+
+    let types = create_types(&input.attrs, &variants);
+    let visit = create_visit(&variants);
     let matchers = create_matchers(&variants);
 
     let expanded = quote! {
+        #types
         #visit
         #matchers
     };
@@ -30,15 +34,188 @@ fn get_enum_variants(input: &DeriveInput) -> Vec<syn::Variant> {
     match &input.data {
         syn::Data::Enum(en) => en.variants.iter().cloned().collect(),
         syn::Data::Struct(_) => {
-            panic!("can only put derive(WalrusExpr) on an enum; found it on a struct")
+            panic!("can only put #[walrus_expr] on an enum; found it on a struct")
         }
         syn::Data::Union(_) => {
-            panic!("can only put derive(WalrusExpr) on an enum; found it on a struct")
+            panic!("can only put #[walrus_expr] on an enum; found it on a union")
         }
     }
 }
 
-fn create_visit(name: &syn::Ident, variants: &[syn::Variant]) -> impl quote::ToTokens {
+fn create_types(attrs: &[syn::Attribute], variants: &[syn::Variant]) -> impl quote::ToTokens {
+    let types: Vec<_> = variants
+        .iter()
+        .map(|v| {
+            let name = &v.ident;
+            let id_name = {
+                let mut s = name.to_string();
+                s.push_str("Id");
+                &syn::Ident::new(&s, Span::call_site())
+            };
+            let attrs = &v.attrs;
+            let fields: Vec<_> = match v.fields {
+                syn::Fields::Named(ref fs) => fs
+                    .named
+                    .iter()
+                    .map(|f| {
+                        let name = &f.ident;
+                        let attrs = &f.attrs;
+                        let ty = &f.ty;
+                        quote! {
+                            #( #attrs )*
+                            pub #name : #ty,
+                        }
+                    })
+                    .collect(),
+                _ => panic!("#[walrus_expr] expects only named fields in enum variant"),
+            };
+            quote! {
+                /// An identifier to a `#name` expression.
+                #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+                pub struct #id_name(ExprId);
+
+                impl From<#id_name> for ExprId {
+                    #[inline]
+                    fn from(id: #id_name) -> ExprId {
+                        id.0
+                    }
+                }
+
+                impl #id_name {
+                    /// Construct a `#id_name` from an `ExprId`.
+                    ///
+                    /// It is the caller's responsibility to ensure that the
+                    /// `Expr` referenced by the given `ExprId` is a `#name`.
+                    #[inline]
+                    pub fn new(id: ExprId) -> #id_name {
+                        #id_name(id)
+                    }
+                }
+
+                #( #attrs )*
+                #[derive(Clone, Debug)]
+                pub struct #name {
+                    #( #fields )*
+                }
+
+                impl From<#name> for Expr {
+                    #[inline]
+                    fn from(x: #name) -> Expr {
+                        Expr::#name(x)
+                    }
+                }
+
+                impl Ast for #name {
+                    type Id = #id_name;
+
+                    #[inline]
+                    fn new_id(id: ExprId) -> #id_name {
+                        #id_name::new(id)
+                    }
+                }
+            }
+        })
+        .collect();
+
+    let methods: Vec<_> = variants
+        .iter()
+        .map(|v| {
+            let name = &v.ident;
+            let snake_name = name.to_string().to_snake_case();
+
+            let is_name = format!("is_{}", snake_name);
+            let is_name = syn::Ident::new(&is_name, Span::call_site());
+
+            let ref_name = format!("{}_ref", snake_name);
+            let ref_name = syn::Ident::new(&ref_name, Span::call_site());
+
+            let mut_name = format!("{}_mut", snake_name);
+            let mut_name = syn::Ident::new(&mut_name, Span::call_site());
+
+            let unwrap_name = format!("unwrap_{}", snake_name);
+            let unwrap_name = syn::Ident::new(&unwrap_name, Span::call_site());
+
+            let unwrap_mut_name = format!("unwrap_{}_mut", snake_name);
+            let unwrap_mut_name = syn::Ident::new(&unwrap_mut_name, Span::call_site());
+
+            quote! {
+                /// If this expression is a `#name`, get a shared reference to it.
+                ///
+                /// Returns `None` otherwise.
+                #[inline]
+                fn #ref_name(&self) -> Option<&#name> {
+                    if let Expr::#name(ref x) = *self {
+                        Some(x)
+                    } else {
+                        None
+                    }
+                }
+
+                /// If this expression is a `#name`, get an exclusive reference to
+                /// it.
+                ///
+                /// Returns `None` otherwise.
+                #[inline]
+                pub fn #mut_name(&mut self) -> Option<&mut #name> {
+                    if let Expr::#name(ref mut x) = *self {
+                        Some(x)
+                    } else {
+                        None
+                    }
+                }
+
+                /// Is this expression a `#name`?
+                #[inline]
+                pub fn #is_name(&self) -> bool {
+                    self.#ref_name().is_some()
+                }
+
+                /// Get a shared reference to the underlying `#name`.
+                ///
+                /// Panics if this expression is not a `#name`.
+                #[inline]
+                pub fn #unwrap_name(&self) -> &#name {
+                    self.#ref_name().unwrap()
+                }
+
+                /// Get an exclusive reference to the underlying `#name`.
+                ///
+                /// Panics if this expression is not a `#name`.
+                #[inline]
+                pub fn #unwrap_mut_name(&mut self) -> &mut #name {
+                    self.#mut_name().unwrap()
+                }
+            }
+        })
+        .collect();
+
+    let variants: Vec<_> = variants
+        .iter()
+        .map(|v| {
+            let name = &v.ident;
+            let attrs = &v.attrs;
+            quote! {
+                #( #attrs )*
+                #name(#name)
+            }
+        })
+        .collect();
+
+    quote! {
+        #( #types )*
+
+        #( #attrs )*
+        pub enum Expr {
+            #(#variants),*
+        }
+
+        impl Expr {
+            #( #methods )*
+        }
+    }
+}
+
+fn create_visit(variants: &[syn::Variant]) -> impl quote::ToTokens {
     let visitor_trait_methods: Vec<_> = variants
         .iter()
         .map(|v| {
@@ -47,37 +224,12 @@ fn create_visit(name: &syn::Ident, variants: &[syn::Variant]) -> impl quote::ToT
             let mut method_name = "visit_".to_string();
             method_name.push_str(&name.to_string().to_snake_case());
             let method_name = syn::Ident::new(&method_name, Span::call_site());
-
-            let params = match &v.fields {
-                syn::Fields::Named(fs) => fs
-                    .named
-                    .iter()
-                    .map(|f| {
-                        let p = f.ident.as_ref().unwrap().to_string().to_snake_case();
-                        let p = syn::Ident::new(&p, Span::call_site());
-                        let ty = &f.ty;
-                        quote! { #p : &#ty }
-                    })
-                    .collect(),
-                syn::Fields::Unnamed(fs) => fs
-                    .unnamed
-                    .iter()
-                    .enumerate()
-                    .map(|(i, f)| {
-                        let p = syn::Ident::new(&format!("arg{}", i), Span::call_site());
-                        let ty = &f.ty;
-                        quote! { #p : &#ty }
-                    })
-                    .collect(),
-                syn::Fields::Unit => vec![],
-            };
-
             let doc = format!("Visit `{}`.", name.to_string());
 
             quote! {
                 #[doc=#doc]
                 #[inline]
-                fn #method_name(&mut self #( , #params )* ) {}
+                fn #method_name(&mut self, expr: &#name ) -> Self::Return;
             }
         })
         .collect();
@@ -86,39 +238,12 @@ fn create_visit(name: &syn::Ident, variants: &[syn::Variant]) -> impl quote::ToT
         .iter()
         .map(|v| {
             let name = &v.ident;
-
-            let args = match &v.fields {
-                syn::Fields::Named(fs) => fs
-                    .named
-                    .iter()
-                    .map(|f| {
-                        let p = f.ident.as_ref().unwrap().to_string().to_snake_case();
-                        syn::Ident::new(&p, Span::call_site())
-                    })
-                    .collect(),
-                syn::Fields::Unnamed(fs) => fs
-                    .unnamed
-                    .iter()
-                    .enumerate()
-                    .map(|(i, _)| syn::Ident::new(&format!("arg{}", i), Span::call_site()))
-                    .collect(),
-                syn::Fields::Unit => vec![],
-            };
-            let args = &args;
-
-            let pattern = match &v.fields {
-                syn::Fields::Named(_) => quote! { { #( #args ),* } },
-                syn::Fields::Unnamed(_) => quote! { ( #( #args ),* ) },
-                syn::Fields::Unit => quote!{},
-            };
-
             let mut method_name = "visit_".to_string();
             method_name.push_str(&name.to_string().to_snake_case());
             let method_name = syn::Ident::new(&method_name, Span::call_site());
-
             quote! {
-                Expr::#name #pattern => {
-                    visitor.#method_name( #( #args ),* );
+                Expr::#name( ref e ) => {
+                    visitor.#method_name(e)
                 }
             }
         })
@@ -127,19 +252,22 @@ fn create_visit(name: &syn::Ident, variants: &[syn::Variant]) -> impl quote::ToT
     quote! {
         /// TODO
         pub trait Visitor {
+            /// The return type of the visitor.
+            type Return;
+
             #( #visitor_trait_methods )*
         }
 
         /// TODO
         pub trait Visit {
             /// TODO
-            fn visit<V>(&self, visitor: &mut V)
+            fn visit<V>(&self, visitor: &mut V) -> V::Return
             where
                 V: Visitor;
         }
 
-        impl Visit for #name {
-            fn visit<V>(&self, visitor: &mut V)
+        impl Visit for Expr {
+            fn visit<V>(&self, visitor: &mut V) -> V::Return
             where
                 V: Visitor
             {
@@ -230,7 +358,7 @@ fn create_matchers(variants: &[syn::Variant]) -> impl quote::ToTokens {
                     pattern = quote! { ( #( #args , )* .. ) };
                 }
                 syn::Fields::Unit => {
-                    pattern = quote!{};
+                    pattern = quote! {};
                 }
             };
 
@@ -261,7 +389,7 @@ fn create_matchers(variants: &[syn::Variant]) -> impl quote::ToTokens {
                 impl< #( #generics ),* > Matcher for #name < #( #generic_tys ),* > {
                     fn is_match(&self, func: &Function, expr: &Expr) -> bool {
                         match expr {
-                            Expr::#expr #pattern => {
+                            Expr::#expr( #expr #pattern ) => {
                                 true #(
                                     && #self_args.is_match(func, &func.exprs[*#args])
                                 )*
@@ -276,7 +404,7 @@ fn create_matchers(variants: &[syn::Variant]) -> impl quote::ToTokens {
 
     quote! {
         pub(crate) mod generated_matchers {
-            use crate::ir::Expr;
+            use crate::ir::*;
             use crate::function::Function;
             use super::matcher::Matcher;
 

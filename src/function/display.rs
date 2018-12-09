@@ -1,9 +1,8 @@
 //! Displaying IR.
 
-use super::super::ir::{Block, Expr, ExprId};
+use super::super::ir::*;
 use super::Function;
-use petgraph::visit;
-use std::fmt;
+use std::fmt::{self, Write};
 
 /// A trait for displaying our parsed IR.
 pub trait DisplayIr {
@@ -11,211 +10,218 @@ pub trait DisplayIr {
     type Context;
 
     /// Display this IR into the given formatter.
-    fn display_ir(&self, f: &mut fmt::Formatter, ctx: &Self::Context) -> fmt::Result;
+    fn display_ir(&self, f: &mut fmt::Formatter, ctx: &Self::Context, indent: usize)
+        -> fmt::Result;
 }
 
 impl DisplayIr for Function {
     type Context = ();
 
-    fn display_ir(&self, f: &mut fmt::Formatter, _: &()) -> fmt::Result {
-        // We iterate over the blocks in reverse post order because it reads
-        // more naturally.
-        let cfg = self.cfg();
-        let mut dfs = visit::DfsPostOrder::new(&cfg, self.entry_block());
-        let mut blocks = vec![];
+    fn display_ir(&self, f: &mut fmt::Formatter, _: &(), indent: usize) -> fmt::Result {
+        assert_eq!(indent, 0);
 
-        while let Some(b) = dfs.next(&cfg) {
-            blocks.push(b);
-        }
+        writeln!(f, "(func")?;
+        let entry = self.entry_block();
 
-        writeln!(f, "func {{")?;
-        for (i, id) in blocks.iter().rev().enumerate() {
-            let block = &self.blocks[*id];
-            if i != 0 {
-                write!(f, "\n")?;
-            }
-            writeln!(f, "  ;; {}", block.kind)?;
-            write!(f, "  block_{}(", id.index())?;
-            for (i, p) in block.params.iter().enumerate() {
-                if i != 0 {
-                    write!(f, " ")?;
-                }
-                write!(f, "{}", p)?;
-            }
-            writeln!(f, "):")?;
-            block.display_ir(f, self)?;
-        }
-        writeln!(f, "}}")
+        let mut visitor = DisplayExpr {
+            func: self,
+            f,
+            indent: indent + 1,
+            id: entry.into(),
+        };
+        self.exprs[entry.into()].visit(&mut visitor)?;
+
+        writeln!(f, ")")
     }
 }
 
-impl DisplayIr for Block {
-    type Context = Function;
+struct DisplayExpr<'a, 'b, 'c> {
+    func: &'a Function,
+    f: &'b mut fmt::Formatter<'c>,
+    indent: usize,
+    id: ExprId,
+}
 
-    fn display_ir(&self, f: &mut fmt::Formatter, func: &Function) -> fmt::Result {
-        for expr in &self.exprs {
-            write!(f, "    ")?;
-            func.exprs.get(*expr).unwrap().display_ir(f, func)?;
-            write!(f, "\n")?;
+impl DisplayExpr<'_, '_, '_> {
+    fn indented(&mut self, s: &str) -> fmt::Result {
+        for _ in 0..self.indent {
+            write!(&mut self.f, "  ")?;
         }
+        writeln!(self.f, "{}", s)
+    }
+
+    fn sexp(&mut self, op: &str, operands: &[ExprId]) -> fmt::Result {
+        if operands.is_empty() && !op.contains(";") {
+            return self.indented(&format!("({})", op));
+        }
+
+        self.indented(&format!("({}", op))?;
+        self.indent += 1;
+        for e in operands {
+            self.visit(*e)?;
+        }
+        self.indent -= 1;
+        self.indented(")")
+    }
+
+    fn list(&mut self, items: &[ExprId]) -> fmt::Result {
+        if items.is_empty() {
+            return self.indented("()");
+        }
+        self.indented("(")?;
+        for i in items {
+            self.visit(*i)?;
+        }
+        self.indented(")")
+    }
+
+    fn visit<E>(&mut self, e: E) -> fmt::Result
+    where
+        E: Into<ExprId>,
+    {
+        let e = e.into();
+        let id = self.id;
+        self.id = e;
+        self.func.exprs[e].visit(self)?;
+        self.id = id;
         Ok(())
     }
 }
 
-fn binop(
-    f: &mut fmt::Formatter,
-    func: &Function,
-    op: &str,
-    lhs: ExprId,
-    rhs: ExprId,
-) -> fmt::Result {
-    write!(f, "({} ", op)?;
-    func.exprs.get(lhs).unwrap().display_ir(f, func)?;
-    write!(f, " ")?;
-    func.exprs.get(rhs).unwrap().display_ir(f, func)?;
-    write!(f, ")")
-}
+impl Visitor for DisplayExpr<'_, '_, '_> {
+    type Return = fmt::Result;
 
-fn unop(f: &mut fmt::Formatter, func: &Function, op: &str, e: ExprId) -> fmt::Result {
-    write!(f, "({} ", op)?;
-    func.exprs.get(e).unwrap().display_ir(f, func)?;
-    write!(f, ")")
-}
+    fn visit_block(&mut self, b: &Block) -> fmt::Result {
+        let label = format!(
+            "{} ;; e{} ({})",
+            match b.kind {
+                BlockKind::Block => "block",
+                BlockKind::Loop => "loop",
+            },
+            self.id.index(),
+            b.diagnostic
+        );
+        self.sexp(&label, &b.exprs)
+    }
 
-impl DisplayIr for Expr {
-    type Context = Function;
+    fn visit_get_local(&mut self, expr: &GetLocal) -> fmt::Result {
+        self.indented(&format!("(get_local {})", expr.local))
+    }
 
-    fn display_ir(&self, f: &mut fmt::Formatter, func: &Function) -> fmt::Result {
-        match self {
-            Expr::Br { block, args } => {
-                write!(f, "(br block_{} (", block.index())?;
-                for (i, a) in args.iter().enumerate() {
-                    if i != 0 {
-                        write!(f, " ")?;
-                    }
-                    func.exprs.get(*a).unwrap().display_ir(f, func)?;
-                }
-                write!(f, "))")?;
+    fn visit_set_local(&mut self, expr: &SetLocal) -> fmt::Result {
+        self.indented("(set_local")?;
+        self.indent += 1;
+        self.indented(&format!("{}", expr.local))?;
+        self.visit(expr.value)?;
+        self.indent -= 1;
+        self.indented(")")
+    }
+
+    fn visit_i32_const(&mut self, expr: &I32Const) -> fmt::Result {
+        self.indented(&format!("(i32.const {})", expr.value))
+    }
+
+    fn visit_i32_add(&mut self, expr: &I32Add) -> fmt::Result {
+        self.sexp("i32.add", &[expr.lhs, expr.rhs])
+    }
+
+    fn visit_i32_sub(&mut self, expr: &I32Sub) -> fmt::Result {
+        self.sexp("i32.sub", &[expr.lhs, expr.rhs])
+    }
+
+    fn visit_i32_mul(&mut self, expr: &I32Mul) -> fmt::Result {
+        self.sexp("i32.mul", &[expr.lhs, expr.rhs])
+    }
+
+    fn visit_i32_eqz(&mut self, e: &I32Eqz) -> fmt::Result {
+        self.sexp("i32.eqz", &[e.expr])
+    }
+
+    fn visit_i32_popcnt(&mut self, e: &I32Popcnt) -> fmt::Result {
+        self.sexp("i32.popcnt", &[e.expr])
+    }
+
+    fn visit_select(&mut self, s: &Select) -> fmt::Result {
+        self.sexp("select", &[s.condition, s.consequent, s.alternative])
+    }
+
+    fn visit_unreachable(&mut self, _: &Unreachable) -> fmt::Result {
+        self.indented("unreachable")
+    }
+
+    fn visit_br(&mut self, br: &Br) -> fmt::Result {
+        self.indented("(br")?;
+        self.indent += 1;
+
+        self.indented(&format!("e{} ;; block", {
+            let b: ExprId = br.block.into();
+            b.index()
+        }))?;
+
+        self.list(&br.args)?;
+
+        self.indent -= 1;
+        self.indented(")")
+    }
+
+    fn visit_br_if(&mut self, br: &BrIf) -> fmt::Result {
+        self.indented("(br_if")?;
+        self.indent += 1;
+
+        self.indented(&format!("e{}", {
+            let b: ExprId = br.block.into();
+            b.index()
+        }))?;
+
+        self.visit(br.condition)?;
+        self.list(&br.args)?;
+
+        self.indent -= 1;
+        self.indented(")")
+    }
+
+    fn visit_if_else(&mut self, expr: &IfElse) -> fmt::Result {
+        self.sexp(
+            "if",
+            &[
+                expr.condition,
+                expr.consequent.into(),
+                expr.alternative.into(),
+            ],
+        )
+    }
+
+    fn visit_br_table(&mut self, b: &BrTable) -> fmt::Result {
+        self.indented("(br_table")?;
+        self.indent += 1;
+
+        self.visit(b.which)?;
+
+        let default: ExprId = b.default.into();
+        self.indented(&format!("e{} ;; default", default.index()))?;
+
+        let mut blocks = "[".to_string();
+        for (i, bl) in b.blocks.iter().cloned().enumerate() {
+            if i > 0 {
+                blocks.push(' ');
             }
-            Expr::BrIf {
-                condition,
-                block,
-                args,
-            } => {
-                write!(f, "(br_if ")?;
-                func.exprs.get(*condition).unwrap().display_ir(f, func)?;
-                write!(f, " block_{} (", block.index())?;
-                for (i, a) in args.iter().enumerate() {
-                    if i != 0 {
-                        write!(f, " ")?;
-                    }
-                    func.exprs.get(*a).unwrap().display_ir(f, func)?;
-                }
-                write!(f, "))")?;
-            }
-            Expr::BrTable {
-                which,
-                blocks,
-                default,
-                args,
-            } => {
-                write!(f, "(br_table ")?;
-                func.exprs.get(*which).unwrap().display_ir(f, func)?;
-                write!(f, " [")?;
-                for (i, b) in blocks.iter().enumerate() {
-                    if i != 0 {
-                        write!(f, " ")?;
-                    }
-                    write!(f, "block_{}", b.index())?;
-                }
-                write!(f, "] block_{} (", default.index())?;
-                for (i, a) in args.iter().enumerate() {
-                    if i != 0 {
-                        write!(f, " ")?;
-                    }
-                    func.exprs.get(*a).unwrap().display_ir(f, func)?;
-                }
-                write!(f, "))")?;
-            }
-            Expr::Drop(e) => {
-                write!(f, "(drop ")?;
-                func.exprs.get(*e).unwrap().display_ir(f, func)?;
-                write!(f, ")")?;
-            }
-            Expr::GetLocal { ty: _, local } => {
-                write!(f, "(get_local {})", local)?;
-            }
-            Expr::I32Add(lhs, rhs) => {
-                binop(f, func, "i32.add", *lhs, *rhs)?;
-            }
-            Expr::I32Const(c) => {
-                write!(f, "(i32.const {})", c)?;
-            }
-            Expr::I32Eqz(e) => {
-                unop(f, func, "i32.eqz", *e)?;
-            }
-            Expr::I32Mul(lhs, rhs) => {
-                binop(f, func, "i32.mul", *lhs, *rhs)?;
-            }
-            Expr::I32Popcnt(e) => {
-                unop(f, func, "i32.popcnt", *e)?;
-            }
-            Expr::I32Sub(lhs, rhs) => {
-                binop(f, func, "i32.sub", *lhs, *rhs)?;
-            }
-            Expr::IfElse {
-                condition,
-                consequent,
-                alternative,
-            } => {
-                write!(f, "(if/else ")?;
-                func.exprs.get(*condition).unwrap().display_ir(f, func)?;
-                write!(
-                    f,
-                    " block_{} block_{})",
-                    consequent.index(),
-                    alternative.index()
-                )?;
-            }
-            Expr::Phi => {
-                write!(f, "(phi)")?;
-            }
-            Expr::Return { values } => {
-                write!(f, "(return (")?;
-                for (i, v) in values.iter().enumerate() {
-                    if i != 0 {
-                        write!(f, " ")?;
-                    }
-                    func.exprs.get(*v).unwrap().display_ir(f, func)?;
-                }
-                write!(f, "))")?;
-            }
-            Expr::Select {
-                condition,
-                consequent,
-                alternative,
-            } => {
-                write!(f, "(select ")?;
-                func.exprs.get(*condition).unwrap().display_ir(f, func)?;
-                write!(f, " ")?;
-                func.exprs.get(*consequent).unwrap().display_ir(f, func)?;
-                write!(f, " ")?;
-                func.exprs.get(*alternative).unwrap().display_ir(f, func)?;
-                write!(f, ")")?;
-            }
-            Expr::SetLocal {
-                ty: _,
-                value,
-                local,
-            } => {
-                write!(f, "(set_local {} ", local)?;
-                func.exprs.get(*value).unwrap().display_ir(f, func)?;
-                write!(f, ")")?;
-            }
-            Expr::Unreachable => {
-                write!(f, "(unreachable)")?;
-            }
+            let bl: ExprId = bl.into();
+            write!(&mut blocks, "e{}", bl.index()).unwrap();
         }
-        Ok(())
+        blocks.push(']');
+        self.indented(&blocks)?;
+
+        self.list(&b.args)?;
+
+        self.indent -= 1;
+        self.indented(")")
+    }
+
+    fn visit_drop(&mut self, d: &Drop) -> fmt::Result {
+        self.sexp("drop", &[d.expr])
+    }
+
+    fn visit_return(&mut self, r: &Return) -> fmt::Result {
+        self.sexp("return", &r.values)
     }
 }

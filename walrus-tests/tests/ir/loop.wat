@@ -5,12 +5,9 @@
     end)
   (export "inf_loop" (func 0)))
 
-;; CHECK: func {
-;; NEXT:    ;; function entry
-;; NEXT:    block_1():
-;; NEXT:      (br block_3 ())
-;; NEXT:  
-;; NEXT:    ;; loop
-;; NEXT:    block_3():
-;; NEXT:      (br block_3 ())
-;; NEXT:  }
+;; CHECK: (func
+;; NEXT:    (block ;; e0 (function entry)
+;; NEXT:      (loop ;; e1 (loop)
+;; NEXT:      )
+;; NEXT:    )
+;; NEXT:  )

@@ -20,9 +20,9 @@ fn do_assert_ir(wasm_path: &Path, wat_path: &Path) {
             panic!("constructing a new `walrus::Function` failed");
         }
     };
-    assert_eq!(module.functions().len(), 1);
+    assert_eq!(module.functions().count(), 1);
 
-    let func = &module.functions()[0];
+    let func = &module.functions().next().unwrap();
     let checker = walrus_tests::FileCheck::from_file(Path::new(wat_path));
     let mut output = String::new();
 

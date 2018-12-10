@@ -1,19 +1,20 @@
 //! TODO
 
-use super::super::error::{ErrorKind, Result};
-use super::super::validation_context::ValidationContext;
-use super::Function;
-use super::ValType;
+use crate::error::{ErrorKind, Result};
 use crate::ir::{Block, BlockId, BlockKind, ExprId};
+use crate::module::functions::{FunctionId, LocalFunction};
+use crate::module::locals::ModuleLocals;
+use crate::ty::ValType;
+use crate::validation_context::ValidationContext;
 use failure::Fail;
 
 #[derive(Debug)]
 pub struct ControlFrame {
     /// The type of the associated label (used to type-check branches).
-    pub label_types: Vec<ValType>,
+    pub label_types: Box<[ValType]>,
 
     /// The result type of the block (used to check its result).
-    pub end_types: Vec<ValType>,
+    pub end_types: Box<[ValType]>,
 
     /// The height of the operand stack at the start of the block (used to check
     /// that operands do not underflow the current block).
@@ -41,8 +42,14 @@ pub type ControlStack = Vec<ControlFrame>;
 
 #[derive(Debug)]
 pub struct FunctionContext<'a> {
+    /// The locals for this function's module.
+    pub locals: &'a mut ModuleLocals,
+
+    /// The arena id of `func`.
+    pub func_id: FunctionId,
+
     /// The function being validated/constructed.
-    pub func: &'a mut Function,
+    pub func: &'a mut LocalFunction,
 
     /// The context under which the function is being validated/constructed.
     pub validation: &'a ValidationContext<'a>,
@@ -57,12 +64,16 @@ pub struct FunctionContext<'a> {
 impl<'a> FunctionContext<'a> {
     /// Create a new function context.
     pub fn new(
-        func: &'a mut Function,
+        locals: &'a mut ModuleLocals,
+        func_id: FunctionId,
+        func: &'a mut LocalFunction,
         validation: &'a ValidationContext<'a>,
         operands: &'a mut OperandStack,
         controls: &'a mut ControlStack,
     ) -> FunctionContext<'a> {
         FunctionContext {
+            locals,
+            func_id,
             func,
             validation,
             operands,
@@ -72,6 +83,8 @@ impl<'a> FunctionContext<'a> {
 
     pub fn nested<'b>(&'b mut self, validation: &'b ValidationContext<'b>) -> FunctionContext<'b> {
         FunctionContext {
+            locals: self.locals,
+            func_id: self.func_id,
             func: self.func,
             validation,
             operands: self.operands,
@@ -112,8 +125,8 @@ impl<'a> FunctionContext<'a> {
         &mut self,
         why: &'static str,
         kind: BlockKind,
-        label_types: Vec<ValType>,
-        end_types: Vec<ValType>,
+        label_types: Box<[ValType]>,
+        end_types: Box<[ValType]>,
     ) -> BlockId {
         impl_push_control(
             why,
@@ -126,10 +139,13 @@ impl<'a> FunctionContext<'a> {
         )
     }
 
-    pub fn pop_control(&mut self) -> Result<(Vec<ValType>, Vec<ExprId>)> {
+    pub fn pop_control(&mut self) -> Result<(Box<[ValType]>, Vec<ExprId>)> {
         let block = self.control(0).block;
         let (results, _block, exprs) = impl_pop_control(&mut self.controls, &mut self.operands)?;
-        self.func.block_mut(block).exprs.extend(exprs.iter().cloned());
+        self.func
+            .block_mut(block)
+            .exprs
+            .extend(exprs.iter().cloned());
         Ok((results, exprs))
     }
 
@@ -241,17 +257,17 @@ fn impl_pop_operands(
 fn impl_push_control(
     why: &'static str,
     kind: BlockKind,
-    func: &mut Function,
+    func: &mut LocalFunction,
     controls: &mut ControlStack,
     operands: &OperandStack,
-    label_types: Vec<ValType>,
-    end_types: Vec<ValType>,
+    label_types: Box<[ValType]>,
+    end_types: Box<[ValType]>,
 ) -> BlockId {
     let block = func.alloc(Block::new(
         why,
         kind,
-        label_types.clone().into_boxed_slice(),
-        end_types.clone().into_boxed_slice(),
+        label_types.clone(),
+        end_types.clone(),
     ));
     let frame = ControlFrame {
         label_types,
@@ -267,7 +283,7 @@ fn impl_push_control(
 fn impl_pop_control(
     controls: &mut ControlStack,
     operands: &mut OperandStack,
-) -> Result<(Vec<ValType>, BlockId, Vec<ExprId>)> {
+) -> Result<(Box<[ValType]>, BlockId, Vec<ExprId>)> {
     let frame = controls.last().ok_or_else(|| {
         ErrorKind::InvalidWasm.context("attempted to pop a frame from an empty control stack")
     })?;

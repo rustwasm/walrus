@@ -387,11 +387,14 @@ fn create_matchers(variants: &[syn::Variant]) -> impl quote::ToTokens {
                 }
 
                 impl< #( #generics ),* > Matcher for #name < #( #generic_tys ),* > {
-                    fn is_match(&self, func: &Function, expr: &Expr) -> bool {
+                    fn is_match(&self, func: &LocalFunction, expr: &Expr) -> bool {
                         match expr {
                             Expr::#expr( #expr #pattern ) => {
                                 true #(
-                                    && #self_args.is_match(func, &func.exprs[*#args])
+                                    && #self_args.is_match(
+                                        func,
+                                        &func.exprs[*#args]
+                                    )
                                 )*
                             }
                             _ => false,
@@ -405,7 +408,7 @@ fn create_matchers(variants: &[syn::Variant]) -> impl quote::ToTokens {
     quote! {
         pub(crate) mod generated_matchers {
             use crate::ir::*;
-            use crate::function::Function;
+            use crate::module::functions::LocalFunction;
             use super::matcher::Matcher;
 
             #( #matchers )*

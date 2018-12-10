@@ -6,8 +6,9 @@ version = "0.1.0"
 
 [dependencies]
 failure = "0.1.2"
-id-arena = "2"
-parity-wasm = "0.34.0"
+#id-arena = "2"
+id-arena = { path = "../id-arena" }
+parity-wasm = "0.35.6"
 petgraph = "0.4.13"
 
 [dependencies.walrus-derive]
@@ -18,4 +19,5 @@ version = "=0.1.0"
 members = [
     "./walrus-derive",
     "./walrus-tests",
+    "./walrus-tests-utils",
 ]

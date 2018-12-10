@@ -1,45 +1,16 @@
-extern crate walkdir;
-
 use std::env;
 use std::ffi::OsStr;
 use std::fs;
-use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::path::Path;
 use walkdir::WalkDir;
-
-fn require_wat2wasm() {
-    let status = Command::new("wat2wasm")
-        .arg("--help")
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .expect(
-            "Could not spawn wat2wasm; do you have https://github.com/WebAssembly/wabt installed?",
-        );
-    assert!(
-        status.success(),
-        "wat2wasm did not run OK; do you have https://github.com/WebAssembly/wabt installed?"
-    )
-}
-
-fn wat2wasm(path: &Path) -> PathBuf {
-    let mut wasm = PathBuf::from(path);
-    wasm.set_extension("wasm");
-
-    let mut cmd = Command::new("wat2wasm");
-    cmd.arg(path).arg("-o").arg(&wasm).arg("-v");
-    println!("running: {:?}", cmd);
-    let status = cmd.status().expect("should spawn wat2wasm OK");
-    assert!(status.success(), "should run wat2wasm OK");
-
-    wasm
-}
+use walrus_tests_utils::wat2wasm;
 
 fn for_each_wat_file<P, F>(dir: P, mut f: F)
 where
     P: AsRef<Path>,
     F: FnMut(&Path),
 {
+    println!("cargo:rerun-if-changed={}", dir.as_ref().display());
     for entry in WalkDir::new(dir) {
         let entry = entry.unwrap();
         if entry.path().extension() == Some(OsStr::new("wat")) {
@@ -97,11 +68,30 @@ fn ir() {
         .expect("should write generated ir.rs file OK");
 }
 
+fn round_trip() {
+    let mut round_trip_tests = String::new();
+
+    for_each_wat_file("tests/round_trip", |path| {
+        let wasm = wat2wasm(path);
+        let test_name = path_to_ident(path);
+        round_trip_tests.push_str(&format!(
+            "assert_round_trip!({}, \"{}\", \"{}\");\n",
+            test_name,
+            wasm.display(),
+            path.display()
+        ));
+    });
+
+    let out_dir = env::var("OUT_DIR").unwrap();
+    fs::write(Path::new(&out_dir).join("round_trip.rs"), &round_trip_tests)
+        .expect("should write generated round_trip.rs file OK");
+}
+
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-env-changed=WALRUS_TESTS_DOT");
 
-    require_wat2wasm();
     valid();
     ir();
+    round_trip();
 }

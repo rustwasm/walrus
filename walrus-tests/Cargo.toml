@@ -6,8 +6,10 @@ edition = "2018"
 
 [build-dependencies]
 walkdir = "2.2.5"
+walrus-tests-utils = { path = "../walrus-tests-utils" }
 
 [dev-dependencies]
 failure = "0.1.2"
 parity-wasm = "0.34.0"
 walrus = { path = ".." }
+walrus-tests-utils = { path = "../walrus-tests-utils" }

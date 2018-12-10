@@ -92,7 +92,7 @@ impl<'a, 'b, T> Iterator for Iter<'a, 'b, T> {
 
             self.list = match self.list.tail {
                 None => return None,
-                Some(t) => t
+                Some(t) => t,
             };
             self.iter = self.list.head.iter();
         }

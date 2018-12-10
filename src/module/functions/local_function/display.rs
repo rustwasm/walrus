@@ -1,7 +1,7 @@
 //! Displaying IR.
 
-use super::super::ir::*;
-use super::Function;
+use crate::ir::*;
+use crate::module::functions::{Function, FunctionKind, ImportedFunction, LocalFunction};
 use std::fmt::{self, Write};
 
 /// A trait for displaying our parsed IR.
@@ -15,6 +15,27 @@ pub trait DisplayIr {
 }
 
 impl DisplayIr for Function {
+    type Context = ();
+
+    fn display_ir(&self, f: &mut fmt::Formatter, _: &(), indent: usize) -> fmt::Result {
+        assert_eq!(indent, 0);
+        match self.kind {
+            FunctionKind::Import(ref i) => i.display_ir(f, &(), indent),
+            FunctionKind::Local(ref l) => l.display_ir(f, &(), indent),
+        }
+    }
+}
+
+impl DisplayIr for ImportedFunction {
+    type Context = ();
+
+    fn display_ir(&self, f: &mut fmt::Formatter, _: &(), indent: usize) -> fmt::Result {
+        assert_eq!(indent, 0);
+        writeln!(f, "(import func)")
+    }
+}
+
+impl DisplayIr for LocalFunction {
     type Context = ();
 
     fn display_ir(&self, f: &mut fmt::Formatter, _: &(), indent: usize) -> fmt::Result {
@@ -36,7 +57,7 @@ impl DisplayIr for Function {
 }
 
 struct DisplayExpr<'a, 'b, 'c> {
-    func: &'a Function,
+    func: &'a LocalFunction,
     f: &'b mut fmt::Formatter<'c>,
     indent: usize,
     id: ExprId,
@@ -95,7 +116,7 @@ impl Visitor for DisplayExpr<'_, '_, '_> {
         let label = format!(
             "{} ;; e{} ({})",
             match b.kind {
-                BlockKind::Block => "block",
+                BlockKind::IfElse | BlockKind::FunctionEntry | BlockKind::Block => "block",
                 BlockKind::Loop => "loop",
             },
             self.id.index(),
@@ -105,13 +126,13 @@ impl Visitor for DisplayExpr<'_, '_, '_> {
     }
 
     fn visit_get_local(&mut self, expr: &GetLocal) -> fmt::Result {
-        self.indented(&format!("(get_local {})", expr.local))
+        self.indented(&format!("(get_local {})", expr.local.index()))
     }
 
     fn visit_set_local(&mut self, expr: &SetLocal) -> fmt::Result {
         self.indented("(set_local")?;
         self.indent += 1;
-        self.indented(&format!("{}", expr.local))?;
+        self.indented(&format!("{}", expr.local.index()))?;
         self.visit(expr.value)?;
         self.indent -= 1;
         self.indented(")")

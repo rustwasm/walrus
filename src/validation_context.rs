@@ -2,7 +2,7 @@
 
 use super::chunk_list::ChunkList;
 use super::error::{ErrorKind, Result};
-use super::ValType;
+use crate::ty::{Type, ValType};
 use failure::{Fail, ResultExt};
 use parity_wasm::elements;
 use std::u16;
@@ -18,20 +18,16 @@ pub struct ValidationContext<'a> {
     tables: ChunkList<'a, elements::TableType>,
     mems: ChunkList<'a, elements::MemoryType>,
     globals: ChunkList<'a, elements::GlobalType>,
-    pub(crate) locals: ChunkList<'a, elements::ValueType>,
-    pub(crate) labels: ChunkList<'a, elements::BlockType>,
-    pub(crate) return_: ChunkList<'a, elements::BlockType>,
+    pub(crate) locals: ChunkList<'a, ValType>,
+    pub(crate) labels: ChunkList<'a, Box<[ValType]>>,
+    pub(crate) return_: ChunkList<'a, Box<[ValType]>>,
 }
 
 impl<'a> ValidationContext<'a> {
     /// Construct a `ValidationContext` from the given module.
     pub fn for_module<'b>(module: &'b elements::Module) -> Result<ValidationContext<'a>> {
         let types: Vec<_> = match module.type_section() {
-            None => {
-                return Err(ErrorKind::InvalidWasm
-                    .context("the module is missing its type section")
-                    .into())
-            }
+            None => vec![],
             Some(ts) => ts
                 .types()
                 .iter()
@@ -108,30 +104,23 @@ impl<'a> ValidationContext<'a> {
     /// TODO
     pub fn for_function<'b>(
         &'b self,
-        func: &elements::Func,
+        ty: &Type,
         body: &elements::FuncBody,
     ) -> Result<ValidationContext<'b>> {
-        let ty = match self.types.get(func.type_ref() as usize) {
-            None => {
-                return Err(ErrorKind::InvalidWasm
-                    .context("reference to out-of-bounds function type")
-                    .into());
-            }
-            Some(ty) => ty,
-        };
-
         let locals = ty
             .params()
             .iter()
             .cloned()
-            .chain(body.locals().iter().map(|l| l.value_type()))
+            .chain(body.locals().iter().map(|l| ValType::from(&l.value_type())))
             .collect();
 
-        let block_ty = ty.return_type().map_or(elements::BlockType::NoResult, |t| {
-            elements::BlockType::Value(t)
-        });
-        let labels = vec![block_ty];
-        let return_ = vec![block_ty];
+        let labels = vec![ty
+            .results()
+            .iter()
+            .cloned()
+            .collect::<Vec<_>>()
+            .into_boxed_slice()];
+        let return_ = labels.clone();
 
         Ok(ValidationContext {
             locals: ChunkList::with_head(locals),
@@ -142,7 +131,7 @@ impl<'a> ValidationContext<'a> {
     }
 
     /// TODO
-    pub fn for_block(&self, label: elements::BlockType) -> ValidationContext {
+    pub fn for_block(&self, label: Box<[ValType]>) -> ValidationContext {
         ValidationContext {
             labels: ChunkList::with_head_and_tail(vec![label], &self.labels),
             ..self.nested()
@@ -152,16 +141,13 @@ impl<'a> ValidationContext<'a> {
     /// TODO
     pub fn for_loop(&self) -> ValidationContext {
         ValidationContext {
-            labels: ChunkList::with_head_and_tail(
-                vec![elements::BlockType::NoResult],
-                &self.labels,
-            ),
+            labels: ChunkList::with_head_and_tail(vec![vec![].into_boxed_slice()], &self.labels),
             ..self.nested()
         }
     }
 
     /// TODO
-    pub fn for_if_else(&self, label: elements::BlockType) -> ValidationContext {
+    pub fn for_if_else(&self, label: Box<[ValType]>) -> ValidationContext {
         ValidationContext {
             labels: ChunkList::with_head_and_tail(vec![label], &self.labels),
             ..self.nested()
@@ -170,23 +156,20 @@ impl<'a> ValidationContext<'a> {
 
     /// Get the type of the n^th local.
     pub fn local(&self, n: u32) -> Result<ValType> {
-        self.locals
-            .get(n as usize)
-            .map(ValType::from)
-            .ok_or_else(|| {
-                ErrorKind::InvalidWasm
-                    .context(format!(
-                        "local {} is out of bounds ({} locals)",
-                        n,
-                        self.locals.len()
-                    ))
-                    .into()
-            })
+        self.locals.get(n as usize).cloned().ok_or_else(|| {
+            ErrorKind::InvalidWasm
+                .context(format!(
+                    "local {} is out of bounds ({} locals)",
+                    n,
+                    self.locals.len()
+                ))
+                .into()
+        })
     }
 
     /// Get the type of the n^th local.
-    pub fn label(&self, n: u32) -> Result<elements::BlockType> {
-        self.labels.get(n as usize).cloned().ok_or_else(|| {
+    pub fn label(&self, n: u32) -> Result<&[ValType]> {
+        self.labels.get(n as usize).map(|t| &t[..]).ok_or_else(|| {
             ErrorKind::InvalidWasm
                 .context(format!(
                     "local {} is out of bounds ({} locals)",

@@ -19,9 +19,9 @@ fn do_assert_valid(path: &Path) {
             panic!("constructing a new `walrus::Module` failed");
         }
     };
-    assert_eq!(module.functions().len(), 1);
+    assert_eq!(module.functions().count(), 1);
 
-    let f = &module.functions()[0];
+    let f = &module.functions().next().unwrap();
     if env::var("WALRUS_TESTS_DOT").is_err() {
         let mut dot_path = PathBuf::from(path);
         dot_path.set_extension("dot");

@@ -2,11 +2,38 @@
 
 pub mod matcher;
 
-use super::ValType;
 use crate::dot::Dot;
+use crate::ty::ValType;
 use id_arena::Id;
 use std::io::{self, Write};
 use walrus_derive::walrus_expr;
+
+/// The id of a local.
+pub type LocalId = Id<Local>;
+
+/// A local variable or parameter.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct Local {
+    id: LocalId,
+    ty: ValType,
+}
+
+impl Local {
+    /// Construct a new local from the given id and type.
+    pub fn new(id: LocalId, ty: ValType) -> Local {
+        Local { id, ty }
+    }
+
+    /// Get this local's id that is unique across the whole module.
+    pub fn id(&self) -> LocalId {
+        self.id
+    }
+
+    /// Get this local's type.
+    pub fn ty(&self) -> ValType {
+        self.ty
+    }
+}
 
 /// TODO
 pub type ExprId = Id<Expr>;
@@ -31,8 +58,15 @@ pub trait Ast: Into<Expr> {
 pub enum BlockKind {
     /// A `block` block.
     Block,
+
     /// A `loop` block.
     Loop,
+
+    /// An `if` or `else` block.
+    IfElse,
+
+    /// The entry to a function.
+    FunctionEntry,
 }
 
 /// TODO
@@ -57,16 +91,16 @@ pub enum Expr {
     GetLocal {
         /// The type of this local.
         ty: ValType,
-        /// The n^th local.
-        local: u32,
+        /// The local being got.
+        local: LocalId,
     },
 
     /// `set_local n`
     SetLocal {
         /// The type of this local.
         ty: ValType,
-        /// The n^th local.
-        local: u32,
+        /// The local being set.
+        local: LocalId,
         /// The value to set the local to.
         value: ExprId,
     },
@@ -180,6 +214,36 @@ pub enum Expr {
         /// The values being returned.
         values: Box<[ExprId]>,
     },
+}
+
+impl Expr {
+    /// Are any instructions that follow this expression's instruction (within
+    /// the current block) unreachable?
+    ///
+    /// Returns `true` for unconditional branches (`br`, `return`, etc...) and
+    /// `unreachable`. Returns `false` for all other "normal" instructions
+    /// (`i32.add`, etc...).
+    pub fn following_instructions_are_unreachable(&self) -> bool {
+        match *self {
+            Expr::Unreachable(..) | Expr::Br(..) | Expr::BrTable(..) | Expr::Return(..) => true,
+
+            // No `_` arm to make sure that we properly update this function as
+            // we add support for new instructions.
+            Expr::Block(..)
+            | Expr::GetLocal(..)
+            | Expr::SetLocal(..)
+            | Expr::I32Const(..)
+            | Expr::I32Add(..)
+            | Expr::I32Sub(..)
+            | Expr::I32Mul(..)
+            | Expr::I32Eqz(..)
+            | Expr::I32Popcnt(..)
+            | Expr::Select(..)
+            | Expr::BrIf(..)
+            | Expr::IfElse(..)
+            | Expr::Drop(..) => false,
+        }
+    }
 }
 
 impl Block {

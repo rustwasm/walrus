@@ -1,4 +1,4 @@
-//! TODO
+//! All the locals used by functions in a wasm module.
 
 use crate::ir::{Local, LocalId};
 use crate::module::functions::FunctionId;

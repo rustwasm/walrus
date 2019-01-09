@@ -1,4 +1,4 @@
-//! TODO
+//! A high-level API for manipulating wasm modules.
 
 pub(crate) mod emit;
 pub mod exports;
@@ -29,7 +29,7 @@ use std::fs;
 use std::io;
 use std::path::Path;
 
-/// TODO
+/// A wasm module.
 #[derive(Debug)]
 pub struct Module {
     pub(crate) imports: ModuleImports,

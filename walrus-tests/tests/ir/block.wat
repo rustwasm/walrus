@@ -10,11 +10,11 @@
     i32.const 2))
 
 ;; CHECK: (func
-;; NEXT:    (block ;; e0 (function entry)
+;; NEXT:    (block ;; e0
 ;; NEXT:      (drop
 ;; NEXT:        (i32.const 0)
 ;; NEXT:      )
-;; NEXT:      (block ;; e3 (block)
+;; NEXT:      (block ;; e3
 ;; NEXT:        (drop
 ;; NEXT:          (i32.const 1)
 ;; NEXT:        )

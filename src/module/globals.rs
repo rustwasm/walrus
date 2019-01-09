@@ -1,4 +1,4 @@
-//! TODO
+//! Globals within a wasm module.
 
 use crate::error::{ErrorKind, Result};
 use crate::module::emit::{Emit, IdsToIndices};

@@ -1,4 +1,4 @@
-//! TODO
+//! Exported items in a wasm module.
 
 use super::functions::ModuleFunctions;
 use super::globals::{GlobalId, ModuleGlobals};

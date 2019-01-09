@@ -1,4 +1,4 @@
-//! TODO
+//! A wasm module's imports.
 
 use crate::arena_set::ArenaSet;
 use crate::error::{Error, ErrorKind, Result};

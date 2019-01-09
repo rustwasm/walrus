@@ -114,13 +114,12 @@ impl Visitor for DisplayExpr<'_, '_, '_> {
 
     fn visit_block(&mut self, b: &Block) -> fmt::Result {
         let label = format!(
-            "{} ;; e{} ({})",
+            "{} ;; e{}",
             match b.kind {
                 BlockKind::IfElse | BlockKind::FunctionEntry | BlockKind::Block => "block",
                 BlockKind::Loop => "loop",
             },
             self.id.index(),
-            b.diagnostic
         );
         self.sexp(&label, &b.exprs)
     }

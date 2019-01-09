@@ -4,7 +4,7 @@
     i32.const 42))
 
 ;; CHECK: (func
-;; NEXT:    (block ;; e0 (function entry)
+;; NEXT:    (block ;; e0
 ;; NEXT:      (i32.const 42)
 ;; NEXT:    )
 ;; NEXT:  )

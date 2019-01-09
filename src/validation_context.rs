@@ -1,4 +1,4 @@
-//! TODO
+//! Wasm validation context.
 
 use super::chunk_list::ChunkList;
 use super::error::{ErrorKind, Result};
@@ -87,7 +87,7 @@ impl<'a> ValidationContext<'a> {
         })
     }
 
-    /// TODO
+    /// Get a nested validation context.
     pub fn nested<'b>(&'b self) -> ValidationContext<'b> {
         ValidationContext {
             types: ChunkList::with_tail(&self.types),
@@ -101,7 +101,7 @@ impl<'a> ValidationContext<'a> {
         }
     }
 
-    /// TODO
+    /// Get a nested validation context for the given function.
     pub fn for_function<'b>(
         &'b self,
         ty: &Type,
@@ -130,7 +130,7 @@ impl<'a> ValidationContext<'a> {
         })
     }
 
-    /// TODO
+    /// Get a nested validation context for a block with the given label.
     pub fn for_block(&self, label: Box<[ValType]>) -> ValidationContext {
         ValidationContext {
             labels: ChunkList::with_head_and_tail(vec![label], &self.labels),
@@ -138,7 +138,7 @@ impl<'a> ValidationContext<'a> {
         }
     }
 
-    /// TODO
+    /// Get a nested validation context for a loop.
     pub fn for_loop(&self) -> ValidationContext {
         ValidationContext {
             labels: ChunkList::with_head_and_tail(vec![vec![].into_boxed_slice()], &self.labels),
@@ -146,7 +146,7 @@ impl<'a> ValidationContext<'a> {
         }
     }
 
-    /// TODO
+    /// Get a nested validation context for an if/else.
     pub fn for_if_else(&self, label: Box<[ValType]>) -> ValidationContext {
         ValidationContext {
             labels: ChunkList::with_head_and_tail(vec![label], &self.labels),

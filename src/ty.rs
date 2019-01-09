@@ -1,4 +1,4 @@
-//! TODO
+//! WebAssembly function and value types.
 
 use id_arena::Id;
 use parity_wasm::elements;
@@ -19,7 +19,7 @@ pub struct Type {
 impl PartialEq for Type {
     #[inline]
     fn eq(&self, rhs: &Type) -> bool {
-        // Do not compare id.
+        // NB: do not compare id.
         self.params == rhs.params && self.results == rhs.results
     }
 }
@@ -65,18 +65,18 @@ impl Type {
     }
 }
 
-/// TODO
+/// A value type.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum ValType {
-    /// TODO
+    /// 32-bit integer.
     I32,
-    /// TODO
+    /// 64-bit integer.
     I64,
-    /// TODO
+    /// 32-bit float.
     F32,
-    /// TODO
+    /// 64-bit float.
     F64,
-    /// TODO
+    /// 128-bit vector.
     V128,
 }
 

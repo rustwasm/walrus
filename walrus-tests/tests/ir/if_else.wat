@@ -10,13 +10,13 @@
   (export "if_else" (func 0)))
 
 ;; CHECK: (func
-;; NEXT:    (block ;; e0 (function entry)
+;; NEXT:    (block ;; e0
 ;; NEXT:      (if
 ;; NEXT:        (get_local 0)
-;; NEXT:        (block ;; e2 (consequent)
+;; NEXT:        (block ;; e2
 ;; NEXT:          (i32.const 1)
 ;; NEXT:        )
-;; NEXT:        (block ;; e4 (alternative)
+;; NEXT:        (block ;; e4
 ;; NEXT:          (i32.const 2)
 ;; NEXT:        )
 ;; NEXT:      )

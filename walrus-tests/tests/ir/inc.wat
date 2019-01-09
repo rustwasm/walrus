@@ -6,7 +6,7 @@
     i32.add))
 
 ;; CHECK: (func
-;; NEXT:    (block ;; e0 (function entry)
+;; NEXT:    (block ;; e0
 ;; NEXT:      (i32.add
 ;; NEXT:        (get_local 0)
 ;; NEXT:        (i32.const 1)

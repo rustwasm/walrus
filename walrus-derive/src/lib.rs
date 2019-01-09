@@ -250,7 +250,7 @@ fn create_visit(variants: &[syn::Variant]) -> impl quote::ToTokens {
         .collect();
 
     quote! {
-        /// TODO
+        /// A visitor walks over an IR expression tree.
         pub trait Visitor {
             /// The return type of the visitor.
             type Return;
@@ -258,9 +258,9 @@ fn create_visit(variants: &[syn::Variant]) -> impl quote::ToTokens {
             #( #visitor_trait_methods )*
         }
 
-        /// TODO
+        /// Anything that can be visited by a `Visitor`.
         pub trait Visit {
-            /// TODO
+            /// Visit this thing with the given visitor.
             fn visit<V>(&self, visitor: &mut V) -> V::Return
             where
                 V: Visitor;

@@ -26,7 +26,7 @@ pub fn wat2wasm(path: &Path) -> PathBuf {
     wasm.set_extension("wasm");
 
     let mut cmd = Command::new("wat2wasm");
-    cmd.arg(path).arg("-o").arg(&wasm).arg("-v");
+    cmd.arg(path).arg("-o").arg(&wasm);
     println!("running: {:?}", cmd);
     let status = cmd.status().expect("should spawn wat2wasm OK");
     assert!(status.success(), "should run wat2wasm OK");
@@ -58,7 +58,7 @@ pub fn wasm2wat(path: &Path) -> PathBuf {
     wasm.set_extension("wasm");
 
     let mut cmd = Command::new("wasm2wat");
-    cmd.arg(path).arg("-o").arg(&wasm).arg("-v");
+    cmd.arg(path).arg("-o").arg(&wasm);
     println!("running: {:?}", cmd);
     let status = cmd.status().expect("should spawn wasm2wat OK");
     assert!(status.success(), "should run wasm2wat OK");

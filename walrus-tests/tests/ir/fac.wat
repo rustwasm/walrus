@@ -29,13 +29,13 @@
   (export "fac" (func 0)))
 
 ;; CHECK: (func
-;; NEXT:    (block ;; e0 (function entry)
-;; NEXT:      (block ;; e1 (block)
+;; NEXT:    (block ;; e0
+;; NEXT:      (block ;; e1
 ;; NEXT:        (set_local
 ;; NEXT:          1
 ;; NEXT:          (get_local 0)
 ;; NEXT:        )
-;; NEXT:        (loop ;; e4 (loop)
+;; NEXT:        (loop ;; e4
 ;; NEXT:          (br_if
 ;; NEXT:            e0
 ;; NEXT:            (i32.eqz

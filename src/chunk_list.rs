@@ -1,8 +1,10 @@
-//! TODO
+//! The `ChunkList` type.
 
 use std::slice;
 
-/// TODO
+/// The `ChunkList` type is used in validation contexts. It lets us prepend to a
+/// list without copying the whole thing, which is something that wasm
+/// validation does frequently.
 #[derive(Debug)]
 pub struct ChunkList<'a, T: 'a> {
     head: Vec<T>,

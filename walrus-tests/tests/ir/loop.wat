@@ -6,8 +6,8 @@
   (export "inf_loop" (func 0)))
 
 ;; CHECK: (func
-;; NEXT:    (block ;; e0 (function entry)
-;; NEXT:      (loop ;; e1 (loop)
+;; NEXT:    (block ;; e0
+;; NEXT:      (loop ;; e1
 ;; NEXT:      )
 ;; NEXT:    )
 ;; NEXT:  )

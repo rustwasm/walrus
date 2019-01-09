@@ -16,10 +16,10 @@
     i32.const 100))
 
 ;; CHECK: (func
-;; NEXT:    (block ;; e0 (function entry)
-;; NEXT:      (block ;; e1 (block)
-;; NEXT:        (block ;; e2 (block)
-;; NEXT:          (block ;; e3 (block)
+;; NEXT:    (block ;; e0
+;; NEXT:      (block ;; e1
+;; NEXT:        (block ;; e2
+;; NEXT:          (block ;; e3
 ;; NEXT:            (br_table
 ;; NEXT:              (get_local 0)
 ;; NEXT:              e0 ;; default

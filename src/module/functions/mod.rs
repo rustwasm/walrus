@@ -1,4 +1,4 @@
-//! TODO
+//! Functions within a wasm module.
 
 mod local_function;
 

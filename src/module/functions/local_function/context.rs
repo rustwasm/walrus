@@ -1,4 +1,4 @@
-//! TODO
+//! Context needed when validating instructions and constructing our `Expr` IR.
 
 use crate::error::{ErrorKind, Result};
 use crate::ir::{Block, BlockId, BlockKind, ExprId};
@@ -123,13 +123,11 @@ impl<'a> FunctionContext<'a> {
 
     pub fn push_control(
         &mut self,
-        why: &'static str,
         kind: BlockKind,
         label_types: Box<[ValType]>,
         end_types: Box<[ValType]>,
     ) -> BlockId {
         impl_push_control(
-            why,
             kind,
             self.func,
             self.controls,
@@ -255,7 +253,6 @@ fn impl_pop_operands(
 }
 
 fn impl_push_control(
-    why: &'static str,
     kind: BlockKind,
     func: &mut LocalFunction,
     controls: &mut ControlStack,
@@ -264,7 +261,6 @@ fn impl_push_control(
     end_types: Box<[ValType]>,
 ) -> BlockId {
     let block = func.alloc(Block::new(
-        why,
         kind,
         label_types.clone(),
         end_types.clone(),

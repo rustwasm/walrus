@@ -1,4 +1,4 @@
-//! TODO
+//! Functions defined locally within a wasm module.
 
 mod context;
 pub mod display;
@@ -31,12 +31,16 @@ pub struct LocalFunction {
     /// The entry block for this function. Always `Some` after the constructor
     /// returns.
     entry: Option<BlockId>,
+    //
     // TODO: provenance: ExprId -> offset in code section of the original
-    // instruction
+    // instruction. This will be necessary for preserving debug info.
 }
 
 impl LocalFunction {
-    /// TODO
+    /// Construct a new `LocalFunction`.
+    ///
+    /// Validates the given function body and constructs the `Expr` IR at the
+    /// same time.
     pub fn new(
         locals: &mut ModuleLocals,
         id: FunctionId,
@@ -61,12 +65,7 @@ impl LocalFunction {
 
         let mut ctx = FunctionContext::new(locals, id, &mut func, &validation, operands, controls);
 
-        let entry = ctx.push_control(
-            "function entry",
-            BlockKind::FunctionEntry,
-            vec![].into_boxed_slice(),
-            result,
-        );
+        let entry = ctx.push_control(BlockKind::FunctionEntry, vec![].into_boxed_slice(), result);
         ctx.func.entry = Some(entry);
         validate_expression(&mut ctx, body.code().elements())?;
 
@@ -206,8 +205,8 @@ impl LocalFunction {
             }
         }
 
-        // TODO: `get_global` is considered const if the global is not mutable
-        // and is imported.
+        // TODO: `get_global` is considered const if the global is imported and
+        // not mutable.
         impl Visitor for IsConstVisitor<'_> {
             type Return = bool;
 
@@ -835,7 +834,7 @@ impl Dot for LocalFunction {
                     BlockKind::IfElse => "if/else target",
                     BlockKind::FunctionEntry => "function entry",
                 };
-                self.node(format!("{} ({})", kind, e.diagnostic))?;
+                self.node(format!("{}", kind))?;
                 for (i, e) in e.exprs.iter().enumerate() {
                     self.edge(*e, format!("exprs[{}]", i))?;
                 }
@@ -1104,7 +1103,7 @@ fn validate_instruction<'a>(
             let mut ctx = ctx.nested(&validation);
             let params = ValType::from_block_ty(block_ty);
             let params_is_empty = params.is_empty();
-            let block = ctx.push_control("block", BlockKind::Block, params.clone(), params);
+            let block = ctx.push_control(BlockKind::Block, params.clone(), params);
             let rest = validate_instruction_sequence(&mut ctx, &insts[1..], Instruction::End)?;
             validate_end(&mut ctx)?;
             if params_is_empty {
@@ -1117,7 +1116,7 @@ fn validate_instruction<'a>(
             let mut ctx = ctx.nested(&validation);
             let t = ValType::from_block_ty(block_ty);
             let t_is_empty = t.is_empty();
-            let block = ctx.push_control("loop", BlockKind::Loop, vec![].into_boxed_slice(), t);
+            let block = ctx.push_control(BlockKind::Loop, vec![].into_boxed_slice(), t);
             let rest = validate_instruction_sequence(&mut ctx, &insts[1..], Instruction::End)?;
             validate_end(&mut ctx)?;
             if t_is_empty {
@@ -1132,14 +1131,12 @@ fn validate_instruction<'a>(
             let (_, condition) = ctx.pop_operand_expected(Some(ValType::I32))?;
 
             let ty = ValType::from_block_ty(block_ty);
-            let consequent =
-                ctx.push_control("consequent", BlockKind::IfElse, ty.clone(), ty.clone());
+            let consequent = ctx.push_control(BlockKind::IfElse, ty.clone(), ty.clone());
 
             let rest = validate_instruction_sequence(&mut ctx, &insts[1..], Instruction::Else)?;
             let (results, _values) = ctx.pop_control()?;
 
-            let alternative =
-                ctx.push_control("alternative", BlockKind::IfElse, results.clone(), results);
+            let alternative = ctx.push_control(BlockKind::IfElse, results.clone(), results);
 
             let rest_rest = validate_instruction_sequence(&mut ctx, rest, Instruction::End)?;
             let (results, _values) = ctx.pop_control()?;

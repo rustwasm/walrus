@@ -1,4 +1,4 @@
-//! TODO
+//! Tables within a wasm module.
 
 use crate::module::emit::{Emit, IdsToIndices};
 use crate::passes::Used;

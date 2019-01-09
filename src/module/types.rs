@@ -1,4 +1,4 @@
-//! TODO
+//! Types in a wasm module.
 
 use crate::arena_set::ArenaSet;
 use crate::module::emit::{Emit, IdsToIndices};

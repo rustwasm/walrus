@@ -7,8 +7,10 @@ cache:
 install:
   - git clone --recursive https://github.com/WebAssembly/wabt.git
   - mkdir wabt/build
-  - cd wabt/build && cmake ..
-  - ls -R wabt/build
+  - cd wabt/build
+  - cmake ..
+  - ls -R
+  - cd -
   - export PATH=$PATH:$(pwd)/wabt/build/bin
   - which wasm2wat
   - which wat2wasm

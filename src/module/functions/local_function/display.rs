@@ -22,6 +22,7 @@ impl DisplayIr for Function {
         match self.kind {
             FunctionKind::Import(ref i) => i.display_ir(f, &(), indent),
             FunctionKind::Local(ref l) => l.display_ir(f, &(), indent),
+            FunctionKind::Uninitialized => unreachable!(),
         }
     }
 }
@@ -122,6 +123,20 @@ impl Visitor for DisplayExpr<'_, '_, '_> {
             self.id.index(),
         );
         self.sexp(&label, &b.exprs)
+    }
+
+    fn visit_call(&mut self, e: &Call) -> fmt::Result {
+        if e.args.is_empty() {
+            return self.indented(&format!("(call {})", e.func.index()));
+        }
+
+        self.indented(&format!("(call {}", e.func.index()))?;
+        self.indent += 1;
+        for a in e.args.iter() {
+            self.visit(*a)?;
+        }
+        self.indent -= 1;
+        self.indented(")")
     }
 
     fn visit_get_local(&mut self, expr: &GetLocal) -> fmt::Result {

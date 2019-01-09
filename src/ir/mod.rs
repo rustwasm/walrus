@@ -7,6 +7,7 @@
 pub mod matcher;
 
 use crate::dot::Dot;
+use crate::module::functions::FunctionId;
 use crate::ty::ValType;
 use id_arena::Id;
 use std::io::{self, Write};
@@ -115,6 +116,14 @@ pub enum Expr {
         results: Box<[ValType]>,
         /// The expressions that make up the body of this block.
         exprs: Vec<ExprId>,
+    },
+
+    /// `call`
+    Call {
+        /// The function being invoked.
+        func: FunctionId,
+        /// The arguments to the function.
+        args: Box<[ExprId]>,
     },
 
     /// `get_local n`
@@ -260,6 +269,7 @@ impl Expr {
             // No `_` arm to make sure that we properly update this function as
             // we add support for new instructions.
             Expr::Block(..)
+            | Expr::Call(..)
             | Expr::GetLocal(..)
             | Expr::SetLocal(..)
             | Expr::I32Const(..)

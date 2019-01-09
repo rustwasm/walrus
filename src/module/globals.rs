@@ -2,7 +2,7 @@
 
 use crate::error::{ErrorKind, Result};
 use crate::module::emit::{Emit, IdsToIndices};
-use crate::module::functions::{Function, LocalFunction};
+use crate::module::functions::{Function, LocalFunction, ModuleFunctions};
 use crate::module::locals::ModuleLocals;
 use crate::passes::Used;
 use crate::ty::{Type, ValType};
@@ -104,6 +104,7 @@ impl ModuleGlobals {
         mutable: bool,
         init_expr: &[elements::Instruction],
     ) -> Result<GlobalId> {
+        let dummy_funcs = &ModuleFunctions::new();
         let dummy_locals = &mut ModuleLocals::new();
         let dummy_id = DefaultArenaBehavior::<Function>::new_id(0, 0);
         let dummy_ty = Type::new(
@@ -113,8 +114,14 @@ impl ModuleGlobals {
         );
         let dummy_body =
             elements::FuncBody::new(vec![], elements::Instructions::new(init_expr.to_vec()));
-        let init_expr =
-            LocalFunction::new(dummy_locals, dummy_id, &dummy_ty, validation, &dummy_body)?;
+        let init_expr = LocalFunction::new(
+            dummy_funcs,
+            dummy_locals,
+            dummy_id,
+            &dummy_ty,
+            validation,
+            &dummy_body,
+        )?;
         if !init_expr.is_const() {
             return Err(ErrorKind::InvalidWasm
                 .context("global's initialization expression is not constant")

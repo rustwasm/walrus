@@ -14,7 +14,7 @@ use std::u32;
 #[derive(Debug)]
 pub struct ValidationContext<'a> {
     types: ChunkList<'a, elements::FunctionType>,
-    funcs: ChunkList<'a, elements::FunctionType>,
+    pub(crate) funcs: ChunkList<'a, elements::FunctionType>,
     tables: ChunkList<'a, elements::TableType>,
     mems: ChunkList<'a, elements::MemoryType>,
     globals: ChunkList<'a, elements::GlobalType>,

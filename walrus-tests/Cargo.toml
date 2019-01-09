@@ -10,6 +10,6 @@ walrus-tests-utils = { path = "../walrus-tests-utils" }
 
 [dev-dependencies]
 failure = "0.1.2"
-parity-wasm = "0.34.0"
+parity-wasm = "0.35.7"
 walrus = { path = ".." }
 walrus-tests-utils = { path = "../walrus-tests-utils" }

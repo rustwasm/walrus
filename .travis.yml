@@ -9,6 +9,7 @@ install:
   - mkdir wabt/build
   - cd wabt/build
   - cmake ..
+  - make -j 8
   - ls -R
   - cd -
   - export PATH=$PATH:$(pwd)/wabt/build/bin

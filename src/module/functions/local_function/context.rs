@@ -2,7 +2,7 @@
 
 use crate::error::{ErrorKind, Result};
 use crate::ir::{Block, BlockId, BlockKind, ExprId};
-use crate::module::functions::{FunctionId, LocalFunction};
+use crate::module::functions::{FunctionId, LocalFunction, ModuleFunctions};
 use crate::module::locals::ModuleLocals;
 use crate::ty::ValType;
 use crate::validation_context::ValidationContext;
@@ -42,6 +42,9 @@ pub type ControlStack = Vec<ControlFrame>;
 
 #[derive(Debug)]
 pub struct FunctionContext<'a> {
+    /// All the functions within this module.
+    pub funcs: &'a ModuleFunctions,
+
     /// The locals for this function's module.
     pub locals: &'a mut ModuleLocals,
 
@@ -64,6 +67,7 @@ pub struct FunctionContext<'a> {
 impl<'a> FunctionContext<'a> {
     /// Create a new function context.
     pub fn new(
+        funcs: &'a ModuleFunctions,
         locals: &'a mut ModuleLocals,
         func_id: FunctionId,
         func: &'a mut LocalFunction,
@@ -72,6 +76,7 @@ impl<'a> FunctionContext<'a> {
         controls: &'a mut ControlStack,
     ) -> FunctionContext<'a> {
         FunctionContext {
+            funcs,
             locals,
             func_id,
             func,
@@ -83,6 +88,7 @@ impl<'a> FunctionContext<'a> {
 
     pub fn nested<'b>(&'b mut self, validation: &'b ValidationContext<'b>) -> FunctionContext<'b> {
         FunctionContext {
+            funcs: self.funcs,
             locals: self.locals,
             func_id: self.func_id,
             func: self.func,
@@ -260,11 +266,7 @@ fn impl_push_control(
     label_types: Box<[ValType]>,
     end_types: Box<[ValType]>,
 ) -> BlockId {
-    let block = func.alloc(Block::new(
-        kind,
-        label_types.clone(),
-        end_types.clone(),
-    ));
+    let block = func.alloc(Block::new(kind, label_types.clone(), end_types.clone()));
     let frame = ControlFrame {
         label_types,
         end_types,

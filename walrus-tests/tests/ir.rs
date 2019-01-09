@@ -20,9 +20,17 @@ fn do_assert_ir(wasm_path: &Path, wat_path: &Path) {
             panic!("constructing a new `walrus::Function` failed");
         }
     };
-    assert_eq!(module.functions().count(), 1);
 
-    let func = &module.functions().next().unwrap();
+    let local_funcs: Vec<_> = module
+        .functions()
+        .filter(|f| match f.kind {
+            walrus::module::functions::FunctionKind::Local(_) => true,
+            _ => false,
+        })
+        .collect();
+    assert_eq!(local_funcs.len(), 1);
+
+    let func = &local_funcs.first().unwrap();
     let checker = walrus_tests::FileCheck::from_file(Path::new(wat_path));
     let mut output = String::new();
 

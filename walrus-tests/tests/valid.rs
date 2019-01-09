@@ -19,9 +19,17 @@ fn do_assert_valid(path: &Path) {
             panic!("constructing a new `walrus::Module` failed");
         }
     };
-    assert_eq!(module.functions().count(), 1);
 
-    let f = &module.functions().next().unwrap();
+    let local_funcs: Vec<_> = module
+        .functions()
+        .filter(|f| match f.kind {
+            walrus::module::functions::FunctionKind::Local(_) => true,
+            _ => false,
+        })
+        .collect();
+    assert_eq!(local_funcs.len(), 1);
+
+    let f = &local_funcs.first().unwrap();
     if env::var("WALRUS_TESTS_DOT").is_err() {
         let mut dot_path = PathBuf::from(path);
         dot_path.set_extension("dot");

@@ -83,6 +83,7 @@ impl Used {
                 FunctionKind::Import(ref i) => {
                     used.imports.insert(i.import);
                 }
+                FunctionKind::Uninitialized => unreachable!(),
             }
         }
 
@@ -116,6 +117,11 @@ impl Visitor for UsedVisitor<'_> {
 
     fn visit_block(&mut self, e: &Block) {
         e.exprs.iter().for_each(|e| self.visit(*e));
+    }
+
+    fn visit_call(&mut self, e: &Call) {
+        self.mark(e.func);
+        e.args.iter().for_each(|a| self.visit(*a));
     }
 
     fn visit_i32_add(&mut self, e: &I32Add) {

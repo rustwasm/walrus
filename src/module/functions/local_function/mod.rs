@@ -4,7 +4,7 @@ mod context;
 pub mod display;
 
 use self::context::FunctionContext;
-use super::FunctionId;
+use super::{FunctionId, ModuleFunctions};
 use crate::dot::Dot;
 use crate::error::{ErrorKind, Result};
 use crate::ir::*;
@@ -18,6 +18,7 @@ use parity_wasm::elements::{self, Instruction};
 use std::collections::{BTreeSet, HashSet};
 use std::fmt;
 use std::io::{self, Write};
+use std::iter;
 
 /// A function defined locally within the wasm module.
 #[derive(Debug)]
@@ -42,6 +43,7 @@ impl LocalFunction {
     /// Validates the given function body and constructs the `Expr` IR at the
     /// same time.
     pub fn new(
+        funcs: &ModuleFunctions,
         locals: &mut ModuleLocals,
         id: FunctionId,
         ty: &Type,
@@ -63,7 +65,15 @@ impl LocalFunction {
         let operands = &mut context::OperandStack::new();
         let controls = &mut context::ControlStack::new();
 
-        let mut ctx = FunctionContext::new(locals, id, &mut func, &validation, operands, controls);
+        let mut ctx = FunctionContext::new(
+            funcs,
+            locals,
+            id,
+            &mut func,
+            &validation,
+            operands,
+            controls,
+        );
 
         let entry = ctx.push_control(BlockKind::FunctionEntry, vec![].into_boxed_slice(), result);
         ctx.func.entry = Some(entry);
@@ -118,6 +128,10 @@ impl LocalFunction {
 
             fn visit_block(&mut self, e: &Block) -> u64 {
                 1 + e.exprs.iter().map(|e| self.visit(*e)).sum::<u64>()
+            }
+
+            fn visit_call(&mut self, e: &Call) -> u64 {
+                1 + e.args.iter().map(|e| self.visit(*e)).sum::<u64>()
             }
 
             fn visit_get_local(&mut self, _: &GetLocal) -> u64 {
@@ -216,6 +230,10 @@ impl LocalFunction {
                 } else {
                     false
                 }
+            }
+
+            fn visit_call(&mut self, _: &Call) -> bool {
+                false
             }
 
             fn visit_i32_const(&mut self, _: &I32Const) -> bool {
@@ -339,6 +357,12 @@ impl LocalFunction {
 
             fn visit_block(&mut self, e: &Block) {
                 for x in e.exprs.iter() {
+                    self.visit(*x);
+                }
+            }
+
+            fn visit_call(&mut self, e: &Call) {
+                for x in e.args.iter() {
                     self.visit(*x);
                 }
             }
@@ -595,6 +619,14 @@ impl LocalFunction {
                 Ok(())
             }
 
+            fn visit_call(&mut self, e: &Call) -> Self::Return {
+                for x in e.args.iter() {
+                    self.visit(*x)?;
+                }
+                let idx = self.indices.get_func_index(e.func);
+                self.emit(elements::Instruction::Call(idx))
+            }
+
             fn visit_get_local(&mut self, e: &GetLocal) -> Self::Return {
                 let idx = self.indices.get_local_index(e.local);
                 self.emit(elements::Instruction::GetLocal(idx))
@@ -844,6 +876,14 @@ impl Dot for LocalFunction {
                 Ok(())
             }
 
+            fn visit_call(&mut self, e: &Call) -> io::Result<()> {
+                self.node(format!("call {}", e.func.index()))?;
+                for (i, arg) in e.args.iter().enumerate() {
+                    self.edge(*arg, format!("arg[{}]", i))?;
+                }
+                Ok(())
+            }
+
             fn visit_get_local(&mut self, e: &GetLocal) -> io::Result<()> {
                 self.node(format!("get_local {}", e.local.index()))
             }
@@ -1034,6 +1074,22 @@ fn validate_instruction<'a>(
 ) -> Result<&'a [Instruction]> {
     assert!(!insts.is_empty());
     match &insts[0] {
+        Instruction::Call(idx) => {
+            let fun_ty = ctx.validation.funcs.get(*idx as usize).ok_or_else(|| {
+                ErrorKind::InvalidWasm
+                    .context(format!("`call` instruction with invalid index {}", idx))
+            })?;
+            let func = ctx.funcs.function_for_index(*idx).expect(
+                "if the validation context has a function for this index, then our module \
+                 functions should too",
+            );
+            let param_tys: Vec<ValType> = fun_ty.params().iter().map(Into::into).collect();
+            let args = ctx.pop_operands(&param_tys)?.into_boxed_slice();
+            let expr = ctx.func.alloc(Call { func, args });
+            let result_tys: Vec<ValType> = fun_ty.return_type().iter().map(Into::into).collect();
+            let result_exprs: Vec<_> = iter::repeat(expr).take(result_tys.len()).collect();
+            ctx.push_operands(&result_tys, &result_exprs);
+        }
         Instruction::GetLocal(n) => {
             let ty = ctx.validation.local(*n).context("invalid get_local")?;
             let local = ctx.locals.local_for_function_and_index(ctx.func_id, ty, *n);

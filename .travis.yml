@@ -1,0 +1,28 @@
+language: rust
+sudo: false
+
+cache:
+  - cargo
+
+install:
+  - git clone --recursive https://github.com/WebAssembly/wabt.git
+  - mkdir wabt/build
+  - cd wabt/build && cmake ..
+  - export PATH=$PATH:$(pwd)/wabt/build/bin
+  - which wasm2wat
+  - which wat2wasm
+
+matrix:
+  include:
+    - name: "test (stable)"
+      rust: stable
+      script:
+        - cargo test
+    - name: "test (beta)"
+      rust: beta
+      script:
+        - cargo test
+    - name: "test (nightly)"
+      rust: nightly
+      script:
+        - cargo test

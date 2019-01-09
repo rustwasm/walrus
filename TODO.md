@@ -1,5 +1,3 @@
-* locals should be referenced by id
-* functions should be referenced by id
 * use wasmparser
 
 -------------------

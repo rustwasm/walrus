@@ -12,7 +12,7 @@ install:
   - make -j 8
   - ls -R
   - cd -
-  - export PATH=$PATH:$(pwd)/wabt/build/bin
+  - export PATH=$PATH:$(pwd)/wabt/build
   - which wasm2wat
   - which wat2wasm
 

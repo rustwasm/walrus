@@ -7,7 +7,7 @@ version = "0.1.0"
 [dependencies]
 failure = "0.1.2"
 #id-arena = "2"
-id-arena = { path = "../id-arena" }
+id-arena = { git = "https://github.com/fitzgen/id-arena.git", branch = "more-little-things" }
 parity-wasm = "0.35.6"
 petgraph = "0.4.13"
 

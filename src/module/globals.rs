@@ -68,7 +68,7 @@ impl ModuleGlobals {
                 ValType::from(&g.global_type().content_type()),
                 g.global_type().is_mutable(),
                 g.init_expr().code(),
-            );
+            )?;
         }
 
         Ok(globals)

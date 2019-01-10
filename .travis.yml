@@ -1,14 +1,20 @@
 language: rust
 sudo: false
 
-cache:
-  - cargo
+before_install:
+  - target=x86_64-unknown-linux-musl
+  - curl -L https://github.com/mozilla/sccache/releases/download/0.2.7/sccache-0.2.7-$target.tar.gz | tar xzf -
+  - export PATH=$PATH:`pwd`/sccache-0.2.7-$target
+  - export RUSTC_WRAPPER=sccache
+
+after_script:
+  - sccache -s
 
 install:
   - git clone --recursive https://github.com/WebAssembly/wabt.git
   - mkdir wabt/build
   - cd wabt/build
-  - cmake ..
+  - cmake .. -DCMAKE_CXX_COMPILER_LAUNCHER=sccache
   - make -j 8
   - cd -
   - export PATH=$PATH:$(pwd)/wabt/build
@@ -19,13 +25,10 @@ matrix:
   include:
     - name: "test (stable)"
       rust: stable
-      script:
-        - cargo test
     - name: "test (beta)"
       rust: beta
-      script:
-        - cargo test
     - name: "test (nightly)"
       rust: nightly
-      script:
-        - cargo test
+
+script:
+  - cargo test --all

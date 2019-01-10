@@ -126,16 +126,16 @@ pub enum Expr {
         args: Box<[ExprId]>,
     },
 
-    /// `get_local n`
-    GetLocal {
+    /// `local.get n`
+    LocalGet {
         /// The type of this local.
         ty: ValType,
         /// The local being got.
         local: LocalId,
     },
 
-    /// `set_local n`
-    SetLocal {
+    /// `local.set n`
+    LocalSet {
         /// The type of this local.
         ty: ValType,
         /// The local being set.
@@ -270,8 +270,8 @@ impl Expr {
             // we add support for new instructions.
             Expr::Block(..)
             | Expr::Call(..)
-            | Expr::GetLocal(..)
-            | Expr::SetLocal(..)
+            | Expr::LocalGet(..)
+            | Expr::LocalSet(..)
             | Expr::I32Const(..)
             | Expr::I32Add(..)
             | Expr::I32Sub(..)

@@ -4,7 +4,7 @@
     block
       block
         block
-          get_local 0
+          local.get 0
           br_table 0 1 2
         end
         i32.const 300
@@ -21,7 +21,7 @@
 ;; NEXT:        (block ;; e2
 ;; NEXT:          (block ;; e3
 ;; NEXT:            (br_table
-;; NEXT:              (get_local 0)
+;; NEXT:              (local.get 0)
 ;; NEXT:              e0 ;; default
 ;; NEXT:              [e2 e1]
 ;; NEXT:              ()

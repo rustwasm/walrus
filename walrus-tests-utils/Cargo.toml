@@ -5,3 +5,5 @@ authors = ["Nick Fitzgerald <fitzgen@gmail.com>"]
 edition = "2018"
 
 [dependencies]
+tempfile = "3.0"
+failure = "0.1"

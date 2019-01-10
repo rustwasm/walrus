@@ -1,24 +1,11 @@
-extern crate failure;
-extern crate parity_wasm;
-extern crate walrus;
-
 use std::env;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use walrus::dot::Dot;
 
-fn do_assert_valid(path: &Path) {
-    let module = match walrus::module::Module::from_file(path) {
-        Ok(m) => m,
-        Err(e) => {
-            eprintln!("got an error:");
-            for c in e.iter_chain() {
-                eprintln!("  {}", c);
-            }
-            eprintln!("{}", e.backtrace());
-            panic!("constructing a new `walrus::Module` failed");
-        }
-    };
+fn run(wat: &Path) -> Result<(), failure::Error> {
+    let wasm = walrus_tests_utils::wat2wasm(wat);
+    let module = walrus::module::Module::from_buffer(&wasm)?;
 
     let local_funcs: Vec<_> = module
         .functions()
@@ -30,21 +17,13 @@ fn do_assert_valid(path: &Path) {
     assert_eq!(local_funcs.len(), 1);
 
     let f = &local_funcs.first().unwrap();
-    if env::var("WALRUS_TESTS_DOT").is_err() {
-        let mut dot_path = PathBuf::from(path);
-        dot_path.set_extension("dot");
-        let mut dot_file = fs::File::create(dot_path).expect("should create dot file OK");
-        f.dot(&mut dot_file).expect("should generate dot file OK");
+    if env::var("WALRUS_TESTS_DOT").is_ok() {
+        let dot_path = wat.with_extension("dot");
+        let mut dot_file = fs::File::create(dot_path)?;
+        f.dot(&mut dot_file)?;
     }
-}
 
-macro_rules! assert_valid {
-    ($name:ident, $path:expr) => {
-        #[test]
-        fn $name() {
-            do_assert_valid(Path::new($path));
-        }
-    };
+    Ok(())
 }
 
 include!(concat!(env!("OUT_DIR"), "/valid.rs"));

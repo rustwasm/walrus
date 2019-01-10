@@ -5,6 +5,7 @@ pub mod display;
 
 use self::context::FunctionContext;
 use super::{FunctionId, ModuleFunctions};
+use crate::ir::matcher::{I32ConstMatcher, Matcher};
 use crate::dot::Dot;
 use crate::error::{ErrorKind, Result};
 use crate::ir::*;
@@ -206,103 +207,14 @@ impl LocalFunction {
     /// Is this function's body a [constant
     /// expression](https://webassembly.github.io/spec/core/valid/instructions.html#constant-expressions)?
     pub fn is_const(&self) -> bool {
-        struct IsConstVisitor<'a> {
-            func: &'a LocalFunction,
-        }
-
-        impl IsConstVisitor<'_> {
-            fn visit<E>(&mut self, e: E) -> bool
-            where
-                E: Into<ExprId>,
-            {
-                self.func.exprs[e.into()].visit(self)
-            }
-        }
-
-        // TODO: `get_global` is considered const if the global is imported and
-        // not mutable.
-        impl Visitor for IsConstVisitor<'_> {
-            type Return = bool;
-
-            fn visit_block(&mut self, e: &Block) -> bool {
-                if let BlockKind::FunctionEntry = e.kind {
-                    e.exprs.iter().all(|e| self.visit(*e))
-                } else {
-                    false
-                }
-            }
-
-            fn visit_call(&mut self, _: &Call) -> bool {
-                false
-            }
-
-            fn visit_i32_const(&mut self, _: &I32Const) -> bool {
-                true
-            }
-
-            fn visit_local_get(&mut self, _: &LocalGet) -> bool {
-                false
-            }
-
-            fn visit_local_set(&mut self, _: &LocalSet) -> bool {
-                false
-            }
-
-            fn visit_i32_add(&mut self, _: &I32Add) -> bool {
-                false
-            }
-
-            fn visit_i32_sub(&mut self, _: &I32Sub) -> bool {
-                false
-            }
-
-            fn visit_i32_mul(&mut self, _: &I32Mul) -> bool {
-                false
-            }
-
-            fn visit_i32_eqz(&mut self, _: &I32Eqz) -> bool {
-                false
-            }
-
-            fn visit_i32_popcnt(&mut self, _: &I32Popcnt) -> bool {
-                false
-            }
-
-            fn visit_select(&mut self, _: &Select) -> bool {
-                false
-            }
-
-            fn visit_unreachable(&mut self, _: &Unreachable) -> bool {
-                false
-            }
-
-            fn visit_br(&mut self, _: &Br) -> bool {
-                false
-            }
-
-            fn visit_br_if(&mut self, _: &BrIf) -> bool {
-                false
-            }
-
-            fn visit_if_else(&mut self, _: &IfElse) -> bool {
-                false
-            }
-
-            fn visit_br_table(&mut self, _: &BrTable) -> bool {
-                false
-            }
-
-            fn visit_drop(&mut self, _: &Drop) -> bool {
-                false
-            }
-
-            fn visit_return(&mut self, _: &Return) -> bool {
-                false
-            }
-        }
-
-        let v = &mut IsConstVisitor { func: self };
-        v.visit(self.entry_block())
+        let entry = match &self.exprs[self.entry_block().into()] {
+            Expr::Block(b) => b,
+            _ => unreachable!(),
+        };
+        let matcher = I32ConstMatcher::new();
+        entry.exprs.iter().all(|e| {
+            matcher.is_match(self, &self.exprs[*e])
+        })
     }
 
     /// Emit this function's compact locals declarations.

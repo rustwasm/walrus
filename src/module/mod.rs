@@ -49,8 +49,17 @@ impl Module {
     where
         P: AsRef<Path>,
     {
-        let path = path.as_ref();
-        let module = elements::deserialize_file(path)?;
+        Module::from_buffer(&fs::read(path)?)
+    }
+
+    /// Construct a new module.
+    pub fn from_buffer(mut wasm: &[u8]) -> Result<Module> {
+        use parity_wasm::elements::Deserialize;
+
+        let module = elements::Module::deserialize(&mut wasm)?;
+        if wasm.len() > 0 {
+            failure::bail!("invalid wasm file");
+        }
 
         let data = module.data_section().cloned().unwrap_or_default();
 

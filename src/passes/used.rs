@@ -182,7 +182,7 @@ impl Visitor for UsedVisitor<'_> {
         e.values.iter().for_each(|e| self.visit(*e));
     }
 
-    fn visit_get_local(&mut self, _: &GetLocal) {}
-    fn visit_set_local(&mut self, _: &SetLocal) {}
+    fn visit_local_get(&mut self, _: &LocalGet) {}
+    fn visit_local_set(&mut self, _: &LocalSet) {}
     fn visit_i32_const(&mut self, _: &I32Const) {}
 }

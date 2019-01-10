@@ -139,12 +139,12 @@ impl Visitor for DisplayExpr<'_, '_, '_> {
         self.indented(")")
     }
 
-    fn visit_get_local(&mut self, expr: &GetLocal) -> fmt::Result {
-        self.indented(&format!("(get_local {})", expr.local.index()))
+    fn visit_local_get(&mut self, expr: &LocalGet) -> fmt::Result {
+        self.indented(&format!("(local.get {})", expr.local.index()))
     }
 
-    fn visit_set_local(&mut self, expr: &SetLocal) -> fmt::Result {
-        self.indented("(set_local")?;
+    fn visit_local_set(&mut self, expr: &LocalSet) -> fmt::Result {
+        self.indented("(local.set")?;
         self.indent += 1;
         self.indented(&format!("{}", expr.local.index()))?;
         self.visit(expr.value)?;

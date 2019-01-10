@@ -134,11 +134,11 @@ impl LocalFunction {
                 1 + e.args.iter().map(|e| self.visit(*e)).sum::<u64>()
             }
 
-            fn visit_get_local(&mut self, _: &GetLocal) -> u64 {
+            fn visit_local_get(&mut self, _: &LocalGet) -> u64 {
                 1
             }
 
-            fn visit_set_local(&mut self, e: &SetLocal) -> u64 {
+            fn visit_local_set(&mut self, e: &LocalSet) -> u64 {
                 1 + self.visit(e.value)
             }
 
@@ -240,11 +240,11 @@ impl LocalFunction {
                 true
             }
 
-            fn visit_get_local(&mut self, _: &GetLocal) -> bool {
+            fn visit_local_get(&mut self, _: &LocalGet) -> bool {
                 false
             }
 
-            fn visit_set_local(&mut self, _: &SetLocal) -> bool {
+            fn visit_local_set(&mut self, _: &LocalSet) -> bool {
                 false
             }
 
@@ -367,11 +367,11 @@ impl LocalFunction {
                 }
             }
 
-            fn visit_get_local(&mut self, e: &GetLocal) {
+            fn visit_local_get(&mut self, e: &LocalGet) {
                 self.insert_local(e.ty, e.local);
             }
 
-            fn visit_set_local(&mut self, e: &SetLocal) {
+            fn visit_local_set(&mut self, e: &LocalSet) {
                 self.insert_local(e.ty, e.local);
             }
 
@@ -627,12 +627,12 @@ impl LocalFunction {
                 self.emit(elements::Instruction::Call(idx))
             }
 
-            fn visit_get_local(&mut self, e: &GetLocal) -> Self::Return {
+            fn visit_local_get(&mut self, e: &LocalGet) -> Self::Return {
                 let idx = self.indices.get_local_index(e.local);
                 self.emit(elements::Instruction::GetLocal(idx))
             }
 
-            fn visit_set_local(&mut self, e: &SetLocal) -> Self::Return {
+            fn visit_local_set(&mut self, e: &LocalSet) -> Self::Return {
                 self.visit(e.value)?;
                 let idx = self.indices.get_local_index(e.local);
                 self.emit(elements::Instruction::SetLocal(idx))
@@ -884,12 +884,12 @@ impl Dot for LocalFunction {
                 Ok(())
             }
 
-            fn visit_get_local(&mut self, e: &GetLocal) -> io::Result<()> {
-                self.node(format!("get_local {}", e.local.index()))
+            fn visit_local_get(&mut self, e: &LocalGet) -> io::Result<()> {
+                self.node(format!("local.get {}", e.local.index()))
             }
 
-            fn visit_set_local(&mut self, e: &SetLocal) -> io::Result<()> {
-                self.node(format!("set_local {}", e.local.index()))?;
+            fn visit_local_set(&mut self, e: &LocalSet) -> io::Result<()> {
+                self.node(format!("local.set {}", e.local.index()))?;
                 self.edge(e.value, "value")
             }
 
@@ -1093,14 +1093,14 @@ fn validate_instruction<'a>(
         Instruction::GetLocal(n) => {
             let ty = ctx.validation.local(*n).context("invalid get_local")?;
             let local = ctx.locals.local_for_function_and_index(ctx.func_id, ty, *n);
-            let expr = ctx.func.alloc(GetLocal { ty, local });
+            let expr = ctx.func.alloc(LocalGet { ty, local });
             ctx.push_operand(Some(ty), expr);
         }
         Instruction::SetLocal(n) => {
             let ty = ctx.validation.local(*n).context("invalid set_local")?;
             let (_, value) = ctx.pop_operand_expected(Some(ty))?;
             let local = ctx.locals.local_for_function_and_index(ctx.func_id, ty, *n);
-            let expr = ctx.func.alloc(SetLocal { ty, local, value });
+            let expr = ctx.func.alloc(LocalSet { ty, local, value });
             ctx.add_to_current_frame_block(expr);
         }
         Instruction::I32Const(n) => {

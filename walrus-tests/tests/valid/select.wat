@@ -3,7 +3,7 @@
   (func $do_select (type 0) (param i32) (result i32)
     i32.const 2
     i32.const 1
-    get_local 0
+    local.get 0
     select)
   (memory (;0;) 16)
   (export "do_select" (func $do_select)))

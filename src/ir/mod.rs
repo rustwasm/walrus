@@ -145,10 +145,10 @@ pub enum Expr {
         value: ExprId,
     },
 
-    /// `i32.const`
-    I32Const {
+    /// `*.const`
+    Const {
         /// The constant value.
-        value: i32,
+        value: Value,
     },
 
     /// `i32.add`
@@ -262,6 +262,21 @@ pub enum Expr {
     },
 }
 
+/// Constant values that can show up in WebAssembly
+#[derive(Debug, Clone, Copy)]
+pub enum Value {
+    /// A constant 32-bit integer
+    I32(i32),
+    /// A constant 64-bit integer
+    I64(i64),
+    /// A constant 32-bit float
+    F32(f32),
+    /// A constant 64-bit float
+    F64(f64),
+    /// A constant 128-bit vector register
+    V128(u128),
+}
+
 impl Expr {
     /// Are any instructions that follow this expression's instruction (within
     /// the current block) unreachable?
@@ -279,7 +294,7 @@ impl Expr {
             | Expr::Call(..)
             | Expr::LocalGet(..)
             | Expr::LocalSet(..)
-            | Expr::I32Const(..)
+            | Expr::Const(..)
             | Expr::I32Add(..)
             | Expr::I32Sub(..)
             | Expr::I32Mul(..)

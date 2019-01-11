@@ -5,7 +5,7 @@ pub mod display;
 
 use self::context::FunctionContext;
 use super::{FunctionId};
-use crate::ir::matcher::{I32ConstMatcher, Matcher};
+use crate::ir::matcher::{ConstMatcher, Matcher};
 use crate::dot::Dot;
 use crate::error::{ErrorKind, Result};
 use crate::ir::*;
@@ -141,7 +141,7 @@ impl LocalFunction {
                 1 + self.visit(e.value)
             }
 
-            fn visit_i32_const(&mut self, _: &I32Const) -> u64 {
+            fn visit_const(&mut self, _: &Const) -> u64 {
                 1
             }
 
@@ -213,7 +213,7 @@ impl LocalFunction {
             Expr::Block(b) => b,
             _ => unreachable!(),
         };
-        let matcher = I32ConstMatcher::new();
+        let matcher = ConstMatcher::new();
         entry.exprs.iter().all(|e| {
             matcher.is_match(self, &self.exprs[*e])
         })
@@ -355,7 +355,7 @@ impl LocalFunction {
                 }
             }
 
-            fn visit_i32_const(&mut self, _: &I32Const) {}
+            fn visit_const(&mut self, _: &Const) {}
             fn visit_unreachable(&mut self, _: &Unreachable) {}
             fn visit_memory_size(&mut self, _: &MemorySize) {}
         }
@@ -553,8 +553,33 @@ impl LocalFunction {
                 self.emit(elements::Instruction::SetLocal(idx))
             }
 
-            fn visit_i32_const(&mut self, e: &I32Const) -> Self::Return {
-                self.emit(elements::Instruction::I32Const(e.value))
+            fn visit_const(&mut self, e: &Const) -> Self::Return {
+                self.emit(match e.value {
+                    Value::I32(i) => elements::Instruction::I32Const(i),
+                    Value::I64(i) => elements::Instruction::I64Const(i),
+                    Value::F32(i) => elements::Instruction::F32Const(i.to_bits()),
+                    Value::F64(i) => elements::Instruction::F64Const(i.to_bits()),
+                    Value::V128(i) => {
+                        elements::Instruction::V128Const(Box::new([
+                            (i >> 0) as u8,
+                            (i >> 8) as u8,
+                            (i >> 16) as u8,
+                            (i >> 24) as u8,
+                            (i >> 32) as u8,
+                            (i >> 40) as u8,
+                            (i >> 48) as u8,
+                            (i >> 56) as u8,
+                            (i >> 64) as u8,
+                            (i >> 72) as u8,
+                            (i >> 80) as u8,
+                            (i >> 88) as u8,
+                            (i >> 96) as u8,
+                            (i >> 104) as u8,
+                            (i >> 112) as u8,
+                            (i >> 120) as u8,
+                        ]))
+                    }
+                })
             }
 
             fn visit_i32_add(&mut self, e: &I32Add) -> Self::Return {
@@ -814,8 +839,14 @@ impl Dot for LocalFunction {
                 self.edge(e.value, "value")
             }
 
-            fn visit_i32_const(&mut self, e: &I32Const) -> io::Result<()> {
-                self.node(format!("i32.const {}", e.value))
+            fn visit_const(&mut self, e: &Const) -> io::Result<()> {
+                self.node(match e.value {
+                    Value::I32(i) => format!("i32.const {}", i),
+                    Value::I64(i) => format!("i64.const {}", i),
+                    Value::F32(i) => format!("f32.const {}", i),
+                    Value::F64(i) => format!("f64.const {}", i),
+                    Value::V128(i) => format!("v128.const {}", i),
+                })
             }
 
             fn visit_i32_add(&mut self, e: &I32Add) -> io::Result<()> {
@@ -1030,7 +1061,36 @@ fn validate_instruction<'a>(
             ctx.add_to_current_frame_block(expr);
         }
         Instruction::I32Const(n) => {
-            const_!(ctx, I32Const, I32, *n);
+            const_!(ctx, Const, I32, Value::I32(*n));
+        }
+        Instruction::I64Const(n) => {
+            const_!(ctx, Const, I64, Value::I64(*n));
+        }
+        Instruction::F32Const(n) => {
+            const_!(ctx, Const, F32, Value::F32(f32::from_bits(*n)));
+        }
+        Instruction::F64Const(n) => {
+            const_!(ctx, Const, F64, Value::F64(f64::from_bits(*n)));
+        }
+        Instruction::V128Const(n) => {
+            let val =
+                ((n[0] as u128) << 0) |
+                ((n[1] as u128) << 8) |
+                ((n[2] as u128) << 16) |
+                ((n[3] as u128) << 24) |
+                ((n[4] as u128) << 32) |
+                ((n[5] as u128) << 40) |
+                ((n[6] as u128) << 48) |
+                ((n[7] as u128) << 56) |
+                ((n[8] as u128) << 64) |
+                ((n[9] as u128) << 72) |
+                ((n[10] as u128) << 80) |
+                ((n[11] as u128) << 88) |
+                ((n[12] as u128) << 96) |
+                ((n[13] as u128) << 104) |
+                ((n[14] as u128) << 112) |
+                ((n[15] as u128) << 120);
+            const_!(ctx, Const, V128, Value::V128(val));
         }
         Instruction::I32Add => {
             binop!(ctx, I32Add, I32);

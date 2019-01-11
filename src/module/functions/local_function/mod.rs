@@ -4,15 +4,14 @@ mod context;
 pub mod display;
 
 use self::context::FunctionContext;
-use super::{FunctionId, ModuleFunctions};
+use super::{FunctionId};
 use crate::ir::matcher::{I32ConstMatcher, Matcher};
 use crate::dot::Dot;
 use crate::error::{ErrorKind, Result};
 use crate::ir::*;
+use crate::module::Module;
 use crate::module::emit::IdsToIndices;
-use crate::module::locals::ModuleLocals;
-use crate::module::memories::ModuleMemories;
-use crate::ty::{Type, TypeId, ValType};
+use crate::ty::{TypeId, ValType};
 use crate::validation_context::ValidationContext;
 use failure::{Fail, ResultExt};
 use id_arena::Arena;
@@ -44,24 +43,22 @@ impl LocalFunction {
     ///
     /// Validates the given function body and constructs the `Expr` IR at the
     /// same time.
-    pub fn new(
-        funcs: &ModuleFunctions,
-        locals: &mut ModuleLocals,
-        memories: &ModuleMemories,
+    pub fn parse(
+        module: &mut Module,
         id: FunctionId,
-        ty: &Type,
+        ty: TypeId,
         validation: &ValidationContext,
         body: &elements::FuncBody,
     ) -> Result<LocalFunction> {
-        let validation = validation.for_function(ty, body)?;
+        let validation = validation.for_function(&module.types.types()[ty], body)?;
 
         let mut func = LocalFunction {
-            ty: ty.id(),
+            ty,
             exprs: Arena::new(),
             entry: None,
         };
 
-        let result: Vec<_> = ty.results().iter().cloned().collect();
+        let result: Vec<_> = module.types.types()[ty].results().iter().cloned().collect();
         let result = result.into_boxed_slice();
         let result_len = result.len();
 
@@ -69,9 +66,7 @@ impl LocalFunction {
         let controls = &mut context::ControlStack::new();
 
         let mut ctx = FunctionContext::new(
-            funcs,
-            locals,
-            memories,
+            module,
             id,
             &mut func,
             &validation,
@@ -1008,7 +1003,7 @@ fn validate_instruction<'a>(
                 ErrorKind::InvalidWasm
                     .context(format!("`call` instruction with invalid index {}", idx))
             })?;
-            let func = ctx.funcs.function_for_index(*idx).expect(
+            let func = ctx.module.funcs.function_for_index(*idx).expect(
                 "if the validation context has a function for this index, then our module \
                  functions should too",
             );
@@ -1021,14 +1016,14 @@ fn validate_instruction<'a>(
         }
         Instruction::GetLocal(n) => {
             let ty = ctx.validation.local(*n).context("invalid get_local")?;
-            let local = ctx.locals.local_for_function_and_index(ctx.func_id, ty, *n);
+            let local = ctx.module.locals.local_for_function_and_index(ctx.func_id, ty, *n);
             let expr = ctx.func.alloc(LocalGet { ty, local });
             ctx.push_operand(Some(ty), expr);
         }
         Instruction::SetLocal(n) => {
             let ty = ctx.validation.local(*n).context("invalid set_local")?;
             let (_, value) = ctx.pop_operand_expected(Some(ty))?;
-            let local = ctx.locals.local_for_function_and_index(ctx.func_id, ty, *n);
+            let local = ctx.module.locals.local_for_function_and_index(ctx.func_id, ty, *n);
             let expr = ctx.func.alloc(LocalSet { ty, local, value });
             ctx.add_to_current_frame_block(expr);
         }
@@ -1255,7 +1250,7 @@ fn validate_instruction<'a>(
         }
 
         Instruction::CurrentMemory(mem) => {
-            let memory = match ctx.memories.memory_for_index(*mem as u32) {
+            let memory = match ctx.module.memories.memory_for_index(*mem as u32) {
                 Some(id) => id,
                 None => failure::bail!("memory {} is out of bounds", mem),
             };

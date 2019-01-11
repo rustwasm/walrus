@@ -8,7 +8,7 @@ use parity_wasm::elements;
 use std::collections::HashMap;
 
 /// The set of de-duplicated types within a module.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct ModuleTypes {
     types: ArenaSet<Type>,
     index_to_type_id: HashMap<u32, TypeId>,
@@ -16,7 +16,7 @@ pub struct ModuleTypes {
 
 impl ModuleTypes {
     /// Construct the set of types within a module.
-    pub fn new(type_section: &elements::TypeSection) -> ModuleTypes {
+    pub fn parse(type_section: &elements::TypeSection) -> ModuleTypes {
         let mut types = ArenaSet::with_capacity(type_section.types().len());
         let mut index_to_type_id = HashMap::with_capacity(type_section.types().len());
 

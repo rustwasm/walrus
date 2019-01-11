@@ -1,9 +1,9 @@
 //! Exported items in a wasm module.
 
-use super::functions::ModuleFunctions;
-use super::globals::{GlobalId, ModuleGlobals};
-use super::memories::{MemoryId, ModuleMemories};
-use super::tables::{ModuleTables, TableId};
+use crate::module::Module;
+use super::globals::{GlobalId};
+use super::memories::{MemoryId};
+use super::tables::{TableId};
 use crate::arena_set::ArenaSet;
 use crate::error::{ErrorKind, Result};
 use crate::module::emit::{Emit, IdsToIndices};
@@ -70,7 +70,7 @@ impl ExportItem {
 }
 
 /// The set of exports in a module.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct ModuleExports {
     /// The arena containing this module's exports.
     pub arena: ArenaSet<Export>,
@@ -94,36 +94,33 @@ impl ops::DerefMut for ModuleExports {
 
 impl ModuleExports {
     /// Construct the export set for a wasm module.
-    pub fn new(
-        funcs: &ModuleFunctions,
-        tables: &ModuleTables,
-        memories: &ModuleMemories,
-        globals: &ModuleGlobals,
+    pub fn parse(
+        module: &Module,
         export_section: &elements::ExportSection,
     ) -> Result<ModuleExports> {
         let mut arena = ArenaSet::with_capacity(export_section.entries().len());
 
         for exp in export_section.entries() {
             let item = match *exp.internal() {
-                elements::Internal::Function(f) => funcs
+                elements::Internal::Function(f) => module.funcs
                     .function_for_index(f)
                     .map(ExportItem::Function)
                     .ok_or_else(|| {
                         ErrorKind::InvalidWasm.context("exported function does not exist")
                     })?,
-                elements::Internal::Table(t) => tables
+                elements::Internal::Table(t) => module.tables
                     .table_for_index(t)
                     .map(ExportItem::Table)
                     .ok_or_else(|| {
                         ErrorKind::InvalidWasm.context("exported table does not exist")
                     })?,
-                elements::Internal::Memory(m) => memories
+                elements::Internal::Memory(m) => module.memories
                     .memory_for_index(m)
                     .map(ExportItem::Memory)
                     .ok_or_else(|| {
                         ErrorKind::InvalidWasm.context("exported memory does not exist")
                     })?,
-                elements::Internal::Global(g) => globals
+                elements::Internal::Global(g) => module.globals
                     .global_for_index(g)
                     .map(ExportItem::Global)
                     .ok_or_else(|| {

@@ -27,7 +27,7 @@ impl Table {
 }
 
 /// The set of tables in this module.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct ModuleTables {
     /// The arena containing this module's tables.
     pub arena: Arena<Table>,
@@ -36,7 +36,7 @@ pub struct ModuleTables {
 
 impl ModuleTables {
     /// Construct a new, empty set of tables for a module.
-    pub fn new(table_section: &elements::TableSection) -> ModuleTables {
+    pub fn parse(table_section: &elements::TableSection) -> ModuleTables {
         let capacity = table_section.entries().len();
         let mut tables = ModuleTables {
             arena: Arena::with_capacity(capacity),

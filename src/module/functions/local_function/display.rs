@@ -22,7 +22,7 @@ impl DisplayIr for Function {
         match self.kind {
             FunctionKind::Import(ref i) => i.display_ir(f, &(), indent),
             FunctionKind::Local(ref l) => l.display_ir(f, &(), indent),
-            FunctionKind::Uninitialized => unreachable!(),
+            FunctionKind::Uninitialized(_) => unreachable!(),
         }
     }
 }

@@ -20,16 +20,15 @@ use self::locals::ModuleLocals;
 use self::memories::ModuleMemories;
 use self::tables::ModuleTables;
 use self::types::ModuleTypes;
-use crate::error::{ErrorKind, Result};
+use crate::error::Result;
 use crate::passes;
-use failure::Fail;
 use failure::ResultExt;
 use parity_wasm::elements;
 use std::fs;
 use std::path::Path;
 
 /// A wasm module.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Module {
     pub(crate) imports: ModuleImports,
     pub(crate) tables: ModuleTables,
@@ -39,6 +38,7 @@ pub struct Module {
     pub(crate) locals: ModuleLocals,
     pub(crate) exports: ModuleExports,
     pub(crate) memories: ModuleMemories,
+    // TODO: make this an internal type, not a parity-wasm type
     pub(crate) data: elements::DataSection,
 }
 
@@ -60,54 +60,37 @@ impl Module {
             failure::bail!("invalid wasm file");
         }
 
-        let data = module.data_section().cloned().unwrap_or_default();
+        let mut ret = Module::default();
 
-        let type_section = module.type_section().cloned().unwrap_or_default();
-        let types = ModuleTypes::new(&type_section);
+        for section in module.sections() {
+            use parity_wasm::elements::Section;
 
-        let import_section = module.import_section().cloned().unwrap_or_default();
-        let imports = ModuleImports::new(&types, &import_section)?;
+            match section {
+                Section::Data(s) => ret.data = s.clone(),
+                Section::Type(s) => ret.types = ModuleTypes::parse(s),
+                Section::Import(s) => {
+                    ret.imports = ModuleImports::parse(&ret.types, s)?;
+                    ret.register_imported_functions();
+                }
+                Section::Table(s) => ret.tables = ModuleTables::parse(s),
+                Section::Memory(s) => ret.memories = ModuleMemories::parse(s),
+                Section::Global(s) => ret.globals = ModuleGlobals::parse(&module, s)?,
+                Section::Function(s) => ret.declare_local_functions(s)?,
+                Section::Code(s) => ret.parse_local_functions(&module, s)?,
 
-        let mut funcs = ModuleFunctions::new();
-        funcs.add_imported_functions(&imports);
+                Section::Export(s) => ret.exports = ModuleExports::parse(&ret, s)?,
 
-        let table_section = module.table_section().cloned().unwrap_or_default();
-        let tables = ModuleTables::new(&table_section);
-
-        let memory_section = module.memory_section().cloned().unwrap_or_default();
-        let memories = ModuleMemories::new(&memory_section);
-
-        let global_section = module.global_section().cloned().unwrap_or_default();
-        let globals = ModuleGlobals::new(&module, &global_section)?;
-
-        let mut locals = ModuleLocals::new();
-
-        let func_section = module.function_section().cloned().unwrap_or_default();
-        let code_section = module.code_section().cloned().unwrap_or_default();
-        if func_section.entries().len() != code_section.bodies().len() {
-            return Err(ErrorKind::InvalidWasm
-                .context("different number of function section entries and code section entries")
-                .into());
+                // TODO: handle these
+                Section::Unparsed { .. } => {}
+                Section::Custom(_) => {}
+                Section::Start(_) => {}
+                Section::Element(_) => {}
+                Section::Name(_) => {}
+                Section::Reloc(_) => {}
+            }
         }
-        funcs.add_local_functions(&module, &func_section, &code_section, &types, &mut locals, &memories)?;
 
-        let exports = module.export_section().cloned().unwrap_or_default();
-        let exports = ModuleExports::new(&funcs, &tables, &memories, &globals, &exports)?;
-
-        // TODO: start section
-        // TODO: element section
-
-        Ok(Module {
-            types,
-            funcs,
-            data,
-            exports,
-            globals,
-            locals,
-            tables,
-            memories,
-            imports,
-        })
+        Ok(ret)
     }
 
     /// Get a shared reference to this module's functions.

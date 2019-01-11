@@ -83,7 +83,7 @@ impl Used {
                 FunctionKind::Import(ref i) => {
                     used.imports.insert(i.import);
                 }
-                FunctionKind::Uninitialized => unreachable!(),
+                FunctionKind::Uninitialized(_) => unreachable!(),
             }
         }
 

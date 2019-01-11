@@ -9,6 +9,7 @@ pub mod matcher;
 use crate::dot::Dot;
 use crate::module::functions::FunctionId;
 use crate::module::memories::MemoryId;
+use crate::module::globals::GlobalId;
 use crate::ty::ValType;
 use id_arena::Id;
 use std::io::{self, Write};
@@ -142,6 +143,20 @@ pub enum Expr {
         /// The local being set.
         local: LocalId,
         /// The value to set the local to.
+        value: ExprId,
+    },
+
+    /// `global.get n`
+    GlobalGet {
+        /// The global being got.
+        global: GlobalId,
+    },
+
+    /// `global.set n`
+    GlobalSet {
+        /// The global being set.
+        global: GlobalId,
+        /// The value to set the global to.
         value: ExprId,
     },
 
@@ -294,6 +309,8 @@ impl Expr {
             | Expr::Call(..)
             | Expr::LocalGet(..)
             | Expr::LocalSet(..)
+            | Expr::GlobalGet(..)
+            | Expr::GlobalSet(..)
             | Expr::Const(..)
             | Expr::I32Add(..)
             | Expr::I32Sub(..)

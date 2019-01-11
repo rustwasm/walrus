@@ -152,6 +152,19 @@ impl Visitor for DisplayExpr<'_, '_, '_> {
         self.indented(")")
     }
 
+    fn visit_global_get(&mut self, expr: &GlobalGet) -> fmt::Result {
+        self.indented(&format!("(global.get {})", expr.global.index()))
+    }
+
+    fn visit_global_set(&mut self, expr: &GlobalSet) -> fmt::Result {
+        self.indented("(global.set")?;
+        self.indent += 1;
+        self.indented(&format!("{}", expr.global.index()))?;
+        self.visit(expr.value)?;
+        self.indent -= 1;
+        self.indented(")")
+    }
+
     fn visit_const(&mut self, expr: &Const) -> fmt::Result {
         self.indented(&match expr.value {
             Value::I32(i) => format!("(i32.const {})", i),

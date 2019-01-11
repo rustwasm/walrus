@@ -2,7 +2,7 @@ use std::fs;
 use std::path::Path;
 
 pub struct FileCheck {
-    patterns: Vec<String>,
+    patterns: Vec<Vec<String>>,
 }
 
 impl FileCheck {
@@ -16,50 +16,57 @@ impl FileCheck {
         for line in iter {
             let line = line.trim();
             if line.starts_with(";; CHECK:") {
-                let mut p = line[";; CHECK:".len()..].trim().to_string();
-                p.push('\n');
-                patterns.push(p);
+                let p = line[";; CHECK:".len()..].to_string();
+                patterns.push(vec![p]);
             }
             if line.starts_with(";; NEXT:") {
                 let p = patterns
                     .last_mut()
                     .expect("NEXT should never come before CHECK");
-                p.push_str(&line[";; NEXT:".len()..].trim());
-                p.push('\n');
+                p.push(line[";; NEXT:".len()..].to_string());
             }
         }
         FileCheck { patterns }
     }
 
     pub fn check(&self, output: &str) {
-        for pattern in &self.patterns {
-            let mut pattern_lines = pattern.lines();
-            let first_line = pattern_lines
-                .next()
-                .expect("should be at least one line in a pattern");
+        let output_lines = output
+            .lines()
+            .collect::<Vec<_>>();
 
-            let output_lines = output.lines().collect::<Vec<_>>();
-            let pos = match output_lines.iter().position(|l| *l == first_line) {
-                None => self.missing_pattern(pattern, output),
-                Some(pos) => pos,
-            };
-            for (out_line, pat_line) in output_lines[pos + 1..].iter().zip(pattern_lines) {
-                if out_line.trim() != pat_line.trim() {
-                    self.missing_pattern(pattern, output);
+        'outer:
+        for pattern in &self.patterns {
+            let first_line = &pattern[0];
+
+            let mut start = 0;
+
+            'inner:
+            while let Some(pos) = output_lines[start..].iter().position(|l| matches(*l, first_line)) {
+                start = pos + 1;
+                if output_lines[pos..].len() + 1 < pattern.len() {
+                    break
                 }
+                for (out_line, pat_line) in output_lines[pos + 1..].iter().zip(&pattern[1..]) {
+                    if !matches(out_line, pat_line) {
+                        continue 'inner;
+                    }
+                }
+
+                continue 'outer;
             }
+            self.missing_pattern(pattern, output);
         }
     }
 
-    fn missing_pattern(&self, pattern: &str, output: &str) -> ! {
+    fn missing_pattern(&self, pattern: &[String], output: &str) -> ! {
         let pattern = pattern
-            .lines()
+            .iter()
             .enumerate()
             .map(|(i, l)| {
                 format!(
                     "    {}: {}",
                     if i == 0 { "CHECK" } else { "NEXT" },
-                    l.trim()
+                    l,
                 )
             })
             .collect::<Vec<_>>()
@@ -81,4 +88,10 @@ impl FileCheck {
             pattern, output
         );
     }
+}
+
+fn matches(actual: &str, expected: &str) -> bool {
+    println!("{:?}", actual.trim());
+    println!("{:?}", expected.trim());
+    actual.trim().starts_with(expected.trim())
 }

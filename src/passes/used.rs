@@ -56,6 +56,7 @@ impl Used {
                 }
                 ExportItem::Table(t) => {
                     used.tables.insert(t);
+                    // TODO: add all functions in an anyfunc table
                 }
                 ExportItem::Memory(m) => {
                     used.memories.insert(m);
@@ -70,8 +71,8 @@ impl Used {
             let func = &module.funcs.arena[f];
             used.types.insert(func.ty(&module));
 
-            match func.kind {
-                FunctionKind::Local(ref func) => {
+            match &func.kind {
+                FunctionKind::Local(func) => {
                     let v = &mut UsedVisitor {
                         func,
                         used: &mut used,
@@ -80,7 +81,7 @@ impl Used {
 
                     v.visit(func.entry_block());
                 }
-                FunctionKind::Import(ref i) => {
+                FunctionKind::Import(i) => {
                     used.imports.insert(i.import);
                 }
                 FunctionKind::Uninitialized(_) => unreachable!(),
@@ -183,10 +184,23 @@ impl Visitor for UsedVisitor<'_> {
     }
 
     fn visit_local_get(&mut self, _: &LocalGet) {}
-    fn visit_local_set(&mut self, _: &LocalSet) {}
+
+    fn visit_local_set(&mut self, l: &LocalSet) {
+        self.visit(l.value);
+    }
+
     fn visit_const(&mut self, _: &Const) {}
 
     fn visit_memory_size(&mut self, m: &MemorySize) {
         self.used.memories.insert(m.memory);
+    }
+
+    fn visit_global_get(&mut self, g: &GlobalGet) {
+        self.used.globals.insert(g.global);
+    }
+
+    fn visit_global_set(&mut self, g: &GlobalSet) {
+        self.used.globals.insert(g.global);
+        self.visit(g.value);
     }
 }

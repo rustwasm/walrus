@@ -12,7 +12,9 @@ where
     println!("cargo:rerun-if-changed={}", dir.as_ref().display());
     for entry in WalkDir::new(dir) {
         let entry = entry.unwrap();
-        if entry.path().extension() == Some(OsStr::new("wat")) {
+        if entry.path().extension() == Some(OsStr::new("wat"))
+            || entry.path().extension() == Some(OsStr::new("wast"))
+        {
             println!("cargo:rerun-if-changed={}", entry.path().display());
             f(entry.path());
         }
@@ -54,4 +56,5 @@ fn main() {
     generate_tests("valid");
     generate_tests("round_trip");
     generate_tests("ir");
+    generate_tests("spec-tests");
 }

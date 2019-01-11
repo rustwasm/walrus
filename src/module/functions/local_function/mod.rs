@@ -403,7 +403,7 @@ fn validate_instruction<'a>(
 
     let memarg = |align, offset| -> Result<MemArg> {
         if align >= 32 {
-            failure::bail!("invalid alignment")
+            failure::bail!("invalid alignment");
         }
         Ok(MemArg {
             align: 1 << (align as i32),
@@ -674,6 +674,12 @@ fn validate_instruction<'a>(
         Instruction::I64ReinterpretF64 => one_op(ctx, F64, I64, UnaryOp::I64ReinterpretF64)?,
         Instruction::F32ReinterpretI32 => one_op(ctx, I32, F32, UnaryOp::F32ReinterpretI32)?,
         Instruction::F64ReinterpretI64 => one_op(ctx, I64, F64, UnaryOp::F64ReinterpretI64)?,
+
+        Instruction::I32Extend8S => one_op(ctx, I32, I32, UnaryOp::I32Extend8S)?,
+        Instruction::I32Extend16S => one_op(ctx, I32, I32, UnaryOp::I32Extend16S)?,
+        Instruction::I64Extend8S => one_op(ctx, I64, I64, UnaryOp::I64Extend8S)?,
+        Instruction::I64Extend16S => one_op(ctx, I64, I64, UnaryOp::I64Extend16S)?,
+        Instruction::I64Extend32S => one_op(ctx, I64, I64, UnaryOp::I64Extend32S)?,
 
         Instruction::Drop => {
             let (_, expr) = ctx.pop_operand()?;

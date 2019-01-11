@@ -152,8 +152,14 @@ impl Visitor for DisplayExpr<'_, '_, '_> {
         self.indented(")")
     }
 
-    fn visit_i32_const(&mut self, expr: &I32Const) -> fmt::Result {
-        self.indented(&format!("(i32.const {})", expr.value))
+    fn visit_const(&mut self, expr: &Const) -> fmt::Result {
+        self.indented(&match expr.value {
+            Value::I32(i) => format!("(i32.const {})", i),
+            Value::I64(i) => format!("(i64.const {})", i),
+            Value::F32(i) => format!("(f32.const {})", i),
+            Value::F64(i) => format!("(f64.const {})", i),
+            Value::V128(i) => format!("(v128.const {})", i),
+        })
     }
 
     fn visit_i32_add(&mut self, expr: &I32Add) -> fmt::Result {

@@ -5,12 +5,10 @@ mod local_function;
 use crate::dot::Dot;
 use crate::error::{ErrorKind, Result};
 use crate::module::emit::{Emit, IdsToIndices};
-use crate::module::imports::{ImportId, ImportKind, ModuleImports};
-use crate::module::locals::ModuleLocals;
-use crate::module::types::ModuleTypes;
+use crate::module::imports::{ImportId, ImportKind};
 use crate::module::Module;
 use crate::passes::Used;
-use crate::ty::{Type, TypeId};
+use crate::ty::TypeId;
 use crate::validation_context::ValidationContext;
 use failure::Fail;
 use id_arena::{Arena, Id};
@@ -38,10 +36,10 @@ pub struct Function {
 }
 
 impl Function {
-    fn new_uninitialized(id: FunctionId) -> Function {
+    fn new_uninitialized(id: FunctionId, ty: TypeId) -> Function {
         Function {
             id,
-            kind: FunctionKind::Uninitialized,
+            kind: FunctionKind::Uninitialized(ty),
         }
     }
 
@@ -54,15 +52,14 @@ impl Function {
     }
 
     /// Create a new function that is locally defined within the wasm module.
-    pub fn new_local(
-        funcs: &ModuleFunctions,
-        locals: &mut ModuleLocals,
+    pub fn parse_local(
+        module: &mut Module,
         id: FunctionId,
-        ty: &Type,
+        ty: TypeId,
         validation: &ValidationContext,
         body: &elements::FuncBody,
     ) -> Result<Function> {
-        let local = LocalFunction::new(funcs, locals, id, ty, validation, body)?;
+        let local = LocalFunction::parse(module, id, ty, validation, body)?;
         Ok(Function {
             id,
             kind: FunctionKind::Local(local),
@@ -86,7 +83,7 @@ impl Function {
                     ),
                 }
             }
-            FunctionKind::Uninitialized => unreachable!(),
+            FunctionKind::Uninitialized(_) => unreachable!(),
         }
     }
 }
@@ -96,7 +93,7 @@ impl Dot for Function {
         match self.kind {
             FunctionKind::Import(ref i) => i.dot(out),
             FunctionKind::Local(ref l) => l.dot(out),
-            FunctionKind::Uninitialized => unreachable!(),
+            FunctionKind::Uninitialized(_) => unreachable!(),
         }
     }
 }
@@ -106,7 +103,7 @@ impl fmt::Display for Function {
         match self.kind {
             FunctionKind::Import(ref i) => fmt::Display::fmt(i, f),
             FunctionKind::Local(ref l) => fmt::Display::fmt(l, f),
-            FunctionKind::Uninitialized => unreachable!(),
+            FunctionKind::Uninitialized(_) => unreachable!(),
         }
     }
 }
@@ -124,7 +121,7 @@ pub enum FunctionKind {
     /// reserved its id and associated it with its original input wasm module
     /// index). This should only exist within
     /// `ModuleFunctions::add_local_functions`.
-    Uninitialized,
+    Uninitialized(TypeId),
 }
 
 impl FunctionKind {
@@ -172,67 +169,6 @@ impl ModuleFunctions {
         Default::default()
     }
 
-    /// Add the externally defined imported functions in the wasm module to this
-    /// instance.
-    pub fn add_imported_functions(&mut self, imports: &ModuleImports) {
-        assert_eq!(self.arena.len(), 0, "should not already have any functions");
-        let mut idx = 0;
-        for (imp_id, imp) in imports.iter() {
-            if let ImportKind::Function { .. } = imp.kind {
-                let id = self.arena.next_id();
-                let id2 = self.arena.alloc(Function::new_import(id, imp_id));
-                debug_assert_eq!(id, id2);
-
-                self.add_function_for_index(idx, id);
-                idx += 1;
-            }
-        }
-    }
-
-    /// Add the locally defined functions in the wasm module to this instance.
-    pub fn add_local_functions(
-        &mut self,
-        module: &elements::Module,
-        func_section: &elements::FunctionSection,
-        code_section: &elements::CodeSection,
-        types: &ModuleTypes,
-        locals: &mut ModuleLocals,
-    ) -> Result<()> {
-        let import_count = self.arena.len() as u32;
-        let validation = ValidationContext::for_module(&module)?;
-
-        // First create a bunch of "uninitialized" functions so that every index
-        // is associated with a function identifier. By making associating every
-        // index with its function id before processing function bodies, we
-        // allow `call`s to functions defined after the function they are
-        // within.
-        let mut ids = Vec::with_capacity(func_section.entries().len());
-        for (i, _) in func_section.entries().iter().enumerate() {
-            let id = self.arena.next_id();
-            let id2 = self.arena.alloc(Function::new_uninitialized(id));
-            debug_assert_eq!(id, id2);
-            self.add_function_for_index(i as u32 + import_count, id);
-            ids.push(id);
-        }
-
-        for (id, (func, body)) in ids.into_iter().zip(
-            func_section
-                .entries()
-                .iter()
-                .zip(code_section.bodies().iter()),
-        ) {
-            let ty = types.type_for_index(func.type_ref()).ok_or_else(|| {
-                ErrorKind::InvalidWasm
-                    .context("function's type is an out-of-bounds reference into the types section")
-            })?;
-
-            self.arena[id] =
-                Function::new_local(self, locals, id, &types.types()[ty], &validation, body)?;
-        }
-
-        Ok(())
-    }
-
     /// Get the function for the given index in the input wasm, if any exists.
     pub fn function_for_index(&self, index: u32) -> Option<FunctionId> {
         self.index_to_function_id.get(&index).cloned()
@@ -242,6 +178,72 @@ impl ModuleFunctions {
     fn add_function_for_index(&mut self, index: u32, id: FunctionId) {
         let old = self.index_to_function_id.insert(index, id);
         assert!(old.is_none());
+    }
+}
+
+impl Module {
+    /// Add the externally defined imported functions in the wasm module to this
+    /// instance.
+    pub fn register_imported_functions(&mut self) {
+        assert_eq!(self.funcs.arena.len(), 0, "should not already have any functions");
+        let mut idx = 0;
+        for (imp_id, imp) in self.imports.iter() {
+            if let ImportKind::Function { .. } = imp.kind {
+                let id = self.funcs.arena.next_id();
+                let id2 = self.funcs.arena.alloc(Function::new_import(id, imp_id));
+                debug_assert_eq!(id, id2);
+
+                self.funcs.add_function_for_index(idx, id);
+                idx += 1;
+            }
+        }
+    }
+
+    /// Declare local functions after seeing the `function` section of a wasm
+    /// executable.
+    pub fn declare_local_functions(
+        &mut self,
+        func_section: &elements::FunctionSection,
+    ) -> Result<()> {
+        let import_count = self.funcs.arena.len() as u32;
+
+        for (i, func) in func_section.entries().iter().enumerate() {
+            let ty = self.types.type_for_index(func.type_ref()).ok_or_else(|| {
+                ErrorKind::InvalidWasm
+                    .context("function's type is an out-of-bounds reference into the types section")
+            })?;
+            let id = self.funcs.arena.next_id();
+            let id2 = self.funcs.arena.alloc(Function::new_uninitialized(id, ty));
+            debug_assert_eq!(id, id2);
+            self.funcs.add_function_for_index(i as u32 + import_count, id);
+        }
+
+        Ok(())
+    }
+
+    /// Add the locally defined functions in the wasm module to this instance.
+    pub fn parse_local_functions(
+        &mut self,
+        raw_module: &elements::Module,
+        code_section: &elements::CodeSection,
+    ) -> Result<()> {
+        let num_imports = self.funcs.arena.len() - code_section.bodies().len();
+        let validation = ValidationContext::for_module(raw_module)?;
+
+        for (i, body) in code_section.bodies().iter().enumerate() {
+            let index = (num_imports + i) as u32;
+            let id = self.funcs.function_for_index(index).ok_or_else(|| {
+                failure::format_err!("code and function section length mismatch")
+            })?;
+            let ty = match self.funcs.arena[id].kind {
+                FunctionKind::Uninitialized(ty) => ty,
+                _ => unreachable!(),
+            };
+            self.funcs.arena[id] =
+                Function::parse_local(self, id, ty, &validation, body)?;
+        }
+
+        Ok(())
     }
 }
 
@@ -269,7 +271,7 @@ impl Emit for ModuleFunctions {
                         let old = imports.insert(idx, id);
                         assert!(old.is_none());
                     }
-                    FunctionKind::Uninitialized => unreachable!(),
+                    FunctionKind::Uninitialized(_) => unreachable!(),
                 }
             }
         }

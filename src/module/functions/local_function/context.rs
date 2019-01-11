@@ -2,8 +2,8 @@
 
 use crate::error::{ErrorKind, Result};
 use crate::ir::{Block, BlockId, BlockKind, ExprId};
-use crate::module::functions::{FunctionId, LocalFunction, ModuleFunctions};
-use crate::module::locals::ModuleLocals;
+use crate::module::functions::{FunctionId, LocalFunction};
+use crate::module::Module;
 use crate::ty::ValType;
 use crate::validation_context::ValidationContext;
 use failure::Fail;
@@ -42,11 +42,8 @@ pub type ControlStack = Vec<ControlFrame>;
 
 #[derive(Debug)]
 pub struct FunctionContext<'a> {
-    /// All the functions within this module.
-    pub funcs: &'a ModuleFunctions,
-
-    /// The locals for this function's module.
-    pub locals: &'a mut ModuleLocals,
+    /// The module that we're adding a function for.
+    pub module: &'a mut Module,
 
     /// The arena id of `func`.
     pub func_id: FunctionId,
@@ -67,8 +64,7 @@ pub struct FunctionContext<'a> {
 impl<'a> FunctionContext<'a> {
     /// Create a new function context.
     pub fn new(
-        funcs: &'a ModuleFunctions,
-        locals: &'a mut ModuleLocals,
+        module: &'a mut Module,
         func_id: FunctionId,
         func: &'a mut LocalFunction,
         validation: &'a ValidationContext<'a>,
@@ -76,8 +72,7 @@ impl<'a> FunctionContext<'a> {
         controls: &'a mut ControlStack,
     ) -> FunctionContext<'a> {
         FunctionContext {
-            funcs,
-            locals,
+            module,
             func_id,
             func,
             validation,
@@ -88,8 +83,7 @@ impl<'a> FunctionContext<'a> {
 
     pub fn nested<'b>(&'b mut self, validation: &'b ValidationContext<'b>) -> FunctionContext<'b> {
         FunctionContext {
-            funcs: self.funcs,
-            locals: self.locals,
+            module: self.module,
             func_id: self.func_id,
             func: self.func,
             validation,

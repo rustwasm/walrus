@@ -22,7 +22,7 @@ impl DisplayIr for Function {
         match self.kind {
             FunctionKind::Import(ref i) => i.display_ir(f, &(), indent),
             FunctionKind::Local(ref l) => l.display_ir(f, &(), indent),
-            FunctionKind::Uninitialized => unreachable!(),
+            FunctionKind::Uninitialized(_) => unreachable!(),
         }
     }
 }
@@ -258,5 +258,9 @@ impl Visitor for DisplayExpr<'_, '_, '_> {
 
     fn visit_return(&mut self, r: &Return) -> fmt::Result {
         self.sexp("return", &r.values)
+    }
+
+    fn visit_memory_size(&mut self, m: &MemorySize) -> fmt::Result {
+        self.indented(&format!("(memory.size {})", m.memory.index()))
     }
 }

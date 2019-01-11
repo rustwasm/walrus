@@ -70,3 +70,9 @@ impl<T: Clone + Eq + Hash> ops::IndexMut<Id<T>> for ArenaSet<T> {
         &mut self.arena[id]
     }
 }
+
+impl<T: Clone + Eq + Hash> Default for ArenaSet<T> {
+    fn default() -> ArenaSet<T> {
+        ArenaSet::new()
+    }
+}

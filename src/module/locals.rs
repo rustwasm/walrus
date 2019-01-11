@@ -7,7 +7,7 @@ use id_arena::Arena;
 use std::collections::HashMap;
 
 /// The set of locals in each function in this module.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct ModuleLocals {
     locals: Arena<Local>,
     func_and_index_to_local_id: HashMap<(FunctionId, u32), LocalId>,

@@ -1,9 +1,9 @@
 //! Globals within a wasm module.
 
 use crate::error::{ErrorKind, Result};
+use crate::module::Module;
 use crate::module::emit::{Emit, IdsToIndices};
-use crate::module::functions::{Function, LocalFunction, ModuleFunctions};
-use crate::module::locals::ModuleLocals;
+use crate::module::functions::{Function, LocalFunction};
 use crate::passes::Used;
 use crate::ty::{Type, ValType};
 use crate::validation_context::ValidationContext;
@@ -40,7 +40,7 @@ impl Global {
 }
 
 /// The set of globals in each function in this module.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct ModuleGlobals {
     /// The arena where the globals are stored.
     pub arena: Arena<Global>,
@@ -49,8 +49,8 @@ pub struct ModuleGlobals {
 
 impl ModuleGlobals {
     /// Construct a new, empty set of globals for a module.
-    pub fn new(
-        module: &elements::Module,
+    pub fn parse(
+        raw_module: &elements::Module,
         global_section: &elements::GlobalSection,
     ) -> Result<ModuleGlobals> {
         let capacity = global_section.entries().len();
@@ -59,7 +59,7 @@ impl ModuleGlobals {
             index_to_global_id: HashMap::with_capacity(capacity),
         };
 
-        let validation = ValidationContext::for_module(&module)?;
+        let validation = ValidationContext::for_module(raw_module)?;
 
         for (i, g) in global_section.entries().iter().enumerate() {
             globals.add_global_for_index(
@@ -104,21 +104,19 @@ impl ModuleGlobals {
         mutable: bool,
         init_expr: &[elements::Instruction],
     ) -> Result<GlobalId> {
-        let dummy_funcs = &ModuleFunctions::new();
-        let dummy_locals = &mut ModuleLocals::new();
+        let dummy_module = &mut Module::default();
         let dummy_id = DefaultArenaBehavior::<Function>::new_id(0, 0);
-        let dummy_ty = Type::new(
+        let dummy_ty = dummy_module.types.types_mut().insert(Type::new(
             DefaultArenaBehavior::<Type>::new_id(0, 0),
             vec![].into_boxed_slice(),
             vec![ty].into_boxed_slice(),
-        );
+        ));
         let dummy_body =
             elements::FuncBody::new(vec![], elements::Instructions::new(init_expr.to_vec()));
-        let init_expr = LocalFunction::new(
-            dummy_funcs,
-            dummy_locals,
+        let init_expr = LocalFunction::parse(
+            dummy_module,
             dummy_id,
-            &dummy_ty,
+            dummy_ty,
             validation,
             &dummy_body,
         )?;

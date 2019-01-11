@@ -20,7 +20,7 @@ pub struct Memory {
 }
 
 /// The set of memories in this module.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct ModuleMemories {
     memories: Arena<Memory>,
     index_to_memory_id: HashMap<u32, MemoryId>,
@@ -28,7 +28,7 @@ pub struct ModuleMemories {
 
 impl ModuleMemories {
     /// Construct a new, empty set of memories for a module.
-    pub fn new(memory_section: &elements::MemorySection) -> ModuleMemories {
+    pub fn parse(memory_section: &elements::MemorySection) -> ModuleMemories {
         let capacity = memory_section.entries().len();
         let mut memories = ModuleMemories {
             memories: Arena::with_capacity(capacity),

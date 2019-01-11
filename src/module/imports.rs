@@ -166,7 +166,7 @@ impl ImportKind {
 }
 
 /// The set of imports in a module.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct ModuleImports {
     imports: ArenaSet<Import>,
 }
@@ -189,7 +189,7 @@ impl ops::DerefMut for ModuleImports {
 
 impl ModuleImports {
     /// Construct the import set for a wasm module.
-    pub fn new(
+    pub fn parse(
         types: &ModuleTypes,
         import_section: &elements::ImportSection,
     ) -> Result<ModuleImports> {

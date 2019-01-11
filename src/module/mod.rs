@@ -24,9 +24,8 @@ use crate::error::{ErrorKind, Result};
 use crate::passes;
 use failure::Fail;
 use failure::ResultExt;
-use parity_wasm::elements::{self, Serialize};
+use parity_wasm::elements;
 use std::fs;
-use std::io;
 use std::path::Path;
 
 /// A wasm module.
@@ -90,7 +89,7 @@ impl Module {
                 .context("different number of function section entries and code section entries")
                 .into());
         }
-        funcs.add_local_functions(&module, &func_section, &code_section, &types, &mut locals)?;
+        funcs.add_local_functions(&module, &func_section, &code_section, &types, &mut locals, &memories)?;
 
         let exports = module.export_section().cloned().unwrap_or_default();
         let exports = ModuleExports::new(&funcs, &tables, &memories, &globals, &exports)?;
@@ -121,6 +120,14 @@ impl Module {
     where
         P: AsRef<Path>,
     {
+        let buffer = self.emit_wasm()?;
+        fs::write(path, buffer)
+            .context("failed to write wasm module")?;
+        Ok(())
+    }
+
+    /// Emit this module into an in-memory wasm buffer.
+    pub fn emit_wasm(&self) -> Result<Vec<u8>> {
         let roots = self.exports.arena.iter().map(|(id, _)| id);
         let used = passes::Used::new(self, roots);
         let data = elements::Section::Data(self.data.clone());
@@ -157,14 +164,8 @@ impl Module {
             | elements::Section::Reloc(_)
             | elements::Section::Name(_) => 12,
         });
-
-        let file =
-            fs::File::create(path).context("failed to create file to write wasm module into")?;
-        let mut file = io::BufWriter::new(file);
-
-        module
-            .serialize(&mut file)
+        let buffer = elements::serialize(module)
             .context("failed to serialize wasm module to file")?;
-        Ok(())
+        Ok(buffer)
     }
 }

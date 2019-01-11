@@ -8,6 +8,7 @@ pub mod matcher;
 
 use crate::dot::Dot;
 use crate::module::functions::FunctionId;
+use crate::module::memories::MemoryId;
 use crate::ty::ValType;
 use id_arena::Id;
 use std::io::{self, Write};
@@ -253,6 +254,12 @@ pub enum Expr {
         /// The values being returned.
         values: Box<[ExprId]>,
     },
+
+    /// memory.size
+    MemorySize {
+        /// The memory we're fetching the current size of.
+        memory: MemoryId,
+    },
 }
 
 impl Expr {
@@ -281,6 +288,7 @@ impl Expr {
             | Expr::Select(..)
             | Expr::BrIf(..)
             | Expr::IfElse(..)
+            | Expr::MemorySize(..)
             | Expr::Drop(..) => false,
         }
     }

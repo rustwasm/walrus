@@ -4,6 +4,7 @@ use crate::error::{ErrorKind, Result};
 use crate::ir::{Block, BlockId, BlockKind, ExprId};
 use crate::module::functions::{FunctionId, LocalFunction, ModuleFunctions};
 use crate::module::locals::ModuleLocals;
+use crate::module::memories::ModuleMemories;
 use crate::ty::ValType;
 use crate::validation_context::ValidationContext;
 use failure::Fail;
@@ -48,6 +49,9 @@ pub struct FunctionContext<'a> {
     /// The locals for this function's module.
     pub locals: &'a mut ModuleLocals,
 
+    /// The memories for this function's module.
+    pub memories: &'a ModuleMemories,
+
     /// The arena id of `func`.
     pub func_id: FunctionId,
 
@@ -69,6 +73,7 @@ impl<'a> FunctionContext<'a> {
     pub fn new(
         funcs: &'a ModuleFunctions,
         locals: &'a mut ModuleLocals,
+        memories: &'a ModuleMemories,
         func_id: FunctionId,
         func: &'a mut LocalFunction,
         validation: &'a ValidationContext<'a>,
@@ -78,6 +83,7 @@ impl<'a> FunctionContext<'a> {
         FunctionContext {
             funcs,
             locals,
+            memories,
             func_id,
             func,
             validation,
@@ -90,6 +96,7 @@ impl<'a> FunctionContext<'a> {
         FunctionContext {
             funcs: self.funcs,
             locals: self.locals,
+            memories: self.memories,
             func_id: self.func_id,
             func: self.func,
             validation,

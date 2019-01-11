@@ -8,6 +8,7 @@ use crate::module::emit::{Emit, IdsToIndices};
 use crate::module::imports::{ImportId, ImportKind, ModuleImports};
 use crate::module::locals::ModuleLocals;
 use crate::module::types::ModuleTypes;
+use crate::module::memories::ModuleMemories;
 use crate::module::Module;
 use crate::passes::Used;
 use crate::ty::{Type, TypeId};
@@ -57,12 +58,13 @@ impl Function {
     pub fn new_local(
         funcs: &ModuleFunctions,
         locals: &mut ModuleLocals,
+        memories: &ModuleMemories,
         id: FunctionId,
         ty: &Type,
         validation: &ValidationContext,
         body: &elements::FuncBody,
     ) -> Result<Function> {
-        let local = LocalFunction::new(funcs, locals, id, ty, validation, body)?;
+        let local = LocalFunction::new(funcs, locals, memories, id, ty, validation, body)?;
         Ok(Function {
             id,
             kind: FunctionKind::Local(local),
@@ -197,6 +199,7 @@ impl ModuleFunctions {
         code_section: &elements::CodeSection,
         types: &ModuleTypes,
         locals: &mut ModuleLocals,
+        memories: &ModuleMemories,
     ) -> Result<()> {
         let import_count = self.arena.len() as u32;
         let validation = ValidationContext::for_module(&module)?;
@@ -224,10 +227,10 @@ impl ModuleFunctions {
             let ty = types.type_for_index(func.type_ref()).ok_or_else(|| {
                 ErrorKind::InvalidWasm
                     .context("function's type is an out-of-bounds reference into the types section")
-            })?;
+           })?;
 
             self.arena[id] =
-                Function::new_local(self, locals, id, &types.types()[ty], &validation, body)?;
+                Function::new_local(self, locals, memories, id, &types.types()[ty], &validation, body)?;
         }
 
         Ok(())

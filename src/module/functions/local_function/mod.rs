@@ -11,6 +11,7 @@ use crate::error::{ErrorKind, Result};
 use crate::ir::*;
 use crate::module::emit::IdsToIndices;
 use crate::module::locals::ModuleLocals;
+use crate::module::memories::ModuleMemories;
 use crate::ty::{Type, TypeId, ValType};
 use crate::validation_context::ValidationContext;
 use failure::{Fail, ResultExt};
@@ -46,6 +47,7 @@ impl LocalFunction {
     pub fn new(
         funcs: &ModuleFunctions,
         locals: &mut ModuleLocals,
+        memories: &ModuleMemories,
         id: FunctionId,
         ty: &Type,
         validation: &ValidationContext,
@@ -69,6 +71,7 @@ impl LocalFunction {
         let mut ctx = FunctionContext::new(
             funcs,
             locals,
+            memories,
             id,
             &mut func,
             &validation,
@@ -197,6 +200,10 @@ impl LocalFunction {
 
             fn visit_return(&mut self, e: &Return) -> u64 {
                 1 + e.values.iter().map(|e| self.visit(*e)).sum::<u64>()
+            }
+
+            fn visit_memory_size(&mut self, _: &MemorySize) -> u64 {
+                1
             }
         }
 
@@ -355,6 +362,7 @@ impl LocalFunction {
 
             fn visit_i32_const(&mut self, _: &I32Const) {}
             fn visit_unreachable(&mut self, _: &Unreachable) {}
+            fn visit_memory_size(&mut self, _: &MemorySize) {}
         }
 
         let mut v = LocalsVisitor {
@@ -661,6 +669,10 @@ impl LocalFunction {
                 self.emit(elements::Instruction::Return)?;
                 Err(())
             }
+
+            fn visit_memory_size(&mut self, e: &MemorySize) -> Self::Return {
+                self.emit(elements::Instruction::CurrentMemory(e.memory.index() as u8))
+            }
         }
 
         let mut v = EmitVisitor {
@@ -885,6 +897,11 @@ impl Dot for LocalFunction {
                 for (i, v) in e.values.iter().enumerate() {
                     self.edge(*v, format!("values[{}]", i))?;
                 }
+                Ok(())
+            }
+
+            fn visit_memory_size(&mut self, m: &MemorySize) -> io::Result<()> {
+                self.node(format!("memory.size {}", m.memory.index()))?;
                 Ok(())
             }
         }
@@ -1237,7 +1254,16 @@ fn validate_instruction<'a>(
             ctx.add_to_current_frame_block(expr);
         }
 
-        op => unimplemented!("Have not implemented support for opcode yet: {:?}", op),
+        Instruction::CurrentMemory(mem) => {
+            let memory = match ctx.memories.memory_for_index(*mem as u32) {
+                Some(id) => id,
+                None => failure::bail!("memory {} is out of bounds", mem),
+            };
+            let expr = ctx.func.alloc(MemorySize { memory });
+            ctx.push_operand(Some(ValType::I32), expr);
+        }
+
+        op => failure::bail!("Have not implemented support for opcode yet: {:?}", op),
     }
 
     Ok(&insts[1..])

@@ -20,7 +20,7 @@ pub struct Memory {
 }
 
 /// The set of memories in this module.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct ModuleMemories {
     memories: Arena<Memory>,
     index_to_memory_id: HashMap<u32, MemoryId>,

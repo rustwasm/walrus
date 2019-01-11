@@ -4,6 +4,7 @@ use crate::error::{ErrorKind, Result};
 use crate::module::emit::{Emit, IdsToIndices};
 use crate::module::functions::{Function, LocalFunction, ModuleFunctions};
 use crate::module::locals::ModuleLocals;
+use crate::module::memories::ModuleMemories;
 use crate::passes::Used;
 use crate::ty::{Type, ValType};
 use crate::validation_context::ValidationContext;
@@ -105,6 +106,7 @@ impl ModuleGlobals {
         init_expr: &[elements::Instruction],
     ) -> Result<GlobalId> {
         let dummy_funcs = &ModuleFunctions::new();
+        let dummy_memories = &ModuleMemories::default();
         let dummy_locals = &mut ModuleLocals::new();
         let dummy_id = DefaultArenaBehavior::<Function>::new_id(0, 0);
         let dummy_ty = Type::new(
@@ -117,6 +119,7 @@ impl ModuleGlobals {
         let init_expr = LocalFunction::new(
             dummy_funcs,
             dummy_locals,
+            dummy_memories,
             dummy_id,
             &dummy_ty,
             validation,

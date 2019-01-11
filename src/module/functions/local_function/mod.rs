@@ -666,7 +666,9 @@ impl LocalFunction {
             }
 
             fn visit_memory_size(&mut self, e: &MemorySize) -> Self::Return {
-                self.emit(elements::Instruction::CurrentMemory(e.memory.index() as u8))
+                let idx = self.indices.get_memory_index(e.memory);
+                assert!(idx < 256);
+                self.emit(elements::Instruction::CurrentMemory(idx as u8))
             }
         }
 

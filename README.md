@@ -5,7 +5,7 @@
 [![](https://docs.rs/walrus/badge.svg)](https://docs.rs/walrus/)
 [![](https://img.shields.io/crates/v/walrus.svg)](https://crates.io/crates/walrus)
 [![](https://img.shields.io/crates/d/walrus.svg)](https://crates.io/crates/walrus)
-[![Travis CI Build Status](https://travis-ci.org/fitzgen/walrus.svg?branch=master)](https://travis-ci.org/fitzgen/walrus)
+[![Travis CI Build Status](https://travis-ci.com/rustwasm/walrus.svg?branch=master)](https://travis-ci.com/rustwasm/walrus)
 
 ## ⚠️ WORK IN PROGRESS ⚠️
 

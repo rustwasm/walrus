@@ -6,6 +6,7 @@ use crate::ty::{Type, ValType};
 use failure::{Fail, ResultExt};
 use parity_wasm::elements;
 use std::u16;
+use std::iter;
 use std::u32;
 
 /// Wasm validation context.
@@ -111,7 +112,9 @@ impl<'a> ValidationContext<'a> {
             .params()
             .iter()
             .cloned()
-            .chain(body.locals().iter().map(|l| ValType::from(&l.value_type())))
+            .chain(body.locals().iter().flat_map(|l| {
+                iter::repeat(ValType::from(&l.value_type())).take(l.count() as usize)
+            }))
             .collect();
 
         let labels = vec![ty

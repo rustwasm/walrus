@@ -13,7 +13,7 @@ use crate::module::Module;
 use crate::module::emit::IdsToIndices;
 use crate::ty::{TypeId, ValType};
 use crate::validation_context::ValidationContext;
-use failure::{Fail, ResultExt};
+use failure::{Fail, ResultExt, format_err, bail};
 use id_arena::Arena;
 use parity_wasm::elements::{self, Instruction};
 use std::collections::{BTreeSet, HashSet};
@@ -138,6 +138,14 @@ impl LocalFunction {
             }
 
             fn visit_local_set(&mut self, e: &LocalSet) -> u64 {
+                1 + self.visit(e.value)
+            }
+
+            fn visit_global_get(&mut self, _: &GlobalGet) -> u64 {
+                1
+            }
+
+            fn visit_global_set(&mut self, e: &GlobalSet) -> u64 {
                 1 + self.visit(e.value)
             }
 
@@ -287,6 +295,13 @@ impl LocalFunction {
 
             fn visit_local_set(&mut self, e: &LocalSet) {
                 self.insert_local(e.ty, e.local);
+                self.visit(e.value);
+            }
+
+            fn visit_global_get(&mut self, _: &GlobalGet) {}
+
+            fn visit_global_set(&mut self, e: &GlobalSet) {
+                self.visit(e.value);
             }
 
             fn visit_i32_add(&mut self, e: &I32Add) {
@@ -507,8 +522,8 @@ impl LocalFunction {
                     0 => elements::BlockType::NoResult,
                     1 => elements::BlockType::Value(e.results[0].into()),
                     _ => panic!(
-                "multiple return values not supported yet; write a transformation to rewrite them"
-            ),
+                        "multiple return values not supported yet; write a transformation to rewrite them"
+                    ),
                 };
 
                 match e.kind {
@@ -551,6 +566,17 @@ impl LocalFunction {
                 self.visit(e.value)?;
                 let idx = self.indices.get_local_index(e.local);
                 self.emit(elements::Instruction::SetLocal(idx))
+            }
+
+            fn visit_global_get(&mut self, e: &GlobalGet) -> Self::Return {
+                let idx = self.indices.get_global_index(e.global);
+                self.emit(elements::Instruction::GetGlobal(idx))
+            }
+
+            fn visit_global_set(&mut self, e: &GlobalSet) -> Self::Return {
+                self.visit(e.value)?;
+                let idx = self.indices.get_global_index(e.global);
+                self.emit(elements::Instruction::SetGlobal(idx))
             }
 
             fn visit_const(&mut self, e: &Const) -> Self::Return {
@@ -839,6 +865,15 @@ impl Dot for LocalFunction {
                 self.edge(e.value, "value")
             }
 
+            fn visit_global_get(&mut self, e: &GlobalGet) -> io::Result<()> {
+                self.node(format!("global.get {}", e.global.index()))
+            }
+
+            fn visit_global_set(&mut self, e: &GlobalSet) -> io::Result<()> {
+                self.node(format!("global.set {}", e.global.index()))?;
+                self.edge(e.value, "value")
+            }
+
             fn visit_const(&mut self, e: &Const) -> io::Result<()> {
                 self.node(match e.value {
                     Value::I32(i) => format!("i32.const {}", i),
@@ -1048,16 +1083,31 @@ fn validate_instruction<'a>(
             ctx.push_operands(&result_tys, &result_exprs);
         }
         Instruction::GetLocal(n) => {
-            let ty = ctx.validation.local(*n).context("invalid get_local")?;
+            let ty = ctx.validation.local(*n).context("invalid local.get")?;
             let local = ctx.module.locals.local_for_function_and_index(ctx.func_id, ty, *n);
             let expr = ctx.func.alloc(LocalGet { ty, local });
             ctx.push_operand(Some(ty), expr);
         }
         Instruction::SetLocal(n) => {
-            let ty = ctx.validation.local(*n).context("invalid set_local")?;
+            let ty = ctx.validation.local(*n).context("invalid local.set")?;
             let (_, value) = ctx.pop_operand_expected(Some(ty))?;
             let local = ctx.module.locals.local_for_function_and_index(ctx.func_id, ty, *n);
             let expr = ctx.func.alloc(LocalSet { ty, local, value });
+            ctx.add_to_current_frame_block(expr);
+        }
+        Instruction::GetGlobal(n) => {
+            let global = ctx.module.globals.global_for_index(*n)
+                .ok_or_else(|| format_err!("invalid global.get index"))?;
+            let ty = ctx.module.globals.arena[global].ty;
+            let expr = ctx.func.alloc(GlobalGet { global });
+            ctx.push_operand(Some(ty), expr);
+        }
+        Instruction::SetGlobal(n) => {
+            let global = ctx.module.globals.global_for_index(*n)
+                .ok_or_else(|| format_err!("invalid global.get index"))?;
+            let ty = ctx.module.globals.arena[global].ty;
+            let (_, value) = ctx.pop_operand_expected(Some(ty))?;
+            let expr = ctx.func.alloc(GlobalSet { global, value });
             ctx.add_to_current_frame_block(expr);
         }
         Instruction::I32Const(n) => {
@@ -1314,13 +1364,13 @@ fn validate_instruction<'a>(
         Instruction::CurrentMemory(mem) => {
             let memory = match ctx.module.memories.memory_for_index(*mem as u32) {
                 Some(id) => id,
-                None => failure::bail!("memory {} is out of bounds", mem),
+                None => bail!("memory {} is out of bounds", mem),
             };
             let expr = ctx.func.alloc(MemorySize { memory });
             ctx.push_operand(Some(ValType::I32), expr);
         }
 
-        op => failure::bail!("Have not implemented support for opcode yet: {:?}", op),
+        op => bail!("Have not implemented support for opcode yet: {:?}", op),
     }
 
     Ok(&insts[1..])

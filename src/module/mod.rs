@@ -104,8 +104,7 @@ impl Module {
         P: AsRef<Path>,
     {
         let buffer = self.emit_wasm()?;
-        fs::write(path, buffer)
-            .context("failed to write wasm module")?;
+        fs::write(path, buffer).context("failed to write wasm module")?;
         Ok(())
     }
 
@@ -147,8 +146,8 @@ impl Module {
             | elements::Section::Reloc(_)
             | elements::Section::Name(_) => 12,
         });
-        let buffer = elements::serialize(module)
-            .context("failed to serialize wasm module to file")?;
+        let buffer =
+            elements::serialize(module).context("failed to serialize wasm module to file")?;
         Ok(buffer)
     }
 }

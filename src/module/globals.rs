@@ -1,9 +1,9 @@
 //! Globals within a wasm module.
 
 use crate::error::{ErrorKind, Result};
-use crate::module::Module;
 use crate::module::emit::{Emit, IdsToIndices};
 use crate::module::functions::{Function, LocalFunction};
+use crate::module::Module;
 use crate::passes::Used;
 use crate::ty::{Type, ValType};
 use crate::validation_context::ValidationContext;
@@ -113,13 +113,8 @@ impl ModuleGlobals {
         ));
         let dummy_body =
             elements::FuncBody::new(vec![], elements::Instructions::new(init_expr.to_vec()));
-        let init_expr = LocalFunction::parse(
-            dummy_module,
-            dummy_id,
-            dummy_ty,
-            validation,
-            &dummy_body,
-        )?;
+        let init_expr =
+            LocalFunction::parse(dummy_module, dummy_id, dummy_ty, validation, &dummy_body)?;
         if !init_expr.is_const() {
             return Err(ErrorKind::InvalidWasm
                 .context("global's initialization expression is not constant")

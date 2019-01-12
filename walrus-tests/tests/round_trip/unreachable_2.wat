@@ -1,5 +1,3 @@
-;; Instructions after an unreachable should not be emitted.
-
 (module
   (type (;0;) (func (result i32)))
   (func $f (type 0) (result i32)
@@ -10,5 +8,6 @@
 ;; CHECK: (module
 ;; NEXT:    (type (;0;) (func (result i32)))
 ;; NEXT:    (func (;0;) (type 0) (result i32)
-;; NEXT:      unreachable)
+;; NEXT:      unreachable
+;; NEXT:      i32.const 42)
 ;; NEXT:    (export "f" (func 0)))

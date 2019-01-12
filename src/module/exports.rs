@@ -1,13 +1,13 @@
 //! Exported items in a wasm module.
 
-use crate::module::Module;
-use super::globals::{GlobalId};
-use super::memories::{MemoryId};
-use super::tables::{TableId};
+use super::globals::GlobalId;
+use super::memories::MemoryId;
+use super::tables::TableId;
 use crate::arena_set::ArenaSet;
 use crate::error::{ErrorKind, Result};
 use crate::module::emit::{Emit, IdsToIndices};
 use crate::module::functions::FunctionId;
+use crate::module::Module;
 use crate::passes::Used;
 use failure::Fail;
 use id_arena::Id;
@@ -102,25 +102,29 @@ impl ModuleExports {
 
         for exp in export_section.entries() {
             let item = match *exp.internal() {
-                elements::Internal::Function(f) => module.funcs
+                elements::Internal::Function(f) => module
+                    .funcs
                     .function_for_index(f)
                     .map(ExportItem::Function)
                     .ok_or_else(|| {
                         ErrorKind::InvalidWasm.context("exported function does not exist")
                     })?,
-                elements::Internal::Table(t) => module.tables
+                elements::Internal::Table(t) => module
+                    .tables
                     .table_for_index(t)
                     .map(ExportItem::Table)
                     .ok_or_else(|| {
                         ErrorKind::InvalidWasm.context("exported table does not exist")
                     })?,
-                elements::Internal::Memory(m) => module.memories
+                elements::Internal::Memory(m) => module
+                    .memories
                     .memory_for_index(m)
                     .map(ExportItem::Memory)
                     .ok_or_else(|| {
                         ErrorKind::InvalidWasm.context("exported memory does not exist")
                     })?,
-                elements::Internal::Global(g) => module.globals
+                elements::Internal::Global(g) => module
+                    .globals
                     .global_for_index(g)
                     .map(ExportItem::Global)
                     .ok_or_else(|| {

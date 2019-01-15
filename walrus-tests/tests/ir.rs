@@ -21,9 +21,9 @@ fn run(wat_path: &Path) -> Result<(), failure::Error> {
     let mut output = String::new();
 
     if env::var("WALRUS_TESTS_DOT").is_ok() {
-        let dot_path = wat_path.with_extension("dot");
-        let mut dot_file = fs::File::create(dot_path)?;
-        func.dot(&mut dot_file)?;
+        let mut file = String::new();
+        func.dot(&mut file);
+        fs::write(wat_path.with_extension("dot"), file)?;
     }
 
     output.push_str(&func.to_string());

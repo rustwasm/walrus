@@ -18,9 +18,9 @@ fn run(wat: &Path) -> Result<(), failure::Error> {
 
     let f = &local_funcs.first().unwrap();
     if env::var("WALRUS_TESTS_DOT").is_ok() {
-        let dot_path = wat.with_extension("dot");
-        let mut dot_file = fs::File::create(dot_path)?;
-        f.dot(&mut dot_file)?;
+        let mut file = String::new();
+        f.dot(&mut file);
+        fs::write(wat.with_extension("dot"), file)?;
     }
 
     Ok(())

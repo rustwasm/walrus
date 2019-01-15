@@ -1,16 +1,17 @@
 //! Functions defined locally within a wasm module.
 
 mod context;
+mod emit;
 pub mod display;
 
 use self::context::FunctionContext;
-use super::{FunctionId};
-use crate::ir::matcher::{ConstMatcher, Matcher};
+use super::FunctionId;
 use crate::dot::Dot;
 use crate::error::{ErrorKind, Result};
+use crate::ir::matcher::{ConstMatcher, Matcher};
 use crate::ir::*;
-use crate::module::Module;
 use crate::module::emit::IdsToIndices;
+use crate::module::Module;
 use crate::ty::{TypeId, ValType};
 use crate::validation_context::ValidationContext;
 use failure::{Fail, ResultExt, format_err, bail};
@@ -18,7 +19,6 @@ use id_arena::Arena;
 use parity_wasm::elements::{self, Instruction};
 use std::collections::{BTreeSet, HashSet};
 use std::fmt;
-use std::io::{self, Write};
 use std::iter;
 
 /// A function defined locally within the wasm module.
@@ -65,14 +65,7 @@ impl LocalFunction {
         let operands = &mut context::OperandStack::new();
         let controls = &mut context::ControlStack::new();
 
-        let mut ctx = FunctionContext::new(
-            module,
-            id,
-            &mut func,
-            &validation,
-            operands,
-            controls,
-        );
+        let mut ctx = FunctionContext::new(module, id, &mut func, &validation, operands, controls);
 
         let entry = ctx.push_control(BlockKind::FunctionEntry, vec![].into_boxed_slice(), result);
         ctx.func.entry = Some(entry);
@@ -111,107 +104,26 @@ impl LocalFunction {
     pub fn size(&self) -> u64 {
         struct SizeVisitor<'a> {
             func: &'a LocalFunction,
+            exprs: u64,
         }
 
-        impl SizeVisitor<'_> {
-            fn visit<E>(&mut self, e: E) -> u64
-            where
-                E: Into<ExprId>,
-            {
-                self.func.exprs[e.into()].visit(self)
-            }
-        }
-
-        impl Visitor for SizeVisitor<'_> {
-            type Return = u64;
-
-            fn visit_block(&mut self, e: &Block) -> u64 {
-                1 + e.exprs.iter().map(|e| self.visit(*e)).sum::<u64>()
+        impl<'expr> Visitor<'expr> for SizeVisitor<'expr> {
+            fn local_function(&self) -> &'expr LocalFunction {
+                self.func
             }
 
-            fn visit_call(&mut self, e: &Call) -> u64 {
-                1 + e.args.iter().map(|e| self.visit(*e)).sum::<u64>()
-            }
-
-            fn visit_local_get(&mut self, _: &LocalGet) -> u64 {
-                1
-            }
-
-            fn visit_local_set(&mut self, e: &LocalSet) -> u64 {
-                1 + self.visit(e.value)
-            }
-
-            fn visit_global_get(&mut self, _: &GlobalGet) -> u64 {
-                1
-            }
-
-            fn visit_global_set(&mut self, e: &GlobalSet) -> u64 {
-                1 + self.visit(e.value)
-            }
-
-            fn visit_const(&mut self, _: &Const) -> u64 {
-                1
-            }
-
-            fn visit_i32_add(&mut self, e: &I32Add) -> u64 {
-                1 + self.visit(e.lhs) + self.visit(e.rhs)
-            }
-
-            fn visit_i32_sub(&mut self, e: &I32Sub) -> u64 {
-                1 + self.visit(e.lhs) + self.visit(e.rhs)
-            }
-
-            fn visit_i32_mul(&mut self, e: &I32Mul) -> u64 {
-                1 + self.visit(e.lhs) + self.visit(e.rhs)
-            }
-
-            fn visit_i32_eqz(&mut self, e: &I32Eqz) -> u64 {
-                1 + self.visit(e.expr)
-            }
-
-            fn visit_i32_popcnt(&mut self, e: &I32Popcnt) -> u64 {
-                1 + self.visit(e.expr)
-            }
-
-            fn visit_select(&mut self, e: &Select) -> u64 {
-                1 + self.visit(e.condition) + self.visit(e.consequent) + self.visit(e.alternative)
-            }
-
-            fn visit_unreachable(&mut self, _: &Unreachable) -> u64 {
-                1
-            }
-
-            fn visit_br(&mut self, e: &Br) -> u64 {
-                1 + e.args.iter().map(|e| self.visit(*e)).sum::<u64>()
-            }
-
-            fn visit_br_if(&mut self, e: &BrIf) -> u64 {
-                1 + e.args.iter().map(|e| self.visit(*e)).sum::<u64>()
-            }
-
-            fn visit_if_else(&mut self, e: &IfElse) -> u64 {
-                1 + self.visit(e.condition) + self.visit(e.consequent) + self.visit(e.alternative)
-            }
-
-            fn visit_br_table(&mut self, e: &BrTable) -> u64 {
-                1 + self.visit(e.which) + e.args.iter().map(|e| self.visit(*e)).sum::<u64>()
-            }
-
-            fn visit_drop(&mut self, e: &Drop) -> u64 {
-                1 + self.visit(e.expr)
-            }
-
-            fn visit_return(&mut self, e: &Return) -> u64 {
-                1 + e.values.iter().map(|e| self.visit(*e)).sum::<u64>()
-            }
-
-            fn visit_memory_size(&mut self, _: &MemorySize) -> u64 {
-                1
+            fn visit_expr(&mut self, e: &'expr Expr) {
+                self.exprs += 1;
+                e.visit(self);
             }
         }
 
-        let v = &mut SizeVisitor { func: self };
-        v.visit(self.entry_block())
+        let mut v = SizeVisitor {
+            func: self,
+            exprs: 0,
+        };
+        self.entry_block().visit(&mut v);
+        v.exprs
     }
 
     /// Is this function's body a [constant
@@ -222,9 +134,10 @@ impl LocalFunction {
             _ => unreachable!(),
         };
         let matcher = ConstMatcher::new();
-        entry.exprs.iter().all(|e| {
-            matcher.is_match(self, &self.exprs[*e])
-        })
+        entry
+            .exprs
+            .iter()
+            .all(|e| matcher.is_match(self, &self.exprs[*e]))
     }
 
     /// Emit this function's compact locals declarations.
@@ -274,25 +187,17 @@ impl LocalFunction {
             }
         }
 
-        impl Visitor for LocalsVisitor<'_> {
-            type Return = ();
-
-            fn visit_block(&mut self, e: &Block) {
-                for x in e.exprs.iter() {
-                    self.visit(*x);
-                }
+        impl<'expr> Visitor<'expr> for LocalsVisitor<'expr> {
+            fn local_function(&self) -> &'expr LocalFunction {
+                self.func
             }
 
-            fn visit_call(&mut self, e: &Call) {
-                for x in e.args.iter() {
-                    self.visit(*x);
-                }
-            }
-
+            // FIXME(#10) should use `visit_local_id` instead
             fn visit_local_get(&mut self, e: &LocalGet) {
                 self.insert_local(e.ty, e.local);
             }
 
+            // FIXME(#10) should use `visit_local_id` instead
             fn visit_local_set(&mut self, e: &LocalSet) {
                 self.insert_local(e.ty, e.local);
                 self.visit(e.value);
@@ -303,76 +208,6 @@ impl LocalFunction {
             fn visit_global_set(&mut self, e: &GlobalSet) {
                 self.visit(e.value);
             }
-
-            fn visit_i32_add(&mut self, e: &I32Add) {
-                self.visit(e.lhs);
-                self.visit(e.rhs);
-            }
-
-            fn visit_i32_sub(&mut self, e: &I32Sub) {
-                self.visit(e.lhs);
-                self.visit(e.rhs);
-            }
-
-            fn visit_i32_mul(&mut self, e: &I32Mul) {
-                self.visit(e.lhs);
-                self.visit(e.rhs);
-            }
-
-            fn visit_i32_eqz(&mut self, e: &I32Eqz) {
-                self.visit(e.expr);
-            }
-
-            fn visit_i32_popcnt(&mut self, e: &I32Popcnt) {
-                self.visit(e.expr);
-            }
-
-            fn visit_select(&mut self, e: &Select) {
-                self.visit(e.condition);
-                self.visit(e.consequent);
-                self.visit(e.alternative);
-            }
-
-            fn visit_br(&mut self, e: &Br) {
-                for x in e.args.iter() {
-                    self.visit(*x);
-                }
-            }
-
-            fn visit_br_if(&mut self, e: &BrIf) {
-                for x in e.args.iter() {
-                    self.visit(*x);
-                }
-                self.visit(e.condition);
-            }
-
-            fn visit_if_else(&mut self, e: &IfElse) {
-                self.visit(e.condition);
-                self.visit(e.consequent);
-                self.visit(e.alternative);
-            }
-
-            fn visit_br_table(&mut self, e: &BrTable) {
-                self.visit(e.which);
-                self.visit(e.default);
-                for x in e.args.iter() {
-                    self.visit(*x);
-                }
-            }
-
-            fn visit_drop(&mut self, e: &Drop) {
-                self.visit(e.expr)
-            }
-
-            fn visit_return(&mut self, e: &Return) {
-                for x in e.values.iter() {
-                    self.visit(*x);
-                }
-            }
-
-            fn visit_const(&mut self, _: &Const) {}
-            fn visit_unreachable(&mut self, _: &Unreachable) {}
-            fn visit_memory_size(&mut self, _: &MemorySize) {}
         }
 
         let mut v = LocalsVisitor {
@@ -458,423 +293,141 @@ impl LocalFunction {
 
     /// Emit this function's instruction sequence.
     pub(crate) fn emit_instructions(&self, indices: &IdsToIndices) -> Vec<elements::Instruction> {
-        struct EmitVisitor<'a> {
-            // The function we are visiting.
-            func: &'a LocalFunction,
-
-            // The id of the current expression.
-            id: ExprId,
-
-            // Needed so we can map locals to their indices.
-            indices: &'a IdsToIndices,
-
-            // Stack of blocks that we are currently emitting instructions for. A branch
-            // is only valid if its target is one of these blocks.
-            blocks: Vec<BlockId>,
-
-            // The instruction sequence we are building up to emit.
-            instructions: Vec<elements::Instruction>,
-        }
-
-        impl EmitVisitor<'_> {
-            fn visit<E>(&mut self, e: E) -> <Self as Visitor>::Return
-            where
-                E: Into<ExprId>,
-            {
-                let id = e.into();
-                let old = self.id;
-                self.id = id;
-                let ret = self.func.exprs[id].visit(self);
-                self.id = old;
-                ret
-            }
-
-            fn emit(&mut self, i: elements::Instruction) -> <Self as Visitor>::Return {
-                self.instructions.push(i);
-                Ok(())
-            }
-
-            fn branch_target(&self, block: BlockId) -> u32 {
-                println!("FITZGEN: looking for  = {:?}", block);
-                println!("FITZGEN: blocks = {:?}", self.blocks);
-                self.blocks
-            .iter()
-            .rev()
-            .skip(1)
-            .position(|b| *b == block)
-            .expect(
-            "attempt to branch to invalid block; bad transformation pass introduced bad branching?",
-        ) as u32
-            }
-        }
-
-        impl Visitor for EmitVisitor<'_> {
-            // Returns whether code has become unreachable in this block or not. If
-            // `Err`, then any following code (within the current block) is unreachable,
-            // and we can skip emitting instructions until the end of the block. Using
-            // `Result` allows us to use `?` for propagation and early exits.
-            type Return = ::std::result::Result<(), ()>;
-
-            fn visit_block(&mut self, e: &Block) -> Self::Return {
-                self.blocks.push(Block::new_id(self.id));
-
-                let block_ty = match e.results.len() {
-                    0 => elements::BlockType::NoResult,
-                    1 => elements::BlockType::Value(e.results[0].into()),
-                    _ => panic!(
-                        "multiple return values not supported yet; write a transformation to rewrite them"
-                    ),
-                };
-
-                match e.kind {
-                    BlockKind::Block => self.emit(elements::Instruction::Block(block_ty))?,
-                    BlockKind::Loop => self.emit(elements::Instruction::Loop(block_ty))?,
-                    BlockKind::FunctionEntry | BlockKind::IfElse => {}
-                }
-
-                for x in &e.exprs {
-                    if self.visit(*x).is_err() {
-                        break;
-                    }
-                }
-
-                match e.kind {
-                    BlockKind::Block | BlockKind::Loop | BlockKind::FunctionEntry => {
-                        self.emit(elements::Instruction::End)?
-                    }
-                    BlockKind::IfElse => {}
-                }
-
-                self.blocks.pop();
-                Ok(())
-            }
-
-            fn visit_call(&mut self, e: &Call) -> Self::Return {
-                for x in e.args.iter() {
-                    self.visit(*x)?;
-                }
-                let idx = self.indices.get_func_index(e.func);
-                self.emit(elements::Instruction::Call(idx))
-            }
-
-            fn visit_local_get(&mut self, e: &LocalGet) -> Self::Return {
-                let idx = self.indices.get_local_index(e.local);
-                self.emit(elements::Instruction::GetLocal(idx))
-            }
-
-            fn visit_local_set(&mut self, e: &LocalSet) -> Self::Return {
-                self.visit(e.value)?;
-                let idx = self.indices.get_local_index(e.local);
-                self.emit(elements::Instruction::SetLocal(idx))
-            }
-
-            fn visit_global_get(&mut self, e: &GlobalGet) -> Self::Return {
-                let idx = self.indices.get_global_index(e.global);
-                self.emit(elements::Instruction::GetGlobal(idx))
-            }
-
-            fn visit_global_set(&mut self, e: &GlobalSet) -> Self::Return {
-                self.visit(e.value)?;
-                let idx = self.indices.get_global_index(e.global);
-                self.emit(elements::Instruction::SetGlobal(idx))
-            }
-
-            fn visit_const(&mut self, e: &Const) -> Self::Return {
-                self.emit(match e.value {
-                    Value::I32(i) => elements::Instruction::I32Const(i),
-                    Value::I64(i) => elements::Instruction::I64Const(i),
-                    Value::F32(i) => elements::Instruction::F32Const(i.to_bits()),
-                    Value::F64(i) => elements::Instruction::F64Const(i.to_bits()),
-                    Value::V128(i) => {
-                        elements::Instruction::V128Const(Box::new([
-                            (i >> 0) as u8,
-                            (i >> 8) as u8,
-                            (i >> 16) as u8,
-                            (i >> 24) as u8,
-                            (i >> 32) as u8,
-                            (i >> 40) as u8,
-                            (i >> 48) as u8,
-                            (i >> 56) as u8,
-                            (i >> 64) as u8,
-                            (i >> 72) as u8,
-                            (i >> 80) as u8,
-                            (i >> 88) as u8,
-                            (i >> 96) as u8,
-                            (i >> 104) as u8,
-                            (i >> 112) as u8,
-                            (i >> 120) as u8,
-                        ]))
-                    }
-                })
-            }
-
-            fn visit_i32_add(&mut self, e: &I32Add) -> Self::Return {
-                self.visit(e.lhs)?;
-                self.visit(e.rhs)?;
-                self.emit(elements::Instruction::I32Add)
-            }
-
-            fn visit_i32_sub(&mut self, e: &I32Sub) -> Self::Return {
-                self.visit(e.lhs)?;
-                self.visit(e.rhs)?;
-                self.emit(elements::Instruction::I32Sub)
-            }
-
-            fn visit_i32_mul(&mut self, e: &I32Mul) -> Self::Return {
-                self.visit(e.lhs)?;
-                self.visit(e.rhs)?;
-                self.emit(elements::Instruction::I32Mul)
-            }
-
-            fn visit_i32_eqz(&mut self, e: &I32Eqz) -> Self::Return {
-                self.visit(e.expr)?;
-                self.emit(elements::Instruction::I32Eqz)
-            }
-
-            fn visit_i32_popcnt(&mut self, e: &I32Popcnt) -> Self::Return {
-                self.visit(e.expr)?;
-                self.emit(elements::Instruction::I32Popcnt)
-            }
-
-            fn visit_select(&mut self, e: &Select) -> Self::Return {
-                self.visit(e.consequent)?;
-                self.visit(e.alternative)?;
-                self.visit(e.condition)?;
-                self.emit(elements::Instruction::Select)
-            }
-
-            fn visit_unreachable(&mut self, _: &Unreachable) -> Self::Return {
-                self.emit(elements::Instruction::Unreachable)?;
-                Err(())
-            }
-
-            fn visit_br(&mut self, e: &Br) -> Self::Return {
-                for x in e.args.iter() {
-                    self.visit(*x)?;
-                }
-                let target = self.branch_target(e.block);
-                self.emit(elements::Instruction::Br(target))
-            }
-
-            fn visit_br_if(&mut self, e: &BrIf) -> Self::Return {
-                for x in e.args.iter() {
-                    self.visit(*x)?;
-                }
-                self.visit(e.condition)?;
-                let target = self.branch_target(e.block);
-                self.emit(elements::Instruction::BrIf(target))
-            }
-
-            fn visit_if_else(&mut self, e: &IfElse) -> Self::Return {
-                let block_ty = {
-                    let consequent = self.func.block(e.consequent);
-                    match consequent.results.len() {
-                        0 => elements::BlockType::NoResult,
-                        1 => elements::BlockType::Value(consequent.results[0].into()),
-                        _ => panic!(
-                            "multiple return values not yet supported; write a transformation to \
-                             rewrite them into single value returns"
-                        ),
-                    }
-                };
-
-                self.visit(e.condition)?;
-                self.emit(elements::Instruction::If(block_ty))?;
-                let _ = self.visit(e.consequent);
-                self.emit(elements::Instruction::Else)?;
-                let _ = self.visit(e.alternative);
-                self.emit(elements::Instruction::End)
-            }
-
-            fn visit_br_table(&mut self, e: &BrTable) -> Self::Return {
-                for x in e.args.iter() {
-                    self.visit(*x)?;
-                }
-                self.visit(e.which)?;
-                let table = e
-                    .blocks
-                    .iter()
-                    .map(|b| self.branch_target(*b))
-                    .collect::<Vec<_>>()
-                    .into_boxed_slice();
-                let default = self.branch_target(e.default);
-                self.emit(elements::Instruction::BrTable(Box::new(
-                    elements::BrTableData { table, default },
-                )))
-            }
-
-            fn visit_drop(&mut self, e: &Drop) -> Self::Return {
-                self.visit(e.expr)?;
-                self.emit(elements::Instruction::Drop)
-            }
-
-            fn visit_return(&mut self, e: &Return) -> Self::Return {
-                for x in e.values.iter() {
-                    self.visit(*x)?;
-                }
-                self.emit(elements::Instruction::Return)?;
-                Err(())
-            }
-
-            fn visit_memory_size(&mut self, e: &MemorySize) -> Self::Return {
-                let idx = self.indices.get_memory_index(e.memory);
-                assert!(idx < 256);
-                self.emit(elements::Instruction::CurrentMemory(idx as u8))
-            }
-        }
-
-        let mut v = EmitVisitor {
-            func: self,
-            indices,
-            id: self.entry_block().into(),
-            blocks: vec![],
-            instructions: vec![],
-        };
-        let _ = v.visit(self.entry_block());
-        v.instructions
+        emit::run(self, indices)
     }
 }
 
 impl fmt::Display for LocalFunction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use self::display::DisplayIr;
-        self.display_ir(f, &(), 0)
+        let mut dst = String::new();
+        self.display_ir(&mut dst, &(), 0);
+        dst.fmt(f)
     }
 }
 
 impl Dot for LocalFunction {
-    fn dot(&self, out: &mut Write) -> io::Result<()> {
+    fn dot(&self, out: &mut String) {
         struct DotVisitor<'a, 'b> {
-            out: &'a mut Write,
+            out: &'a mut String,
             func: &'b LocalFunction,
             id: ExprId,
-            seen: HashSet<ExprId>,
         }
 
         impl DotVisitor<'_, '_> {
-            fn write_id(&mut self, id: ExprId) -> io::Result<()> {
-                write!(self.out, "e{}", id.index())
+            fn write_id(&mut self, id: ExprId) {
+                id.dot(self.out);
             }
 
-            fn write_node_prologue(&mut self) -> io::Result<()> {
-                self.write_id(self.id)?;
-                write!(
-                    self.out,
+            fn write_node_prologue(&mut self) {
+                self.write_id(self.id);
+                self.out.push_str(
                     " [label=<<table cellborder=\"0\" border=\"0\"><tr><td><font face=\"monospace\">"
                 )
             }
 
-            fn write_node_epilogue(&mut self) -> io::Result<()> {
-                writeln!(self.out, "</font></td></tr></table>>];")
+            fn write_node_epilogue(&mut self) {
+                self.out.push_str("</font></td></tr></table>>];")
             }
 
-            fn node<S>(&mut self, label: S) -> io::Result<()>
+            fn node<S>(&mut self, label: S)
             where
                 S: AsRef<str>,
             {
-                self.write_node_prologue()?;
-                write!(self.out, "{}", label.as_ref())?;
+                self.write_node_prologue();
+                self.out.push_str(&label.as_ref().to_string());
                 self.write_node_epilogue()
             }
 
-            fn edge<E, S>(&mut self, to: E, label: S) -> io::Result<()>
+            fn edge<E, S>(&mut self, to: E, label: S)
             where
                 E: Into<ExprId>,
                 S: AsRef<str>,
             {
                 let to = to.into();
                 let label = label.as_ref();
-                self.write_id(self.id)?;
-                write!(self.out, " -> ")?;
-                self.write_id(to)?;
-                writeln!(self.out, " [label=\"{}\"];", label)?;
-                self.visit_if_unseen(to)
+                self.write_id(self.id);
+                self.out.push_str(" -> ");
+                self.write_id(to);
+                self.out.push_str(&format!(" [label=\"{}\"];", label));
+                self.visit_expr_id(&to.into());
             }
 
-            fn visit_if_unseen<E>(&mut self, e: E) -> io::Result<()>
-            where
-                E: Into<ExprId>,
-            {
-                let e = e.into();
-                if self.seen.insert(e) {
-                    let id = self.id;
-                    self.id = e;
-                    self.func.exprs[e].visit(self)?;
-                    self.id = id;
-                    Ok(())
-                } else {
-                    Ok(())
-                }
-            }
-
-            fn binop<S, L, R>(&mut self, label: S, lhs: L, rhs: R) -> io::Result<()>
+            fn binop<S, L, R>(&mut self, label: S, lhs: L, rhs: R)
             where
                 S: AsRef<str>,
                 L: Into<ExprId>,
                 R: Into<ExprId>,
             {
-                self.node(label)?;
-                self.edge(lhs, "lhs")?;
+                self.node(label);
+                self.edge(lhs, "lhs");
                 self.edge(rhs, "rhs")
             }
 
-            fn unop<S, E>(&mut self, label: S, e: E) -> io::Result<()>
+            fn unop<S, E>(&mut self, label: S, e: E)
             where
                 S: AsRef<str>,
                 E: Into<ExprId>,
             {
-                self.node(label)?;
+                self.node(label);
                 self.edge(e, "expr")
             }
         }
 
-        impl Visitor for DotVisitor<'_, '_> {
-            type Return = io::Result<()>;
+        impl<'expr> Visitor<'expr> for DotVisitor<'_, 'expr> {
+            fn local_function(&self) -> &'expr LocalFunction {
+                self.func
+            }
 
-            fn visit_block(&mut self, e: &Block) -> io::Result<()> {
+            fn visit_expr_id(&mut self, &e: &ExprId) {
+                let id = self.id;
+                self.id = e;
+                e.visit(self);
+                self.id = id;
+            }
+
+            fn visit_block(&mut self, e: &Block) {
                 let kind = match e.kind {
                     BlockKind::Block => "block",
                     BlockKind::Loop => "loop",
                     BlockKind::IfElse => "if/else target",
                     BlockKind::FunctionEntry => "function entry",
                 };
-                self.node(format!("{}", kind))?;
+                self.node(format!("{}", kind));
                 for (i, e) in e.exprs.iter().enumerate() {
-                    self.edge(*e, format!("exprs[{}]", i))?;
+                    self.edge(*e, format!("exprs[{}]", i));
                 }
                 if let BlockKind::Loop = e.kind {
-                    self.edge(self.id, "loop")?;
+                    self.edge(self.id, "loop");
                 }
-                Ok(())
             }
 
-            fn visit_call(&mut self, e: &Call) -> io::Result<()> {
-                self.node(format!("call {}", e.func.index()))?;
+            fn visit_call(&mut self, e: &Call) {
+                self.node(format!("call {}", e.func.index()));
                 for (i, arg) in e.args.iter().enumerate() {
-                    self.edge(*arg, format!("arg[{}]", i))?;
+                    self.edge(*arg, format!("arg[{}]", i));
                 }
-                Ok(())
             }
 
-            fn visit_local_get(&mut self, e: &LocalGet) -> io::Result<()> {
+            fn visit_local_get(&mut self, e: &LocalGet) {
                 self.node(format!("local.get {}", e.local.index()))
             }
 
-            fn visit_local_set(&mut self, e: &LocalSet) -> io::Result<()> {
-                self.node(format!("local.set {}", e.local.index()))?;
+            fn visit_local_set(&mut self, e: &LocalSet) {
+                self.node(format!("local.set {}", e.local.index()));
                 self.edge(e.value, "value")
             }
 
-            fn visit_global_get(&mut self, e: &GlobalGet) -> io::Result<()> {
+            fn visit_global_get(&mut self, e: &GlobalGet) {
                 self.node(format!("global.get {}", e.global.index()))
             }
 
-            fn visit_global_set(&mut self, e: &GlobalSet) -> io::Result<()> {
-                self.node(format!("global.set {}", e.global.index()))?;
+            fn visit_global_set(&mut self, e: &GlobalSet) {
+                self.node(format!("global.set {}", e.global.index()));
                 self.edge(e.value, "value")
             }
 
-            fn visit_const(&mut self, e: &Const) -> io::Result<()> {
+            fn visit_const(&mut self, e: &Const) {
                 self.node(match e.value {
                     Value::I32(i) => format!("i32.const {}", i),
                     Value::I64(i) => format!("i64.const {}", i),
@@ -884,108 +437,103 @@ impl Dot for LocalFunction {
                 })
             }
 
-            fn visit_i32_add(&mut self, e: &I32Add) -> io::Result<()> {
+            fn visit_i32_add(&mut self, e: &I32Add) {
                 self.binop("i32.add", e.lhs, e.rhs)
             }
 
-            fn visit_i32_sub(&mut self, e: &I32Sub) -> io::Result<()> {
+            fn visit_i32_sub(&mut self, e: &I32Sub) {
                 self.binop("i32.sub", e.lhs, e.rhs)
             }
 
-            fn visit_i32_mul(&mut self, e: &I32Mul) -> io::Result<()> {
+            fn visit_i32_mul(&mut self, e: &I32Mul) {
                 self.binop("i32.mul", e.lhs, e.rhs)
             }
 
-            fn visit_i32_eqz(&mut self, e: &I32Eqz) -> io::Result<()> {
+            fn visit_i32_eqz(&mut self, e: &I32Eqz) {
                 self.unop("i32.eqz", e.expr)
             }
 
-            fn visit_i32_popcnt(&mut self, e: &I32Popcnt) -> io::Result<()> {
+            fn visit_i32_popcnt(&mut self, e: &I32Popcnt) {
                 self.unop("i32.popcnt", e.expr)
             }
 
-            fn visit_select(&mut self, e: &Select) -> io::Result<()> {
-                self.node("select")?;
-                self.edge(e.condition, "condition")?;
-                self.edge(e.consequent, "consequent")?;
+            fn visit_select(&mut self, e: &Select) {
+                self.node("select");
+                self.edge(e.condition, "condition");
+                self.edge(e.consequent, "consequent");
                 self.edge(e.alternative, "alternative")
             }
 
-            fn visit_unreachable(&mut self, _: &Unreachable) -> io::Result<()> {
+            fn visit_unreachable(&mut self, _: &Unreachable) {
                 self.node("unreachable")
             }
 
-            fn visit_br(&mut self, e: &Br) -> io::Result<()> {
-                self.node("br")?;
-                self.edge(e.block, "block")?;
+            fn visit_br(&mut self, e: &Br) {
+                self.node("br");
+                self.edge(e.block, "block");
                 for (i, a) in e.args.iter().enumerate() {
-                    self.edge(*a, format!("parameter[{}]", i))?;
+                    self.edge(*a, format!("parameter[{}]", i));
                 }
-                Ok(())
             }
 
-            fn visit_br_if(&mut self, e: &BrIf) -> io::Result<()> {
+            fn visit_br_if(&mut self, e: &BrIf) {
                 let block: ExprId = e.block.into();
-                self.node("br_if")?;
-                self.edge(e.condition, "condition")?;
-                self.edge(block, "block")?;
+                self.node("br_if");
+                self.edge(e.condition, "condition");
+                self.edge(block, "block");
                 for (i, a) in e.args.iter().enumerate() {
-                    self.edge(*a, format!("parameter[{}]", i))?;
+                    self.edge(*a, format!("parameter[{}]", i));
                 }
-                Ok(())
             }
 
-            fn visit_if_else(&mut self, e: &IfElse) -> io::Result<()> {
-                self.node("if/else")?;
-                self.edge(e.condition, "condition")?;
-                self.edge(e.consequent, "consequent")?;
+            fn visit_if_else(&mut self, e: &IfElse) {
+                self.node("if/else");
+                self.edge(e.condition, "condition");
+                self.edge(e.consequent, "consequent");
                 self.edge(e.alternative, "alternative")
             }
 
-            fn visit_br_table(&mut self, e: &BrTable) -> io::Result<()> {
-                self.node("br_table")?;
-                self.edge(e.which, "which")?;
+            fn visit_br_table(&mut self, e: &BrTable) {
+                self.node("br_table");
+                self.edge(e.which, "which");
                 for (i, b) in e.blocks.iter().enumerate() {
-                    self.edge(*b, format!("block[{}]", i))?;
+                    self.edge(*b, format!("block[{}]", i));
                 }
                 self.edge(e.default, "default block")
             }
 
-            fn visit_drop(&mut self, e: &Drop) -> io::Result<()> {
+            fn visit_drop(&mut self, e: &Drop) {
                 self.unop("drop", e.expr)
             }
 
-            fn visit_return(&mut self, e: &Return) -> io::Result<()> {
-                self.node("return")?;
+            fn visit_return(&mut self, e: &Return) {
+                self.node("return");
                 for (i, v) in e.values.iter().enumerate() {
-                    self.edge(*v, format!("values[{}]", i))?;
+                    self.edge(*v, format!("values[{}]", i));
                 }
-                Ok(())
             }
 
-            fn visit_memory_size(&mut self, m: &MemorySize) -> io::Result<()> {
-                self.node(format!("memory.size {}", m.memory.index()))?;
-                Ok(())
+            fn visit_memory_size(&mut self, m: &MemorySize) {
+                self.node(format!("memory.size {}", m.memory.index()));
             }
         }
 
-        writeln!(out, "digraph {{")?;
-        writeln!(out, "rankdir=LR;")?;
+        out.push_str("digraph {\n");
+        out.push_str("rankdir=LR;\n");
 
         let v = &mut DotVisitor {
             out,
             func: self,
             id: self.entry_block().into(),
-            seen: HashSet::new(),
         };
-        v.visit_if_unseen(self.entry_block())?;
+        self.entry_block().visit(v);
 
-        writeln!(v.out, "subgraph unreachable {{")?;
+        v.out.push_str("subgraph unreachable {\n");
         for (id, _) in self.exprs.iter() {
-            v.visit_if_unseen(id)?;
+            id.visit(v);
         }
-        writeln!(v.out, "}}")?;
-        writeln!(out, "}}")
+        v.out.push_str("}\n");
+        out.push_str("}\n");
     }
 }
 
@@ -1083,15 +631,21 @@ fn validate_instruction<'a>(
             ctx.push_operands(&result_tys, &result_exprs);
         }
         Instruction::GetLocal(n) => {
-            let ty = ctx.validation.local(*n).context("invalid local.get")?;
-            let local = ctx.module.locals.local_for_function_and_index(ctx.func_id, ty, *n);
+            let ty = ctx.validation.local(*n).context("invalid get_local")?;
+            let local = ctx
+                .module
+                .locals
+                .local_for_function_and_index(ctx.func_id, ty, *n);
             let expr = ctx.func.alloc(LocalGet { ty, local });
             ctx.push_operand(Some(ty), expr);
         }
         Instruction::SetLocal(n) => {
             let ty = ctx.validation.local(*n).context("invalid local.set")?;
             let (_, value) = ctx.pop_operand_expected(Some(ty))?;
-            let local = ctx.module.locals.local_for_function_and_index(ctx.func_id, ty, *n);
+            let local = ctx
+                .module
+                .locals
+                .local_for_function_and_index(ctx.func_id, ty, *n);
             let expr = ctx.func.alloc(LocalSet { ty, local, value });
             ctx.add_to_current_frame_block(expr);
         }
@@ -1123,23 +677,22 @@ fn validate_instruction<'a>(
             const_!(ctx, Const, F64, Value::F64(f64::from_bits(*n)));
         }
         Instruction::V128Const(n) => {
-            let val =
-                ((n[0] as u128) << 0) |
-                ((n[1] as u128) << 8) |
-                ((n[2] as u128) << 16) |
-                ((n[3] as u128) << 24) |
-                ((n[4] as u128) << 32) |
-                ((n[5] as u128) << 40) |
-                ((n[6] as u128) << 48) |
-                ((n[7] as u128) << 56) |
-                ((n[8] as u128) << 64) |
-                ((n[9] as u128) << 72) |
-                ((n[10] as u128) << 80) |
-                ((n[11] as u128) << 88) |
-                ((n[12] as u128) << 96) |
-                ((n[13] as u128) << 104) |
-                ((n[14] as u128) << 112) |
-                ((n[15] as u128) << 120);
+            let val = ((n[0] as u128) << 0)
+                | ((n[1] as u128) << 8)
+                | ((n[2] as u128) << 16)
+                | ((n[3] as u128) << 24)
+                | ((n[4] as u128) << 32)
+                | ((n[5] as u128) << 40)
+                | ((n[6] as u128) << 48)
+                | ((n[7] as u128) << 56)
+                | ((n[8] as u128) << 64)
+                | ((n[9] as u128) << 72)
+                | ((n[10] as u128) << 80)
+                | ((n[11] as u128) << 88)
+                | ((n[12] as u128) << 96)
+                | ((n[13] as u128) << 104)
+                | ((n[14] as u128) << 112)
+                | ((n[15] as u128) << 120);
             const_!(ctx, Const, V128, Value::V128(val));
         }
         Instruction::I32Add => {

@@ -10,9 +10,9 @@ fn run(wat_path: &Path) -> Result<(), failure::Error> {
 
     if env::var("WALRUS_TESTS_DOT").is_ok() {
         for (i, func) in module.functions().enumerate() {
-            let dot_path = wat_path.with_extension(&format!("{}.dot", i));
-            let mut dot_file = fs::File::create(dot_path)?;
-            func.dot(&mut dot_file)?;
+            let mut file = String::new();
+            func.dot(&mut file);
+            fs::write(wat_path.with_extension(&format!("{}.dot", i)), file)?;
         }
     }
 

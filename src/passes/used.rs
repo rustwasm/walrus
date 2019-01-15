@@ -79,7 +79,7 @@ impl Used {
                         stack: &mut stack,
                     };
 
-                    v.visit(func.entry_block());
+                    func.entry_block().visit(v);
                 }
                 FunctionKind::Import(i) => {
                     used.imports.insert(i.import);
@@ -104,103 +104,27 @@ impl UsedVisitor<'_> {
             self.stack.push(f);
         }
     }
-
-    fn visit<E>(&mut self, e: E)
-    where
-        E: Into<ExprId>,
-    {
-        self.func.exprs[e.into()].visit(self)
-    }
 }
 
-impl Visitor for UsedVisitor<'_> {
-    type Return = ();
-
-    fn visit_block(&mut self, e: &Block) {
-        e.exprs.iter().for_each(|e| self.visit(*e));
+impl<'expr> Visitor<'expr> for UsedVisitor<'expr> {
+    fn local_function(&self) -> &'expr LocalFunction {
+        self.func
     }
 
-    fn visit_call(&mut self, e: &Call) {
-        self.mark(e.func);
-        e.args.iter().for_each(|a| self.visit(*a));
+    fn visit_function_id(&mut self, &func: &FunctionId) {
+        self.mark(func);
     }
 
-    fn visit_i32_add(&mut self, e: &I32Add) {
-        self.visit(e.lhs);
-        self.visit(e.rhs);
+    fn visit_memory_id(&mut self, &m: &MemoryId) {
+        self.used.memories.insert(m);
     }
 
-    fn visit_i32_sub(&mut self, e: &I32Sub) {
-        self.visit(e.lhs);
-        self.visit(e.rhs);
+    fn visit_global_id(&mut self, &g: &GlobalId) {
+        self.used.globals.insert(g);
     }
 
-    fn visit_i32_mul(&mut self, e: &I32Mul) {
-        self.visit(e.lhs);
-        self.visit(e.rhs);
-    }
-
-    fn visit_i32_eqz(&mut self, e: &I32Eqz) {
-        self.visit(e.expr);
-    }
-
-    fn visit_i32_popcnt(&mut self, e: &I32Popcnt) {
-        self.visit(e.expr);
-    }
-
-    fn visit_select(&mut self, e: &Select) {
-        self.visit(e.condition);
-        self.visit(e.consequent);
-        self.visit(e.alternative);
-    }
-
-    fn visit_unreachable(&mut self, _: &Unreachable) {}
-
-    fn visit_br(&mut self, e: &Br) {
-        e.args.iter().for_each(|e| self.visit(*e));
-    }
-
-    fn visit_br_if(&mut self, e: &BrIf) {
-        e.args.iter().for_each(|e| self.visit(*e));
-    }
-
-    fn visit_if_else(&mut self, e: &IfElse) {
-        self.visit(e.condition);
-        self.visit(e.consequent);
-        self.visit(e.alternative);
-    }
-
-    fn visit_br_table(&mut self, e: &BrTable) {
-        self.visit(e.which);
-        e.args.iter().for_each(|e| self.visit(*e));
-    }
-
-    fn visit_drop(&mut self, e: &Drop) {
-        self.visit(e.expr);
-    }
-
-    fn visit_return(&mut self, e: &Return) {
-        e.values.iter().for_each(|e| self.visit(*e));
-    }
-
-    fn visit_local_get(&mut self, _: &LocalGet) {}
-
-    fn visit_local_set(&mut self, l: &LocalSet) {
-        self.visit(l.value);
-    }
-
-    fn visit_const(&mut self, _: &Const) {}
-
-    fn visit_memory_size(&mut self, m: &MemorySize) {
-        self.used.memories.insert(m.memory);
-    }
-
-    fn visit_global_get(&mut self, g: &GlobalGet) {
-        self.used.globals.insert(g.global);
-    }
-
-    fn visit_global_set(&mut self, g: &GlobalSet) {
-        self.used.globals.insert(g.global);
-        self.visit(g.value);
+    fn visit_table_id(&mut self, &t: &TableId) {
+        self.used.tables.insert(t);
+        // TODO: need to recurse into table entries
     }
 }

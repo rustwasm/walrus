@@ -12,7 +12,6 @@ use crate::module::memories::MemoryId;
 use crate::module::globals::GlobalId;
 use crate::ty::ValType;
 use id_arena::Id;
-use std::io::{self, Write};
 use walrus_derive::walrus_expr;
 
 /// The id of a local.
@@ -46,8 +45,8 @@ impl Local {
 pub type ExprId = Id<Expr>;
 
 impl Dot for ExprId {
-    fn dot(&self, out: &mut Write) -> io::Result<()> {
-        write!(out, "expr_{}", self.index())
+    fn dot(&self, out: &mut String) {
+        out.push_str(&format!("expr_{}", self.index()))
     }
 }
 
@@ -109,12 +108,15 @@ pub enum Expr {
     /// A block of multiple expressions, and also a control frame.
     Block {
         /// What kind of block is this?
+        #[walrus(skip_visit)] // nothing to recurse
         kind: BlockKind,
         /// The types of the expected values on the stack when entering this
         /// block.
+        #[walrus(skip_visit)] // nothing to recurse
         params: Box<[ValType]>,
         /// The types of the resulting values added to the stack after this
         /// block is evaluated.
+        #[walrus(skip_visit)] // nothing to recurse
         results: Box<[ValType]>,
         /// The expressions that make up the body of this block.
         exprs: Vec<ExprId>,
@@ -131,6 +133,7 @@ pub enum Expr {
     /// `local.get n`
     LocalGet {
         /// The type of this local.
+        #[walrus(skip_visit)] // nothing to recurse
         ty: ValType,
         /// The local being got.
         local: LocalId,
@@ -139,6 +142,7 @@ pub enum Expr {
     /// `local.set n`
     LocalSet {
         /// The type of this local.
+        #[walrus(skip_visit)] // nothing to recurse
         ty: ValType,
         /// The local being set.
         local: LocalId,
@@ -220,6 +224,7 @@ pub enum Expr {
     /// `br`
     Br {
         /// The target block to branch to.
+        #[walrus(skip_visit)] // should have already been visited
         block: BlockId,
         /// The arguments to the block.
         args: Box<[ExprId]>,
@@ -230,6 +235,7 @@ pub enum Expr {
         /// The condition for when to branch.
         condition: ExprId,
         /// The target block to branch to when the condition is met.
+        #[walrus(skip_visit)] // should have already been visited
         block: BlockId,
         /// The arguments to the block.
         args: Box<[ExprId]>,
@@ -250,9 +256,11 @@ pub enum Expr {
         /// The table index of which block to branch to.
         which: ExprId,
         /// The table of target blocks.
+        #[walrus(skip_visit)] // should have already been visited
         blocks: Box<[BlockId]>,
         /// The block that is branched to by default when `which` is out of the
         /// table's bounds.
+        #[walrus(skip_visit)] // should have already been visited
         default: BlockId,
         /// The arguments to the block.
         args: Box<[ExprId]>,
@@ -336,5 +344,22 @@ impl Block {
             results,
             exprs,
         }
+    }
+}
+
+/// Anything that can be visited by a `Visitor`.
+pub trait Visit<'expr> {
+    /// Visit this thing with the given visitor.
+    fn visit<V>(&self, visitor: &mut V)
+    where
+        V: Visitor<'expr>;
+}
+
+impl<'expr> Visit<'expr> for ExprId {
+    fn visit<V>(&self, visitor: &mut V)
+    where
+        V: Visitor<'expr>,
+    {
+        visitor.visit_expr(&visitor.local_function().exprs[*self])
     }
 }

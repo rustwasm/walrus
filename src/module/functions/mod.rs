@@ -15,7 +15,6 @@ use id_arena::{Arena, Id};
 use parity_wasm::elements;
 use std::collections::{BTreeMap, HashMap};
 use std::fmt;
-use std::io::{self, Write};
 
 pub use self::local_function::LocalFunction;
 
@@ -89,10 +88,10 @@ impl Function {
 }
 
 impl Dot for Function {
-    fn dot(&self, out: &mut Write) -> io::Result<()> {
-        match self.kind {
-            FunctionKind::Import(ref i) => i.dot(out),
-            FunctionKind::Local(ref l) => l.dot(out),
+    fn dot(&self, out: &mut String) {
+        match &self.kind {
+            FunctionKind::Import(i) => i.dot(out),
+            FunctionKind::Local(l) => l.dot(out),
             FunctionKind::Uninitialized(_) => unreachable!(),
         }
     }
@@ -100,9 +99,9 @@ impl Dot for Function {
 
 impl fmt::Display for Function {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self.kind {
-            FunctionKind::Import(ref i) => fmt::Display::fmt(i, f),
-            FunctionKind::Local(ref l) => fmt::Display::fmt(l, f),
+        match &self.kind {
+            FunctionKind::Import(i) => fmt::Display::fmt(i, f),
+            FunctionKind::Local(l) => fmt::Display::fmt(l, f),
             FunctionKind::Uninitialized(_) => unreachable!(),
         }
     }
@@ -143,8 +142,8 @@ pub struct ImportedFunction {
 }
 
 impl Dot for ImportedFunction {
-    fn dot(&self, out: &mut Write) -> io::Result<()> {
-        writeln!(out, "digraph {{ imported_function; }}")
+    fn dot(&self, out: &mut String) {
+        out.push_str("digraph {{ imported_function; }}");
     }
 }
 
@@ -185,7 +184,11 @@ impl Module {
     /// Add the externally defined imported functions in the wasm module to this
     /// instance.
     pub fn register_imported_functions(&mut self) {
-        assert_eq!(self.funcs.arena.len(), 0, "should not already have any functions");
+        assert_eq!(
+            self.funcs.arena.len(),
+            0,
+            "should not already have any functions"
+        );
         let mut idx = 0;
         for (imp_id, imp) in self.imports.iter() {
             if let ImportKind::Function { .. } = imp.kind {
@@ -215,7 +218,8 @@ impl Module {
             let id = self.funcs.arena.next_id();
             let id2 = self.funcs.arena.alloc(Function::new_uninitialized(id, ty));
             debug_assert_eq!(id, id2);
-            self.funcs.add_function_for_index(i as u32 + import_count, id);
+            self.funcs
+                .add_function_for_index(i as u32 + import_count, id);
         }
 
         Ok(())
@@ -232,15 +236,15 @@ impl Module {
 
         for (i, body) in code_section.bodies().iter().enumerate() {
             let index = (num_imports + i) as u32;
-            let id = self.funcs.function_for_index(index).ok_or_else(|| {
-                failure::format_err!("code and function section length mismatch")
-            })?;
+            let id = self
+                .funcs
+                .function_for_index(index)
+                .ok_or_else(|| failure::format_err!("code and function section length mismatch"))?;
             let ty = match self.funcs.arena[id].kind {
                 FunctionKind::Uninitialized(ty) => ty,
                 _ => unreachable!(),
             };
-            self.funcs.arena[id] =
-                Function::parse_local(self, id, ty, &validation, body)?;
+            self.funcs.arena[id] = Function::parse_local(self, id, ty, &validation, body)?;
         }
 
         Ok(())

@@ -4,6 +4,7 @@ mod context;
 mod emit;
 pub mod display;
 
+use std::mem;
 use self::context::FunctionContext;
 use super::FunctionId;
 use crate::dot::Dot;
@@ -15,7 +16,7 @@ use crate::module::Module;
 use crate::ty::{TypeId, ValType};
 use crate::validation_context::ValidationContext;
 use failure::{Fail, ResultExt, format_err, bail};
-use id_arena::Arena;
+use id_arena::{Arena, Id};
 use parity_wasm::elements::{self, Instruction};
 use std::collections::{BTreeSet, HashSet};
 use std::fmt;
@@ -308,232 +309,74 @@ impl fmt::Display for LocalFunction {
 
 impl Dot for LocalFunction {
     fn dot(&self, out: &mut String) {
-        struct DotVisitor<'a, 'b> {
-            out: &'a mut String,
-            func: &'b LocalFunction,
-            id: ExprId,
-        }
-
-        impl DotVisitor<'_, '_> {
-            fn write_id(&mut self, id: ExprId) {
-                id.dot(self.out);
-            }
-
-            fn write_node_prologue(&mut self) {
-                self.write_id(self.id);
-                self.out.push_str(
-                    " [label=<<table cellborder=\"0\" border=\"0\"><tr><td><font face=\"monospace\">"
-                )
-            }
-
-            fn write_node_epilogue(&mut self) {
-                self.out.push_str("</font></td></tr></table>>];")
-            }
-
-            fn node<S>(&mut self, label: S)
-            where
-                S: AsRef<str>,
-            {
-                self.write_node_prologue();
-                self.out.push_str(&label.as_ref().to_string());
-                self.write_node_epilogue()
-            }
-
-            fn edge<E, S>(&mut self, to: E, label: S)
-            where
-                E: Into<ExprId>,
-                S: AsRef<str>,
-            {
-                let to = to.into();
-                let label = label.as_ref();
-                self.write_id(self.id);
-                self.out.push_str(" -> ");
-                self.write_id(to);
-                self.out.push_str(&format!(" [label=\"{}\"];", label));
-                self.visit_expr_id(&to.into());
-            }
-
-            fn binop<S, L, R>(&mut self, label: S, lhs: L, rhs: R)
-            where
-                S: AsRef<str>,
-                L: Into<ExprId>,
-                R: Into<ExprId>,
-            {
-                self.node(label);
-                self.edge(lhs, "lhs");
-                self.edge(rhs, "rhs")
-            }
-
-            fn unop<S, E>(&mut self, label: S, e: E)
-            where
-                S: AsRef<str>,
-                E: Into<ExprId>,
-            {
-                self.node(label);
-                self.edge(e, "expr")
-            }
-        }
-
-        impl<'expr> Visitor<'expr> for DotVisitor<'_, 'expr> {
-            fn local_function(&self) -> &'expr LocalFunction {
-                self.func
-            }
-
-            fn visit_expr_id(&mut self, &e: &ExprId) {
-                let id = self.id;
-                self.id = e;
-                e.visit(self);
-                self.id = id;
-            }
-
-            fn visit_block(&mut self, e: &Block) {
-                let kind = match e.kind {
-                    BlockKind::Block => "block",
-                    BlockKind::Loop => "loop",
-                    BlockKind::IfElse => "if/else target",
-                    BlockKind::FunctionEntry => "function entry",
-                };
-                self.node(format!("{}", kind));
-                for (i, e) in e.exprs.iter().enumerate() {
-                    self.edge(*e, format!("exprs[{}]", i));
-                }
-                if let BlockKind::Loop = e.kind {
-                    self.edge(self.id, "loop");
-                }
-            }
-
-            fn visit_call(&mut self, e: &Call) {
-                self.node(format!("call {}", e.func.index()));
-                for (i, arg) in e.args.iter().enumerate() {
-                    self.edge(*arg, format!("arg[{}]", i));
-                }
-            }
-
-            fn visit_local_get(&mut self, e: &LocalGet) {
-                self.node(format!("local.get {}", e.local.index()))
-            }
-
-            fn visit_local_set(&mut self, e: &LocalSet) {
-                self.node(format!("local.set {}", e.local.index()));
-                self.edge(e.value, "value")
-            }
-
-            fn visit_global_get(&mut self, e: &GlobalGet) {
-                self.node(format!("global.get {}", e.global.index()))
-            }
-
-            fn visit_global_set(&mut self, e: &GlobalSet) {
-                self.node(format!("global.set {}", e.global.index()));
-                self.edge(e.value, "value")
-            }
-
-            fn visit_const(&mut self, e: &Const) {
-                self.node(match e.value {
-                    Value::I32(i) => format!("i32.const {}", i),
-                    Value::I64(i) => format!("i64.const {}", i),
-                    Value::F32(i) => format!("f32.const {}", i),
-                    Value::F64(i) => format!("f64.const {}", i),
-                    Value::V128(i) => format!("v128.const {}", i),
-                })
-            }
-
-            fn visit_i32_add(&mut self, e: &I32Add) {
-                self.binop("i32.add", e.lhs, e.rhs)
-            }
-
-            fn visit_i32_sub(&mut self, e: &I32Sub) {
-                self.binop("i32.sub", e.lhs, e.rhs)
-            }
-
-            fn visit_i32_mul(&mut self, e: &I32Mul) {
-                self.binop("i32.mul", e.lhs, e.rhs)
-            }
-
-            fn visit_i32_eqz(&mut self, e: &I32Eqz) {
-                self.unop("i32.eqz", e.expr)
-            }
-
-            fn visit_i32_popcnt(&mut self, e: &I32Popcnt) {
-                self.unop("i32.popcnt", e.expr)
-            }
-
-            fn visit_select(&mut self, e: &Select) {
-                self.node("select");
-                self.edge(e.condition, "condition");
-                self.edge(e.consequent, "consequent");
-                self.edge(e.alternative, "alternative")
-            }
-
-            fn visit_unreachable(&mut self, _: &Unreachable) {
-                self.node("unreachable")
-            }
-
-            fn visit_br(&mut self, e: &Br) {
-                self.node("br");
-                self.edge(e.block, "block");
-                for (i, a) in e.args.iter().enumerate() {
-                    self.edge(*a, format!("parameter[{}]", i));
-                }
-            }
-
-            fn visit_br_if(&mut self, e: &BrIf) {
-                let block: ExprId = e.block.into();
-                self.node("br_if");
-                self.edge(e.condition, "condition");
-                self.edge(block, "block");
-                for (i, a) in e.args.iter().enumerate() {
-                    self.edge(*a, format!("parameter[{}]", i));
-                }
-            }
-
-            fn visit_if_else(&mut self, e: &IfElse) {
-                self.node("if/else");
-                self.edge(e.condition, "condition");
-                self.edge(e.consequent, "consequent");
-                self.edge(e.alternative, "alternative")
-            }
-
-            fn visit_br_table(&mut self, e: &BrTable) {
-                self.node("br_table");
-                self.edge(e.which, "which");
-                for (i, b) in e.blocks.iter().enumerate() {
-                    self.edge(*b, format!("block[{}]", i));
-                }
-                self.edge(e.default, "default block")
-            }
-
-            fn visit_drop(&mut self, e: &Drop) {
-                self.unop("drop", e.expr)
-            }
-
-            fn visit_return(&mut self, e: &Return) {
-                self.node("return");
-                for (i, v) in e.values.iter().enumerate() {
-                    self.edge(*v, format!("values[{}]", i));
-                }
-            }
-
-            fn visit_memory_size(&mut self, m: &MemorySize) {
-                self.node(format!("memory.size {}", m.memory.index()));
-            }
-        }
-
         out.push_str("digraph {\n");
         out.push_str("rankdir=LR;\n");
 
-        let v = &mut DotVisitor {
+        let v = &mut DotExpr {
             out,
             func: self,
             id: self.entry_block().into(),
+            needs_close: false,
         };
-        self.entry_block().visit(v);
-
         v.out.push_str("subgraph unreachable {\n");
-        for (id, _) in self.exprs.iter() {
-            id.visit(v);
-        }
+        v.visit_block_id(&self.entry_block());
+        // self.entry_block().visit(v);
+        // for (id, _) in self.exprs.iter() {
+        //     id.visit(v);
+        // }
+        v.close_previous();
         v.out.push_str("}\n");
         out.push_str("}\n");
+    }
+}
+
+pub(crate) struct DotExpr<'a, 'b> {
+    pub(crate) out: &'a mut String,
+    pub(crate) func: &'b LocalFunction,
+    id: ExprId,
+    needs_close: bool,
+}
+
+impl DotExpr<'_, '_> {
+    pub(crate) fn expr_id(&mut self, id: ExprId) {
+        self.close_previous();
+        let prev = mem::replace(&mut self.id, id);
+        id.dot(self.out);
+        self.out.push_str(
+            " [label=<<table cellborder=\"0\" border=\"0\"><tr><td><font face=\"monospace\">"
+        );
+        self.needs_close = true;
+        id.visit(self);
+        self.close_previous();
+        self.id = prev;
+    }
+
+    pub(crate) fn id<T>(&mut self, id: Id<T>) {
+        self.out.push_str(" ");
+        self.out.push_str(&id.index().to_string());
+    }
+
+    fn close_previous(&mut self) {
+        if self.needs_close {
+            self.out.push_str("</font></td></tr></table>>];\n")
+        }
+        self.needs_close = false;
+    }
+
+    pub(crate) fn edge<E, S>(&mut self, to: E, label: S)
+    where
+        E: Into<ExprId>,
+        S: AsRef<str>,
+    {
+        self._edge(to.into(), label.as_ref())
+    }
+
+    fn _edge(&mut self, to: ExprId, label: &str) {
+        self.close_previous();
+        self.id.dot(self.out);
+        self.out.push_str(" -> ");
+        to.dot(self.out);
+        self.out.push_str(&format!(" [label=\"{}\"];\n", label));
     }
 }
 

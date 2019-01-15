@@ -10,7 +10,7 @@ use crate::dot::Dot;
 use crate::module::functions::FunctionId;
 use crate::module::memories::MemoryId;
 use crate::module::globals::GlobalId;
-use crate::module::functions::DisplayExpr;
+use crate::module::functions::{DisplayExpr, DotExpr};
 use crate::ty::ValType;
 use std::fmt;
 use id_arena::Id;
@@ -108,7 +108,7 @@ pub enum BlockKind {
 #[derive(Clone, Debug)]
 pub enum Expr {
     /// A block of multiple expressions, and also a control frame.
-    #[walrus(display_name = display_block_name)]
+    #[walrus(display_name = display_block_name, dot_name = dot_block_name)]
     Block {
         /// What kind of block is this?
         #[walrus(skip_visit)] // nothing to recurse
@@ -386,6 +386,15 @@ fn display_block_name(block: &Block, out: &mut DisplayExpr) {
     match block.kind {
         BlockKind::Loop => out.f.push_str("loop"),
         _ => out.f.push_str("block"),
+    }
+}
+
+fn dot_block_name(block: &Block, out: &mut DotExpr<'_, '_>) {
+    match block.kind {
+        BlockKind::Loop => out.out.push_str("loop"),
+        BlockKind::IfElse => out.out.push_str("if_else"),
+        BlockKind::FunctionEntry => out.out.push_str("entry"),
+        BlockKind::Block => out.out.push_str("block"),
     }
 }
 

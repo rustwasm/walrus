@@ -17,7 +17,10 @@ use std::collections::{BTreeMap, HashMap};
 use std::fmt;
 
 pub use self::local_function::LocalFunction;
+
+// have generated impls from the `#[walrus_expr]` macro
 pub(crate) use self::local_function::display::DisplayExpr;
+pub(crate) use self::local_function::DotExpr;
 
 /// A function identifier.
 pub type FunctionId = Id<Function>;

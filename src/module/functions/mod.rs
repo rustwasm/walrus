@@ -17,6 +17,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::fmt;
 
 pub use self::local_function::LocalFunction;
+pub(crate) use self::local_function::display::DisplayExpr;
 
 /// A function identifier.
 pub type FunctionId = Id<Function>;

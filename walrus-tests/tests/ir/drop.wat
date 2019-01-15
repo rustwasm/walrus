@@ -5,9 +5,9 @@
     drop))
 
 ;; CHECK: (func
-;; NEXT:    (block ;; e0
+;; NEXT:    (block
 ;; NEXT:      (drop
-;; NEXT:        (i32.const 42)
+;; NEXT:        (const 42)
 ;; NEXT:      )
 ;; NEXT:    )
 ;; NEXT:  )

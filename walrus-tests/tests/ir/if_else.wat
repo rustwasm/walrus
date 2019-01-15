@@ -10,14 +10,14 @@
   (export "if_else" (func 0)))
 
 ;; CHECK: (func
-;; NEXT:    (block ;; e0
+;; NEXT:    (block
 ;; NEXT:      (if
 ;; NEXT:        (local.get 0)
-;; NEXT:        (block ;; e2
-;; NEXT:          (i32.const 1)
+;; NEXT:        (block
+;; NEXT:          (const 1)
 ;; NEXT:        )
-;; NEXT:        (block ;; e4
-;; NEXT:          (i32.const 2)
+;; NEXT:        (block
+;; NEXT:          (const 2)
 ;; NEXT:        )
 ;; NEXT:      )
 ;; NEXT:    )

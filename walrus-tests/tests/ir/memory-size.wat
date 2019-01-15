@@ -5,7 +5,7 @@
   (export "get" (func 0)))
 
 ;; CHECK: (func
-;; NEXT:    (block ;; e0
+;; NEXT:    (block
 ;; NEXT:      (memory.size 0)
 ;; NEXT:    )
 ;; NEXT:  )

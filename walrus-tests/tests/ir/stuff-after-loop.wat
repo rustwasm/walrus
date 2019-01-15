@@ -6,9 +6,8 @@
     i32.const 1))
 
 ;; CHECK: (func
-;; NEXT:    (block ;; e0
-;; NEXT:      (loop ;; e1
-;; NEXT:      )
-;; NEXT:      (i32.const 1)
+;; NEXT:    (block
+;; NEXT:      (loop)
+;; NEXT:      (const 1)
 ;; NEXT:    )
 ;; NEXT:  )

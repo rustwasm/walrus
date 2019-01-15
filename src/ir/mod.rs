@@ -10,7 +10,9 @@ use crate::dot::Dot;
 use crate::module::functions::FunctionId;
 use crate::module::memories::MemoryId;
 use crate::module::globals::GlobalId;
+use crate::module::functions::DisplayExpr;
 use crate::ty::ValType;
+use std::fmt;
 use id_arena::Id;
 use walrus_derive::walrus_expr;
 
@@ -106,6 +108,7 @@ pub enum BlockKind {
 #[derive(Clone, Debug)]
 pub enum Expr {
     /// A block of multiple expressions, and also a control frame.
+    #[walrus(display_name = display_block_name)]
     Block {
         /// What kind of block is this?
         #[walrus(skip_visit)] // nothing to recurse
@@ -222,6 +225,7 @@ pub enum Expr {
     Unreachable {},
 
     /// `br`
+    #[walrus(display_extra = display_br)]
     Br {
         /// The target block to branch to.
         #[walrus(skip_visit)] // should have already been visited
@@ -231,6 +235,7 @@ pub enum Expr {
     },
 
     /// `br_if`
+    #[walrus(display_extra = display_br_if)]
     BrIf {
         /// The condition for when to branch.
         condition: ExprId,
@@ -252,6 +257,7 @@ pub enum Expr {
     },
 
     /// `br_table`
+    #[walrus(display_extra = display_br_table)]
     BrTable {
         /// The table index of which block to branch to.
         which: ExprId,
@@ -298,6 +304,18 @@ pub enum Value {
     F64(f64),
     /// A constant 128-bit vector register
     V128(u128),
+}
+
+impl fmt::Display for Value {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Value::I32(i) => i.fmt(f),
+            Value::I64(i) => i.fmt(f),
+            Value::F32(i) => i.fmt(f),
+            Value::F64(i) => i.fmt(f),
+            Value::V128(i) => i.fmt(f),
+        }
+    }
 }
 
 impl Expr {
@@ -362,4 +380,28 @@ impl<'expr> Visit<'expr> for ExprId {
     {
         visitor.visit_expr(&visitor.local_function().exprs[*self])
     }
+}
+
+fn display_block_name(block: &Block, out: &mut DisplayExpr) {
+    match block.kind {
+        BlockKind::Loop => out.f.push_str("loop"),
+        _ => out.f.push_str("block"),
+    }
+}
+
+fn display_br(e: &Br, out: &mut DisplayExpr) {
+    out.f.push_str(&format!(" (;e{};)", ExprId::from(e.block).index()))
+}
+
+fn display_br_if(e: &BrIf, out: &mut DisplayExpr) {
+    out.f.push_str(&format!(" (;e{};)", ExprId::from(e.block).index()))
+}
+
+fn display_br_table(e: &BrTable, out: &mut DisplayExpr) {
+    let blocks = e.blocks
+        .iter()
+        .map(|b| format!("e{}", ExprId::from(*b).index()))
+        .collect::<Vec<_>>()
+        .join(" ");
+    out.f.push_str(&format!(" (;default:e{}  [{}];)", ExprId::from(e.default).index(), blocks))
 }

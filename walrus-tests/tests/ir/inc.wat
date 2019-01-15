@@ -6,10 +6,10 @@
     i32.add))
 
 ;; CHECK: (func
-;; NEXT:    (block ;; e0
+;; NEXT:    (block
 ;; NEXT:      (i32.add
 ;; NEXT:        (local.get 0)
-;; NEXT:        (i32.const 1)
+;; NEXT:        (const 1)
 ;; NEXT:      )
 ;; NEXT:    )
 ;; NEXT:  )

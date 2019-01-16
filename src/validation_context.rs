@@ -5,8 +5,8 @@ use super::error::{ErrorKind, Result};
 use crate::ty::{Type, ValType};
 use failure::{Fail, ResultExt};
 use parity_wasm::elements;
-use std::u16;
 use std::iter;
+use std::u16;
 use std::u32;
 
 /// Wasm validation context.

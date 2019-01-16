@@ -1,10 +1,9 @@
 //! Functions defined locally within a wasm module.
 
 mod context;
-mod emit;
 pub mod display;
+mod emit;
 
-use std::mem;
 use self::context::FunctionContext;
 use super::FunctionId;
 use crate::dot::Dot;
@@ -15,12 +14,13 @@ use crate::module::emit::IdsToIndices;
 use crate::module::Module;
 use crate::ty::{TypeId, ValType};
 use crate::validation_context::ValidationContext;
-use failure::{Fail, ResultExt, format_err, bail};
+use failure::{bail, format_err, Fail, ResultExt};
 use id_arena::{Arena, Id};
 use parity_wasm::elements::{self, Instruction};
 use std::collections::{BTreeSet, HashSet};
 use std::fmt;
 use std::iter;
+use std::mem;
 
 /// A function defined locally within the wasm module.
 #[derive(Debug)]
@@ -343,7 +343,7 @@ impl DotExpr<'_, '_> {
         let prev = mem::replace(&mut self.id, id);
         id.dot(self.out);
         self.out.push_str(
-            " [label=<<table cellborder=\"0\" border=\"0\"><tr><td><font face=\"monospace\">"
+            " [label=<<table cellborder=\"0\" border=\"0\"><tr><td><font face=\"monospace\">",
         );
         self.needs_close = true;
         id.visit(self);
@@ -493,14 +493,20 @@ fn validate_instruction<'a>(
             ctx.add_to_current_frame_block(expr);
         }
         Instruction::GetGlobal(n) => {
-            let global = ctx.module.globals.global_for_index(*n)
+            let global = ctx
+                .module
+                .globals
+                .global_for_index(*n)
                 .ok_or_else(|| format_err!("invalid global.get index"))?;
             let ty = ctx.module.globals.arena[global].ty;
             let expr = ctx.func.alloc(GlobalGet { global });
             ctx.push_operand(Some(ty), expr);
         }
         Instruction::SetGlobal(n) => {
-            let global = ctx.module.globals.global_for_index(*n)
+            let global = ctx
+                .module
+                .globals
+                .global_for_index(*n)
                 .ok_or_else(|| format_err!("invalid global.get index"))?;
             let ty = ctx.module.globals.arena[global].ty;
             let (_, value) = ctx.pop_operand_expected(Some(ty))?;

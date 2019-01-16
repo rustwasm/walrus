@@ -1,6 +1,6 @@
-use crate::module::functions::LocalFunction;
 use crate::ir::*;
 use crate::module::emit::IdsToIndices;
+use crate::module::functions::LocalFunction;
 use parity_wasm::elements;
 
 pub(crate) fn run(func: &LocalFunction, indices: &IdsToIndices) -> Vec<elements::Instruction> {
@@ -174,8 +174,8 @@ impl Emit<'_> {
             .skip(1)
             .position(|b| *b == block)
             .expect(
-                "attempt to branch to invalid block; bad transformation pass introduced bad branching?",
-            ) as u32
+            "attempt to branch to invalid block; bad transformation pass introduced bad branching?",
+        ) as u32
     }
 
     fn visit_block(&mut self, e: &Block) {

@@ -7,12 +7,12 @@ use heck::SnakeCase;
 use proc_macro2::Span;
 use quote::quote;
 use std::iter::FromIterator;
-use syn::DeriveInput;
 use syn::ext::IdentExt;
-use syn::Error;
-use syn::{parse_macro_input, Ident, Result, Token};
 use syn::parse::{Parse, ParseStream};
 use syn::punctuated::Punctuated;
+use syn::DeriveInput;
+use syn::Error;
+use syn::{parse_macro_input, Ident, Result, Token};
 
 #[proc_macro_attribute]
 pub fn walrus_expr(_attr: TokenStream, input: TokenStream) -> TokenStream {
@@ -77,11 +77,10 @@ fn get_enum_variants(input: &DeriveInput) -> Result<Vec<WalrusVariant>> {
             let attrs = walrus_attrs(&mut variant.attrs);
 
             Ok(WalrusVariant {
-                fields: variant.fields
+                fields: variant
+                    .fields
                     .iter_mut()
-                    .map(|field| {
-                        syn::parse(walrus_attrs(&mut field.attrs))
-                    })
+                    .map(|field| syn::parse(walrus_attrs(&mut field.attrs)))
                     .collect::<Result<_>>()?,
                 syn: variant,
                 opts: syn::parse(attrs)?,
@@ -107,11 +106,11 @@ impl Parse for WalrusFieldOpts {
 
         impl Parse for Attr {
             fn parse(input: ParseStream) -> Result<Self> {
-				let attr: Ident = input.parse()?;
-				if attr == "skip_visit" {
-					return Ok(Attr::SkipVisit)
-				}
-				return Err(Error::new(attr.span(), "unexpected attribute"));
+                let attr: Ident = input.parse()?;
+                if attr == "skip_visit" {
+                    return Ok(Attr::SkipVisit);
+                }
+                return Err(Error::new(attr.span(), "unexpected attribute"));
             }
         }
     }
@@ -138,23 +137,23 @@ impl Parse for WalrusVariantOpts {
 
         impl Parse for Attr {
             fn parse(input: ParseStream) -> Result<Self> {
-				let attr: Ident = input.parse()?;
-				if attr == "display_name" {
+                let attr: Ident = input.parse()?;
+                if attr == "display_name" {
                     input.parse::<Token![=]>()?;
                     let name = input.call(Ident::parse_any)?;
-					return Ok(Attr::DisplayName(name))
-				}
-				if attr == "display_extra" {
+                    return Ok(Attr::DisplayName(name));
+                }
+                if attr == "display_extra" {
                     input.parse::<Token![=]>()?;
                     let name = input.call(Ident::parse_any)?;
-					return Ok(Attr::DisplayExtra(name))
-				}
-				if attr == "dot_name" {
+                    return Ok(Attr::DisplayExtra(name));
+                }
+                if attr == "dot_name" {
                     input.parse::<Token![=]>()?;
                     let name = input.call(Ident::parse_any)?;
-					return Ok(Attr::DotName(name))
-				}
-				return Err(Error::new(attr.span(), "unexpected attribute"));
+                    return Ok(Attr::DotName(name));
+                }
+                return Err(Error::new(attr.span(), "unexpected attribute"));
             }
         }
     }
@@ -165,7 +164,7 @@ fn walrus_attrs(attrs: &mut Vec<syn::Attribute>) -> TokenStream {
     let ident = syn::Path::from(syn::Ident::new("walrus", Span::call_site()));
     for i in (0..attrs.len()).rev() {
         if attrs[i].path != ident {
-            continue
+            continue;
         }
         let attr = attrs.remove(i);
         let group = match attr.tts.into_iter().next().unwrap() {
@@ -173,9 +172,9 @@ fn walrus_attrs(attrs: &mut Vec<syn::Attribute>) -> TokenStream {
             _ => panic!("#[walrus(...)] expected"),
         };
         ret.extend(group.stream());
-        ret.extend(quote!{ , });
+        ret.extend(quote! { , });
     }
-    return ret.into()
+    return ret.into();
 }
 
 fn create_types(attrs: &[syn::Attribute], variants: &[WalrusVariant]) -> impl quote::ToTokens {
@@ -189,17 +188,15 @@ fn create_types(attrs: &[syn::Attribute], variants: &[WalrusVariant]) -> impl qu
                 &syn::Ident::new(&s, Span::call_site())
             };
             let attrs = &v.syn.attrs;
-            let fields = v.syn.fields
-                .iter()
-                .map(|f| {
-                    let name = &f.ident;
-                    let attrs = &f.attrs;
-                    let ty = &f.ty;
-                    quote! {
-                        #( #attrs )*
-                        pub #name : #ty,
-                    }
-                });
+            let fields = v.syn.fields.iter().map(|f| {
+                let name = &f.ident;
+                let attrs = &f.attrs;
+                let ty = &f.ty;
+                quote! {
+                    #( #attrs )*
+                    pub #name : #ty,
+                }
+            });
             quote! {
                 /// An identifier to a `#name` expression.
                 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -352,10 +349,13 @@ fn create_types(attrs: &[syn::Attribute], variants: &[WalrusVariant]) -> impl qu
     }
 }
 
-fn visit_fields<'a>(variant: &'a WalrusVariant, allow_skip: bool)
-    -> impl Iterator<Item = (syn::Ident, proc_macro2::TokenStream, bool)> + 'a
-{
-    return variant.syn.fields
+fn visit_fields<'a>(
+    variant: &'a WalrusVariant,
+    allow_skip: bool,
+) -> impl Iterator<Item = (syn::Ident, proc_macro2::TokenStream, bool)> + 'a {
+    return variant
+        .syn
+        .fields
         .iter()
         .zip(&variant.fields)
         .enumerate()
@@ -414,18 +414,17 @@ fn create_visit(variants: &[WalrusVariant]) -> impl quote::ToTokens {
         let method_name = syn::Ident::new(&method_name, Span::call_site());
         let method_id_name = syn::Ident::new(&format!("{}_id", method_name), Span::call_site());
 
-        let visit_fields = visit_fields(variant, true)
-            .map(|(method_name, field_name, list)| {
-                if list {
-                    quote! {
-                        for item in self.#field_name.iter() {
-                            visitor.#method_name(item);
-                        }
+        let visit_fields = visit_fields(variant, true).map(|(method_name, field_name, list)| {
+            if list {
+                quote! {
+                    for item in self.#field_name.iter() {
+                        visitor.#method_name(item);
                     }
-                } else {
-                    quote! { visitor.#method_name(&self.#field_name); }
                 }
-            });
+            } else {
+                quote! { visitor.#method_name(&self.#field_name); }
+            }
+        });
 
         visit_impls.push(quote! {
             impl<'expr> Visit<'expr> for #name {
@@ -738,9 +737,7 @@ fn create_dot(variants: &[WalrusVariant]) -> impl quote::ToTokens {
             }
         };
         let field_edges = visit_fields(variant, false)
-            .filter(|(method, _, _)| {
-                method == "visit_expr_id" || method == "visit_block_id"
-            })
+            .filter(|(method, _, _)| method == "visit_expr_id" || method == "visit_block_id")
             .map(|(_ty, accessor, list)| {
                 if list {
                     quote! {

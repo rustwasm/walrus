@@ -8,12 +8,12 @@ pub mod matcher;
 
 use crate::dot::Dot;
 use crate::module::functions::FunctionId;
-use crate::module::memories::MemoryId;
-use crate::module::globals::GlobalId;
 use crate::module::functions::{DisplayExpr, DotExpr};
+use crate::module::globals::GlobalId;
+use crate::module::memories::MemoryId;
 use crate::ty::ValType;
-use std::fmt;
 use id_arena::Id;
+use std::fmt;
 use walrus_derive::walrus_expr;
 
 /// The id of a local.
@@ -399,18 +399,25 @@ fn dot_block_name(block: &Block, out: &mut DotExpr<'_, '_>) {
 }
 
 fn display_br(e: &Br, out: &mut DisplayExpr) {
-    out.f.push_str(&format!(" (;e{};)", ExprId::from(e.block).index()))
+    out.f
+        .push_str(&format!(" (;e{};)", ExprId::from(e.block).index()))
 }
 
 fn display_br_if(e: &BrIf, out: &mut DisplayExpr) {
-    out.f.push_str(&format!(" (;e{};)", ExprId::from(e.block).index()))
+    out.f
+        .push_str(&format!(" (;e{};)", ExprId::from(e.block).index()))
 }
 
 fn display_br_table(e: &BrTable, out: &mut DisplayExpr) {
-    let blocks = e.blocks
+    let blocks = e
+        .blocks
         .iter()
         .map(|b| format!("e{}", ExprId::from(*b).index()))
         .collect::<Vec<_>>()
         .join(" ");
-    out.f.push_str(&format!(" (;default:e{}  [{}];)", ExprId::from(e.default).index(), blocks))
+    out.f.push_str(&format!(
+        " (;default:e{}  [{}];)",
+        ExprId::from(e.default).index(),
+        blocks
+    ))
 }

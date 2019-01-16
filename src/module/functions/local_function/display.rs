@@ -77,7 +77,6 @@ impl DisplayExpr<'_, '_> {
     }
 
     pub(crate) fn expr_id(&mut self, id: ExprId) {
-
         // If we're the first argument of a previous expression, then we start
         // ourselves on a new line. Otherwise we're already starting on a line.
         let first_arg = mem::replace(&mut self.first_arg, true);

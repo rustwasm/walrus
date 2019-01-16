@@ -30,21 +30,20 @@ impl FileCheck {
     }
 
     pub fn check(&self, output: &str) {
-        let output_lines = output
-            .lines()
-            .collect::<Vec<_>>();
+        let output_lines = output.lines().collect::<Vec<_>>();
 
-        'outer:
-        for pattern in &self.patterns {
+        'outer: for pattern in &self.patterns {
             let first_line = &pattern[0];
 
             let mut start = 0;
 
-            'inner:
-            while let Some(pos) = output_lines[start..].iter().position(|l| matches(*l, first_line)) {
+            'inner: while let Some(pos) = output_lines[start..]
+                .iter()
+                .position(|l| matches(*l, first_line))
+            {
                 start = pos + 1;
                 if output_lines[pos..].len() + 1 < pattern.len() {
-                    break
+                    break;
                 }
                 for (out_line, pat_line) in output_lines[pos + 1..].iter().zip(&pattern[1..]) {
                     if !matches(out_line, pat_line) {
@@ -62,13 +61,7 @@ impl FileCheck {
         let pattern = pattern
             .iter()
             .enumerate()
-            .map(|(i, l)| {
-                format!(
-                    "    {}: {}",
-                    if i == 0 { "CHECK" } else { "NEXT" },
-                    l,
-                )
-            })
+            .map(|(i, l)| format!("    {}: {}", if i == 0 { "CHECK" } else { "NEXT" }, l,))
             .collect::<Vec<_>>()
             .join("\n");
 

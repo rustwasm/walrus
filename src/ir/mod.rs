@@ -135,18 +135,12 @@ pub enum Expr {
 
     /// `local.get n`
     LocalGet {
-        /// The type of this local.
-        #[walrus(skip_visit)] // nothing to recurse
-        ty: ValType,
         /// The local being got.
         local: LocalId,
     },
 
     /// `local.set n`
     LocalSet {
-        /// The type of this local.
-        #[walrus(skip_visit)] // nothing to recurse
-        ty: ValType,
         /// The local being set.
         local: LocalId,
         /// The value to set the local to.

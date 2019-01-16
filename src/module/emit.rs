@@ -16,10 +16,19 @@ use std::collections::HashMap;
 
 /// Anything that can be lowered to raw wasm structures.
 pub(crate) trait Emit {
+    /// Extra data, if any, passed into `emit`.
+    type Extra;
+
     /// Emit `self` into the given module.
     ///
     /// Anything that is not in the `used` set should not be emitted.
-    fn emit(&self, used: &Used, module: &mut elements::Module, indices: &mut IdsToIndices);
+    fn emit(
+        &self,
+        extra: &Self::Extra,
+        used: &Used,
+        module: &mut elements::Module,
+        indices: &mut IdsToIndices,
+    );
 }
 
 /// Maps our high-level identifiers to the raw indices they end up emitted at.

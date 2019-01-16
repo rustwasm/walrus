@@ -9,5 +9,5 @@
 
 ;; CHECK: (func
 ;; NEXT:    (local i32 i32)
-;; NEXT:    local.get 0
-;; NEXT:    local.set 1)
+;; NEXT:    local.get 1
+;; NEXT:    local.set 0)

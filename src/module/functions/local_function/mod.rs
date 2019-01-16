@@ -11,13 +11,14 @@ use crate::error::{ErrorKind, Result};
 use crate::ir::matcher::{ConstMatcher, Matcher};
 use crate::ir::*;
 use crate::module::emit::IdsToIndices;
+use crate::module::locals::ModuleLocals;
 use crate::module::Module;
 use crate::ty::{TypeId, ValType};
 use crate::validation_context::ValidationContext;
 use failure::{bail, format_err, Fail, ResultExt};
 use id_arena::{Arena, Id};
 use parity_wasm::elements::{self, Instruction};
-use std::collections::{BTreeSet, HashSet};
+use std::collections::{BTreeMap, HashSet};
 use std::fmt;
 use std::iter;
 use std::mem;
@@ -142,50 +143,17 @@ impl LocalFunction {
     }
 
     /// Emit this function's compact locals declarations.
-    pub(crate) fn emit_locals(&self, indices: &mut IdsToIndices) -> Vec<elements::Local> {
+    pub(crate) fn emit_locals(
+        &self,
+        locals: &ModuleLocals,
+        indices: &mut IdsToIndices,
+    ) -> Vec<elements::Local> {
         struct LocalsVisitor<'a> {
             func: &'a LocalFunction,
-            seen: HashSet<ExprId>,
-
-            // NB: Use `BTreeSet` to make compilation deterministic (since we iterate
-            // over these sets) so our tests aren't busted.
-            i32s: BTreeSet<LocalId>,
-            i64s: BTreeSet<LocalId>,
-            f32s: BTreeSet<LocalId>,
-            f64s: BTreeSet<LocalId>,
-            v128s: BTreeSet<LocalId>,
-        }
-
-        impl LocalsVisitor<'_> {
-            fn visit<E>(&mut self, e: E)
-            where
-                E: Into<ExprId>,
-            {
-                let id = e.into();
-                if self.seen.insert(id) {
-                    self.func.exprs[id].visit(self);
-                }
-            }
-
-            fn insert_local(&mut self, ty: ValType, local: LocalId) {
-                match ty {
-                    ValType::I32 => {
-                        self.i32s.insert(local);
-                    }
-                    ValType::I64 => {
-                        self.i64s.insert(local);
-                    }
-                    ValType::F32 => {
-                        self.f32s.insert(local);
-                    }
-                    ValType::F64 => {
-                        self.f64s.insert(local);
-                    }
-                    ValType::V128 => {
-                        self.v128s.insert(local);
-                    }
-                }
-            }
+            locals: &'a ModuleLocals,
+            seen: HashSet<LocalId>,
+            // NB: Use `BTreeMap` to make compilation deterministic
+            ty_to_locals: BTreeMap<ValType, Vec<LocalId>>,
         }
 
         impl<'expr> Visitor<'expr> for LocalsVisitor<'expr> {
@@ -193,103 +161,41 @@ impl LocalFunction {
                 self.func
             }
 
-            // FIXME(#10) should use `visit_local_id` instead
-            fn visit_local_get(&mut self, e: &LocalGet) {
-                self.insert_local(e.ty, e.local);
-            }
-
-            // FIXME(#10) should use `visit_local_id` instead
-            fn visit_local_set(&mut self, e: &LocalSet) {
-                self.insert_local(e.ty, e.local);
-                self.visit(e.value);
-            }
-
-            fn visit_global_get(&mut self, _: &GlobalGet) {}
-
-            fn visit_global_set(&mut self, e: &GlobalSet) {
-                self.visit(e.value);
+            fn visit_local_id(&mut self, &id: &LocalId) {
+                if self.seen.insert(id) {
+                    let ty = self.locals.locals()[id].ty();
+                    self.ty_to_locals.entry(ty).or_insert(Vec::new()).push(id);
+                }
             }
         }
 
         let mut v = LocalsVisitor {
             func: self,
-            seen: Default::default(),
-            i32s: Default::default(),
-            i64s: Default::default(),
-            f32s: Default::default(),
-            f64s: Default::default(),
-            v128s: Default::default(),
+            locals,
+            seen: HashSet::new(),
+            ty_to_locals: BTreeMap::new(),
         };
-        v.visit(self.entry_block());
+        self.entry_block().visit(&mut v);
 
-        let mut locals = Vec::with_capacity(5);
+        let mut ret = Vec::with_capacity(5);
         let mut idx = 0;
 
-        let LocalsVisitor {
-            i32s,
-            i64s,
-            f32s,
-            f64s,
-            v128s,
-            ..
-        } = v;
-
-        if !i32s.is_empty() {
-            locals.push(elements::Local::new(
-                i32s.len() as u32,
-                elements::ValueType::I32,
-            ));
-            for l in i32s {
+        for (ty, locals) in v.ty_to_locals {
+            let element_ty = match ty {
+                ValType::I32 => elements::ValueType::I32,
+                ValType::I64 => elements::ValueType::I64,
+                ValType::F32 => elements::ValueType::F32,
+                ValType::F64 => elements::ValueType::F64,
+                ValType::V128 => elements::ValueType::V128,
+            };
+            ret.push(elements::Local::new(locals.len() as u32, element_ty));
+            for l in locals {
                 indices.set_local_index(l, idx);
                 idx += 1;
             }
         }
 
-        if !i64s.is_empty() {
-            locals.push(elements::Local::new(
-                i64s.len() as u32,
-                elements::ValueType::I64,
-            ));
-            for l in i64s {
-                indices.set_local_index(l, idx);
-                idx += 1;
-            }
-        }
-
-        if !f32s.is_empty() {
-            locals.push(elements::Local::new(
-                f32s.len() as u32,
-                elements::ValueType::F32,
-            ));
-            for l in f32s {
-                indices.set_local_index(l, idx);
-                idx += 1;
-            }
-        }
-
-        if !f64s.is_empty() {
-            locals.push(elements::Local::new(
-                f64s.len() as u32,
-                elements::ValueType::F64,
-            ));
-            for l in f64s {
-                indices.set_local_index(l, idx);
-                idx += 1;
-            }
-        }
-
-        if !v128s.is_empty() {
-            locals.push(elements::Local::new(
-                v128s.len() as u32,
-                elements::ValueType::V128,
-            ));
-            for l in v128s {
-                indices.set_local_index(l, idx);
-                idx += 1;
-            }
-        }
-
-        locals
+        return ret;
     }
 
     /// Emit this function's instruction sequence.
@@ -319,11 +225,7 @@ impl Dot for LocalFunction {
             needs_close: false,
         };
         v.out.push_str("subgraph unreachable {\n");
-        v.visit_block_id(&self.entry_block());
-        // self.entry_block().visit(v);
-        // for (id, _) in self.exprs.iter() {
-        //     id.visit(v);
-        // }
+        self.entry_block().visit(v);
         v.close_previous();
         v.out.push_str("}\n");
         out.push_str("}\n");
@@ -479,7 +381,7 @@ fn validate_instruction<'a>(
                 .module
                 .locals
                 .local_for_function_and_index(ctx.func_id, ty, *n);
-            let expr = ctx.func.alloc(LocalGet { ty, local });
+            let expr = ctx.func.alloc(LocalGet { local });
             ctx.push_operand(Some(ty), expr);
         }
         Instruction::SetLocal(n) => {
@@ -489,7 +391,7 @@ fn validate_instruction<'a>(
                 .module
                 .locals
                 .local_for_function_and_index(ctx.func_id, ty, *n);
-            let expr = ctx.func.alloc(LocalSet { ty, local, value });
+            let expr = ctx.func.alloc(LocalSet { local, value });
             ctx.add_to_current_frame_block(expr);
         }
         Instruction::GetGlobal(n) => {

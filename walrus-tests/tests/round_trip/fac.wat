@@ -33,21 +33,21 @@
 ;; NEXT:    (func (;0;) (type 0) (param i32) (result i32)
 ;; NEXT:      (local i32 i32)
 ;; NEXT:      block  ;; label = @1
-;; NEXT:        local.get 0
-;; NEXT:        local.set 1
+;; NEXT:        local.get 1
+;; NEXT:        local.set 0
 ;; NEXT:        loop  ;; label = @2
-;; NEXT:          local.get 0
+;; NEXT:          local.get 1
 ;; NEXT:          i32.eqz
 ;; NEXT:          br_if 1 (;@1;)
+;; NEXT:          local.get 0
 ;; NEXT:          local.get 1
-;; NEXT:          local.get 0
 ;; NEXT:          i32.mul
-;; NEXT:          local.set 1
-;; NEXT:          local.get 0
+;; NEXT:          local.set 0
+;; NEXT:          local.get 1
 ;; NEXT:          i32.const 1
 ;; NEXT:          i32.sub
-;; NEXT:          local.set 0
+;; NEXT:          local.set 1
 ;; NEXT:        end
 ;; NEXT:      end
-;; NEXT:      local.get 1)
+;; NEXT:      local.get 0)
 ;; NEXT:    (export "fac" (func 0)))

@@ -65,7 +65,9 @@ impl ModuleTypes {
 }
 
 impl Emit for ModuleTypes {
-    fn emit(&self, used: &Used, module: &mut elements::Module, indices: &mut IdsToIndices) {
+    type Extra = ();
+
+    fn emit(&self, _: &(), used: &Used, module: &mut elements::Module, indices: &mut IdsToIndices) {
         if used.types.is_empty() {
             return;
         }

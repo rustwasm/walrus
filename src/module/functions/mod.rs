@@ -6,6 +6,7 @@ use crate::dot::Dot;
 use crate::error::{ErrorKind, Result};
 use crate::module::emit::{Emit, IdsToIndices};
 use crate::module::imports::{ImportId, ImportKind};
+use crate::module::locals::ModuleLocals;
 use crate::module::Module;
 use crate::passes::Used;
 use crate::ty::TypeId;
@@ -256,7 +257,15 @@ impl Module {
 }
 
 impl Emit for ModuleFunctions {
-    fn emit(&self, used: &Used, module: &mut elements::Module, indices: &mut IdsToIndices) {
+    type Extra = ModuleLocals;
+
+    fn emit(
+        &self,
+        locals: &ModuleLocals,
+        used: &Used,
+        module: &mut elements::Module,
+        indices: &mut IdsToIndices,
+    ) {
         if used.funcs.is_empty() {
             return;
         }
@@ -321,7 +330,7 @@ impl Emit for ModuleFunctions {
             let ty_idx = indices.get_type_index(func.ty);
             funcs.push(elements::Func::new(ty_idx));
 
-            let locals = func.emit_locals(indices);
+            let locals = func.emit_locals(locals, indices);
             let instructions = func.emit_instructions(indices);
             let instructions = elements::Instructions::new(instructions);
             codes.push(elements::FuncBody::new(locals, instructions));

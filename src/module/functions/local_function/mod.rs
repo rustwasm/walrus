@@ -71,7 +71,7 @@ impl LocalFunction {
 
         let entry = ctx.push_control(BlockKind::FunctionEntry, vec![].into_boxed_slice(), result);
         ctx.func.entry = Some(entry);
-        validate_expression(&mut ctx, body.code().elements())?;
+        validate_expression(&mut ctx, body.code().elements(), entry.into())?;
 
         debug_assert_eq!(ctx.operands.len(), result_len);
         debug_assert!(ctx.controls.is_empty());
@@ -335,9 +335,13 @@ fn validate_instruction_sequence<'a>(
     }
 }
 
-fn validate_expression(ctx: &mut FunctionContext, expr: &[Instruction]) -> Result<Vec<ExprId>> {
+fn validate_expression(
+    ctx: &mut FunctionContext,
+    expr: &[Instruction],
+    container: ExprId,
+) -> Result<Vec<ExprId>> {
     let rest = validate_instruction_sequence(ctx, expr, Instruction::End)?;
-    let exprs = validate_end(ctx)?;
+    let exprs = validate_end(ctx, container)?;
     if rest.is_empty() {
         Ok(exprs)
     } else {
@@ -347,9 +351,9 @@ fn validate_expression(ctx: &mut FunctionContext, expr: &[Instruction]) -> Resul
     }
 }
 
-fn validate_end(ctx: &mut FunctionContext) -> Result<Vec<ExprId>> {
+fn validate_end(ctx: &mut FunctionContext, expr: ExprId) -> Result<Vec<ExprId>> {
     let (results, exprs) = ctx.pop_control()?;
-    ctx.push_operands(&results, &exprs);
+    ctx.push_operands(&results, &exprs, expr);
     Ok(exprs)
 }
 
@@ -373,7 +377,30 @@ fn validate_instruction<'a>(
             let expr = ctx.func.alloc(Call { func, args });
             let result_tys: Vec<ValType> = fun_ty.return_type().iter().map(Into::into).collect();
             let result_exprs: Vec<_> = iter::repeat(expr).take(result_tys.len()).collect();
-            ctx.push_operands(&result_tys, &result_exprs);
+            ctx.push_operands(&result_tys, &result_exprs, expr.into());
+        }
+        Instruction::CallIndirect(type_idx, table_idx) => {
+            let type_id = ctx
+                .module
+                .types
+                .type_for_index(*type_idx)
+                .ok_or_else(|| format_err!("invalid type index in `call_indirect`"))?;
+            let ty = ctx.module.types.types()[type_id].clone();
+            let table = ctx
+                .module
+                .tables
+                .table_for_index((*table_idx) as u32)
+                .ok_or_else(|| format_err!("invalid index in `call_indirect`"))?;
+            let (_, func) = ctx.pop_operand_expected(Some(ValType::I32))?;
+            let args = ctx.pop_operands(ty.params())?.into_boxed_slice();
+            let expr = ctx.func.alloc(CallIndirect {
+                table,
+                ty: type_id,
+                func,
+                args,
+            });
+            let result_exprs: Vec<_> = iter::repeat(expr).take(ty.results().len()).collect();
+            ctx.push_operands(ty.results(), &result_exprs, expr.into());
         }
         Instruction::GetLocal(n) => {
             let ty = ctx.validation.local(*n).context("invalid get_local")?;
@@ -497,27 +524,19 @@ fn validate_instruction<'a>(
         Instruction::Block(block_ty) => {
             let validation = ctx.validation.for_block(ValType::from_block_ty(block_ty));
             let mut ctx = ctx.nested(&validation);
-            let params = ValType::from_block_ty(block_ty);
-            let params_is_empty = params.is_empty();
-            let block = ctx.push_control(BlockKind::Block, params.clone(), params);
+            let results = ValType::from_block_ty(block_ty);
+            let block = ctx.push_control(BlockKind::Block, results.clone(), results);
             let rest = validate_instruction_sequence(&mut ctx, &insts[1..], Instruction::End)?;
-            validate_end(&mut ctx)?;
-            if params_is_empty {
-                ctx.add_to_current_frame_block(block);
-            }
+            validate_end(&mut ctx, block.into())?;
             return Ok(rest);
         }
         Instruction::Loop(block_ty) => {
             let validation = ctx.validation.for_loop();
             let mut ctx = ctx.nested(&validation);
             let t = ValType::from_block_ty(block_ty);
-            let t_is_empty = t.is_empty();
             let block = ctx.push_control(BlockKind::Loop, vec![].into_boxed_slice(), t);
             let rest = validate_instruction_sequence(&mut ctx, &insts[1..], Instruction::End)?;
-            validate_end(&mut ctx)?;
-            if t_is_empty {
-                ctx.add_to_current_frame_block(block);
-            }
+            validate_end(&mut ctx, block.into())?;
             return Ok(rest);
         }
         Instruction::If(block_ty) => {
@@ -542,12 +561,8 @@ fn validate_instruction<'a>(
                 consequent,
                 alternative,
             });
-            if results.is_empty() {
-                ctx.add_to_current_frame_block(expr);
-            } else {
-                let exprs: Vec<_> = results.iter().map(|_| expr).collect();
-                ctx.push_operands(&results, &exprs);
-            }
+            let exprs: Vec<_> = results.iter().map(|_| expr).collect();
+            ctx.push_operands(&results, &exprs, expr.into());
 
             return Ok(rest_rest);
         }
@@ -607,12 +622,8 @@ fn validate_instruction<'a>(
                 block: to_block,
                 args,
             });
-            if expected.is_empty() {
-                ctx.add_to_current_frame_block(expr);
-            } else {
-                let exprs: Vec<_> = expected.iter().map(|_| expr).collect();
-                ctx.push_operands(&expected, &exprs);
-            }
+            let exprs: Vec<_> = expected.iter().map(|_| expr).collect();
+            ctx.push_operands(&expected, &exprs, expr.into());
         }
         Instruction::BrTable(table) => {
             ctx.validation

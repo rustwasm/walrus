@@ -14,7 +14,7 @@ use std::u32;
 /// https://webassembly.github.io/spec/core/valid/conventions.html#contexts
 #[derive(Debug)]
 pub struct ValidationContext<'a> {
-    types: ChunkList<'a, elements::FunctionType>,
+    pub(crate) types: ChunkList<'a, elements::FunctionType>,
     pub(crate) funcs: ChunkList<'a, elements::FunctionType>,
     tables: ChunkList<'a, elements::TableType>,
     mems: ChunkList<'a, elements::MemoryType>,

@@ -497,6 +497,11 @@ fn create_visit(variants: &[WalrusVariant]) -> impl quote::ToTokens {
                 // ...
             }
 
+            /// Visit `TypeId`
+            fn visit_type_id(&mut self, ty: &crate::ty::TypeId) {
+                // ...
+            }
+
             /// Visit `Value`.
             fn visit_value(&mut self, value: &crate::ir::Value) {
                 // ...
@@ -623,13 +628,13 @@ fn create_matchers(variants: &[WalrusVariant]) -> impl quote::ToTokens {
                 }
 
                 impl< #( #generics ),* > Matcher for #name < #( #generic_tys ),* > {
-                    fn is_match(&self, func: &LocalFunction, expr: &Expr) -> bool {
+                    fn is_match(&self, local_func: &LocalFunction, expr: &Expr) -> bool {
                         match expr {
                             Expr::#expr( #expr #pattern ) => {
                                 true #(
                                     && #self_args.is_match(
-                                        func,
-                                        &func.exprs[*#args]
+                                        local_func,
+                                        &local_func.exprs[*#args]
                                     )
                                 )*
                             }
@@ -710,6 +715,10 @@ fn create_display(variants: &[WalrusVariant]) -> impl quote::ToTokens {
                 self.id(*function);
             }
 
+            fn visit_type_id(&mut self, ty: &crate::ty::TypeId) {
+                self.id(*ty);
+            }
+
             fn visit_value(&mut self, value: &crate::ir::Value) {
                 self.f.push_str(" ");
                 self.f.push_str(&value.to_string());
@@ -788,6 +797,10 @@ fn create_dot(variants: &[WalrusVariant]) -> impl quote::ToTokens {
 
             fn visit_function_id(&mut self, function: &crate::module::functions::FunctionId) {
                 self.id(*function);
+            }
+
+            fn visit_type_id(&mut self, ty: &crate::ty::TypeId) {
+                self.id(*ty);
             }
 
             fn visit_value(&mut self, value: &crate::ir::Value) {

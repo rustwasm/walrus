@@ -4,6 +4,7 @@
 //! `parity_wasm::elements` types.
 
 use crate::ir::LocalId;
+use crate::module::elements::ElementId;
 use crate::module::functions::FunctionId;
 use crate::module::globals::GlobalId;
 use crate::module::imports::ImportId;
@@ -47,6 +48,7 @@ pub(crate) struct IdsToIndices {
     globals: HashMap<GlobalId, u32>,
     locals: HashMap<LocalId, u32>,
     memories: HashMap<MemoryId, u32>,
+    elements: HashMap<ElementId, u32>,
 }
 
 macro_rules! define_get_set_index {
@@ -54,6 +56,7 @@ macro_rules! define_get_set_index {
         impl IdsToIndices {
             /// Get the index for the given identifier.
             #[inline]
+            #[allow(dead_code)] // not everything is used just yet
             pub(crate) fn $get_name(&self, id: $id_ty) -> u32 {
                 self.$member.get(&id).cloned().expect(
                     "Should never try and get the index for an identifier that has not already had \
@@ -79,3 +82,4 @@ define_get_set_index!(get_func_index, set_func_index, FunctionId, funcs);
 define_get_set_index!(get_global_index, set_global_index, GlobalId, globals);
 define_get_set_index!(get_local_index, set_local_index, LocalId, locals);
 define_get_set_index!(get_memory_index, set_memory_index, MemoryId, memories);
+define_get_set_index!(get_element_index, set_element_index, ElementId, elements);

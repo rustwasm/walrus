@@ -3,7 +3,6 @@ use crate::module::elements::ElementId;
 use crate::module::exports::{ExportId, ExportItem};
 use crate::module::functions::{FunctionId, FunctionKind, LocalFunction};
 use crate::module::globals::GlobalId;
-use crate::module::imports::ImportId;
 use crate::module::memories::MemoryId;
 use crate::module::tables::{TableId, TableKind};
 use crate::module::Module;
@@ -17,8 +16,6 @@ use std::collections::HashSet;
 /// are not used.
 #[derive(Debug, Default)]
 pub struct Used {
-    /// The module's used imports.
-    pub imports: HashSet<ImportId>,
     /// The module's used tables.
     pub tables: HashSet<TableId>,
     /// The module's used types.
@@ -47,7 +44,7 @@ impl Used {
         };
 
         for r in roots {
-            match module.exports.arena[r].item {
+            match module.exports.get(r).item {
                 ExportItem::Function(f) => stack.push_func(f),
                 ExportItem::Table(t) => stack.push_table(t),
                 ExportItem::Memory(m) => {
@@ -61,8 +58,8 @@ impl Used {
 
         while stack.functions.len() > 0 || stack.tables.len() > 0 {
             while let Some(f) = stack.functions.pop() {
-                let func = &module.funcs.arena[f];
-                stack.used.types.insert(func.ty(&module));
+                let func = module.funcs.get(f);
+                stack.used.types.insert(func.ty());
 
                 match &func.kind {
                     FunctionKind::Local(func) => {
@@ -71,16 +68,13 @@ impl Used {
                             stack: &mut stack,
                         });
                     }
-                    FunctionKind::Import(i) => {
-                        stack.used.imports.insert(i.import);
-                    }
+                    FunctionKind::Import(_) => {}
                     FunctionKind::Uninitialized(_) => unreachable!(),
                 }
             }
 
             while let Some(t) = stack.tables.pop() {
-                let table = &module.tables.arena[t];
-                match &table.kind {
+                match &module.tables.get(t).kind {
                     TableKind::Function(list) => {
                         for id in list.elements.iter() {
                             if let Some(id) = id {

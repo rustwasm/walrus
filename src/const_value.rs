@@ -1,8 +1,8 @@
 //! Handling wasm constant values
 
+use crate::emit::IdsToIndices;
 use crate::error::Result;
 use crate::ir::Value;
-use crate::module::emit::IdsToIndices;
 use crate::module::globals::GlobalId;
 use failure::bail;
 use parity_wasm::elements::{self, Instruction};

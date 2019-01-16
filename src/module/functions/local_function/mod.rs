@@ -7,15 +7,16 @@ mod emit;
 use self::context::FunctionContext;
 use super::FunctionId;
 use crate::dot::Dot;
+use crate::emit::IdsToIndices;
 use crate::error::{ErrorKind, Result};
 use crate::ir::matcher::{ConstMatcher, Matcher};
 use crate::ir::*;
-use crate::module::emit::IdsToIndices;
 use crate::module::locals::ModuleLocals;
+use crate::module::parse::IndicesToIds;
 use crate::module::Module;
 use crate::ty::{TypeId, ValType};
 use crate::validation_context::ValidationContext;
-use failure::{bail, format_err, Fail, ResultExt};
+use failure::{bail, Fail, ResultExt};
 use id_arena::{Arena, Id};
 use parity_wasm::elements::{self, Instruction};
 use std::collections::{BTreeMap, HashSet};
@@ -47,12 +48,13 @@ impl LocalFunction {
     /// same time.
     pub fn parse(
         module: &mut Module,
+        indices: &IndicesToIds,
         id: FunctionId,
         ty: TypeId,
         validation: &ValidationContext,
         body: &elements::FuncBody,
     ) -> Result<LocalFunction> {
-        let validation = validation.for_function(&module.types.types()[ty], body)?;
+        let validation = validation.for_function(&module.types.get(ty), body)?;
 
         let mut func = LocalFunction {
             ty,
@@ -60,14 +62,22 @@ impl LocalFunction {
             entry: None,
         };
 
-        let result: Vec<_> = module.types.types()[ty].results().iter().cloned().collect();
+        let result: Vec<_> = module.types.get(ty).results().iter().cloned().collect();
         let result = result.into_boxed_slice();
         let result_len = result.len();
 
         let operands = &mut context::OperandStack::new();
         let controls = &mut context::ControlStack::new();
 
-        let mut ctx = FunctionContext::new(module, id, &mut func, &validation, operands, controls);
+        let mut ctx = FunctionContext::new(
+            module,
+            indices,
+            id,
+            &mut func,
+            &validation,
+            operands,
+            controls,
+        );
 
         let entry = ctx.push_control(BlockKind::FunctionEntry, vec![].into_boxed_slice(), result);
         ctx.func.entry = Some(entry);
@@ -368,10 +378,7 @@ fn validate_instruction<'a>(
                 ErrorKind::InvalidWasm
                     .context(format!("`call` instruction with invalid index {}", idx))
             })?;
-            let func = ctx.module.funcs.function_for_index(*idx).expect(
-                "if the validation context has a function for this index, then our module \
-                 functions should too",
-            );
+            let func = ctx.indices.get_func(*idx).context("invalid call")?;
             let param_tys: Vec<ValType> = fun_ty.params().iter().map(Into::into).collect();
             let args = ctx.pop_operands(&param_tys)?.into_boxed_slice();
             let expr = ctx.func.alloc(Call { func, args });
@@ -380,17 +387,15 @@ fn validate_instruction<'a>(
             ctx.push_operands(&result_tys, &result_exprs, expr.into());
         }
         Instruction::CallIndirect(type_idx, table_idx) => {
-            let type_id = ctx.module.types.type_for_index(*type_idx).ok_or_else(|| {
-                format_err!("invalid type index in `call_indirect: {}`", type_idx)
-            })?;
-            let ty = ctx.module.types.types()[type_id].clone();
+            let type_id = ctx
+                .indices
+                .get_type(*type_idx)
+                .context("invalid call_indirect")?;
+            let ty = ctx.module.types.get(type_id).clone();
             let table = ctx
-                .module
-                .tables
-                .table_for_index((*table_idx) as u32)
-                .ok_or_else(|| {
-                    format_err!("invalid table index in `call_indirect`: {}", table_idx)
-                })?;
+                .indices
+                .get_table(*table_idx as u32)
+                .context("invalid call_indirect")?;
             let (_, func) = ctx.pop_operand_expected(Some(ValType::I32))?;
             let args = ctx.pop_operands(ty.params())?.into_boxed_slice();
             let expr = ctx.func.alloc(CallIndirect {
@@ -422,22 +427,14 @@ fn validate_instruction<'a>(
             ctx.add_to_current_frame_block(expr);
         }
         Instruction::GetGlobal(n) => {
-            let global = ctx
-                .module
-                .globals
-                .global_for_index(*n)
-                .ok_or_else(|| format_err!("invalid global.get index"))?;
-            let ty = ctx.module.globals.arena[global].ty;
+            let global = ctx.indices.get_global(*n).context("invalid global.get")?;
+            let ty = ctx.module.globals.get(global).ty;
             let expr = ctx.func.alloc(GlobalGet { global });
             ctx.push_operand(Some(ty), expr);
         }
         Instruction::SetGlobal(n) => {
-            let global = ctx
-                .module
-                .globals
-                .global_for_index(*n)
-                .ok_or_else(|| format_err!("invalid global.get index"))?;
-            let ty = ctx.module.globals.arena[global].ty;
+            let global = ctx.indices.get_global(*n).context("invalid global.set")?;
+            let ty = ctx.module.globals.get(global).ty;
             let (_, value) = ctx.pop_operand_expected(Some(ty))?;
             let expr = ctx.func.alloc(GlobalSet { global, value });
             ctx.add_to_current_frame_block(expr);
@@ -677,10 +674,7 @@ fn validate_instruction<'a>(
         }
 
         Instruction::CurrentMemory(mem) => {
-            let memory = match ctx.module.memories.memory_for_index(*mem as u32) {
-                Some(id) => id,
-                None => bail!("memory {} is out of bounds", mem),
-            };
+            let memory = ctx.indices.get_memory(*mem as u32)?;
             let expr = ctx.func.alloc(MemorySize { memory });
             ctx.push_operand(Some(ValType::I32), expr);
         }

@@ -1,27 +1,40 @@
 //! Types in a wasm module.
 
 use crate::arena_set::ArenaSet;
-use crate::module::emit::{Emit, IdsToIndices};
-use crate::passes::Used;
+use crate::emit::{Emit, EmitContext};
+use crate::module::parse::IndicesToIds;
+use crate::module::Module;
 use crate::ty::{Type, TypeId, ValType};
 use parity_wasm::elements;
-use std::collections::HashMap;
 
 /// The set of de-duplicated types within a module.
 #[derive(Debug, Default)]
 pub struct ModuleTypes {
-    types: ArenaSet<Type>,
-    index_to_type_id: HashMap<u32, TypeId>,
+    arena: ArenaSet<Type>,
 }
 
 impl ModuleTypes {
-    /// Construct the set of types within a module.
-    pub fn parse(type_section: &elements::TypeSection) -> ModuleTypes {
-        let mut types = ArenaSet::with_capacity(type_section.types().len());
-        let mut index_to_type_id = HashMap::with_capacity(type_section.types().len());
+    /// Get a type associated with an ID
+    pub fn get(&self, id: TypeId) -> &Type {
+        &self.arena[id]
+    }
 
-        for (i, ty) in type_section.types().iter().enumerate() {
-            let id = types.next_id();
+    /// Get a type associated with an ID
+    pub fn get_mut(&mut self, id: TypeId) -> &mut Type {
+        &mut self.arena[id]
+    }
+
+    /// Get a shared reference to this module's types.
+    pub fn iter(&self) -> impl Iterator<Item = &Type> {
+        self.arena.iter().map(|(_, f)| f)
+    }
+}
+
+impl Module {
+    /// Construct the set of types within a module.
+    pub(crate) fn parse_types(&mut self, section: &elements::TypeSection, ids: &mut IndicesToIds) {
+        for ty in section.types() {
+            let id = self.types.arena.next_id();
             let fun_ty = match ty {
                 elements::Type::Function(f) => f,
             };
@@ -37,49 +50,22 @@ impl ModuleTypes {
                 .map(ValType::from)
                 .collect::<Vec<_>>()
                 .into_boxed_slice();
-            let id = types.insert(Type::new(id, params, results));
-            index_to_type_id.insert(i as u32, id);
+            let id = self.types.arena.insert(Type::new(id, params, results));
+            ids.push_type(id);
+            // self.types.index_to_type_id.insert(i as u32, id);
         }
-
-        ModuleTypes {
-            types,
-            index_to_type_id,
-        }
-    }
-
-    /// Get the type id for the type at the given index in the original input
-    /// wasm.
-    pub fn type_for_index(&self, index: u32) -> Option<TypeId> {
-        self.index_to_type_id.get(&index).cloned()
-    }
-
-    /// Get the set of types for this module.
-    pub fn types(&self) -> &ArenaSet<Type> {
-        &self.types
-    }
-
-    /// Get the set of types for this module.
-    pub fn types_mut(&mut self) -> &mut ArenaSet<Type> {
-        &mut self.types
     }
 }
 
 impl Emit for ModuleTypes {
-    type Extra = ();
+    fn emit(&self, cx: &mut EmitContext) {
+        let mut types = Vec::with_capacity(cx.used.types.len());
 
-    fn emit(&self, _: &(), used: &Used, module: &mut elements::Module, indices: &mut IdsToIndices) {
-        if used.types.is_empty() {
-            return;
-        }
-
-        let mut types = Vec::with_capacity(used.types.len());
-
-        for (id, ty) in self.types.iter() {
-            if !used.types.contains(&id) {
+        for (id, ty) in self.arena.iter() {
+            if !cx.used.types.contains(&id) {
                 continue;
             }
-
-            indices.set_type_index(id, types.len() as u32);
+            cx.indices.push_type(id);
 
             let params: Vec<elements::ValueType> =
                 ty.params().iter().cloned().map(Into::into).collect();
@@ -99,8 +85,10 @@ impl Emit for ModuleTypes {
             )));
         }
 
-        let types = elements::TypeSection::with_types(types);
-        let types = elements::Section::Type(types);
-        module.sections_mut().push(types);
+        if !types.is_empty() {
+            let types = elements::TypeSection::with_types(types);
+            let types = elements::Section::Type(types);
+            cx.dst.sections_mut().push(types);
+        }
     }
 }

@@ -1,5 +1,5 @@
+use crate::emit::IdsToIndices;
 use crate::ir::*;
-use crate::module::emit::IdsToIndices;
 use crate::module::functions::LocalFunction;
 use parity_wasm::elements;
 

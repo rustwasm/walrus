@@ -142,7 +142,15 @@ impl ModuleExports {
 }
 
 impl Emit for ModuleExports {
-    fn emit(&self, _used: &Used, module: &mut elements::Module, indices: &mut IdsToIndices) {
+    type Extra = ();
+
+    fn emit(
+        &self,
+        _: &(),
+        _used: &Used,
+        module: &mut elements::Module,
+        indices: &mut IdsToIndices,
+    ) {
         // NB: exports are always considered used. They are the roots that the
         // used analysis searches out from.
 

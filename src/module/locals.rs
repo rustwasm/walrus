@@ -47,4 +47,14 @@ impl ModuleLocals {
         debug_assert_eq!(id, id2);
         id
     }
+
+    /// Get the set of locals for this module.
+    pub fn locals(&self) -> &Arena<Local> {
+        &self.locals
+    }
+
+    /// Get the set of locals for this module.
+    pub fn locals_mut(&mut self) -> &mut Arena<Local> {
+        &mut self.locals
+    }
 }

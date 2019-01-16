@@ -117,13 +117,13 @@ impl Module {
         let indices = &mut IdsToIndices::default();
         let mut module = elements::Module::new(vec![data]);
 
-        self.types.emit(&used, &mut module, indices);
-        self.imports.emit(&used, &mut module, indices);
-        self.tables.emit(&used, &mut module, indices);
-        self.memories.emit(&used, &mut module, indices);
-        self.globals.emit(&used, &mut module, indices);
-        self.funcs.emit(&used, &mut module, indices);
-        self.exports.emit(&used, &mut module, indices);
+        self.types.emit(&(), &used, &mut module, indices);
+        self.imports.emit(&(), &used, &mut module, indices);
+        self.tables.emit(&(), &used, &mut module, indices);
+        self.memories.emit(&(), &used, &mut module, indices);
+        self.globals.emit(&(), &used, &mut module, indices);
+        self.funcs.emit(&self.locals, &used, &mut module, indices);
+        self.exports.emit(&(), &used, &mut module, indices);
 
         // TODO: start section
         // TODO: element section

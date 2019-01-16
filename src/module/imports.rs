@@ -230,7 +230,9 @@ impl ModuleImports {
 }
 
 impl Emit for ModuleImports {
-    fn emit(&self, used: &Used, module: &mut elements::Module, indices: &mut IdsToIndices) {
+    type Extra = ();
+
+    fn emit(&self, _: &(), used: &Used, module: &mut elements::Module, indices: &mut IdsToIndices) {
         if used.imports.is_empty() {
             return;
         }

@@ -7,11 +7,11 @@
     select))
 
 ;; CHECK: (func
-;; NEXT:    (block ;; e0
+;; NEXT:    (block
 ;; NEXT:      (select
 ;; NEXT:        (local.get 0)
-;; NEXT:        (i32.const 1)
-;; NEXT:        (i32.const 2)
+;; NEXT:        (const 1)
+;; NEXT:        (const 2)
 ;; NEXT:      )
 ;; NEXT:    )
 ;; NEXT:  )

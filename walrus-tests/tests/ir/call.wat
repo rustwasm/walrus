@@ -6,7 +6,7 @@
   (export "g" (func $g)))
 
 ;; CHECK: (func
-;; NEXT:    (block ;; e0
+;; NEXT:    (block
 ;; NEXT:      (call 0)
 ;; NEXT:    )
 ;; NEXT:  )

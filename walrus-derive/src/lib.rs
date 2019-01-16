@@ -7,24 +7,34 @@ use heck::SnakeCase;
 use proc_macro2::Span;
 use quote::quote;
 use std::iter::FromIterator;
-use syn::{parse_macro_input, DeriveInput};
+use syn::DeriveInput;
+use syn::ext::IdentExt;
+use syn::Error;
+use syn::{parse_macro_input, Ident, Result, Token};
+use syn::parse::{Parse, ParseStream};
+use syn::punctuated::Punctuated;
 
 #[proc_macro_attribute]
 pub fn walrus_expr(_attr: TokenStream, input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
 
-    let variants = get_enum_variants(&input);
+    let variants = match get_enum_variants(&input) {
+        Ok(v) => v,
+        Err(e) => return e.to_compile_error().into(),
+    };
 
     assert_eq!(input.ident.to_string(), "Expr");
 
     let types = create_types(&input.attrs, &variants);
     let visit = create_visit(&variants);
     let matchers = create_matchers(&variants);
+    let display = create_display(&variants);
 
     let expanded = quote! {
         #types
         #visit
         #matchers
+        #display
     };
 
     TokenStream::from(expanded)
@@ -33,6 +43,13 @@ pub fn walrus_expr(_attr: TokenStream, input: TokenStream) -> TokenStream {
 struct WalrusVariant {
     syn: syn::Variant,
     fields: Vec<WalrusFieldOpts>,
+    opts: WalrusVariantOpts,
+}
+
+#[derive(Default)]
+struct WalrusVariantOpts {
+    display_name: Option<syn::Ident>,
+    display_extra: Option<syn::Ident>,
 }
 
 #[derive(Default)]
@@ -40,7 +57,7 @@ struct WalrusFieldOpts {
     skip_visit: bool,
 }
 
-fn get_enum_variants(input: &DeriveInput) -> Vec<WalrusVariant> {
+fn get_enum_variants(input: &DeriveInput) -> Result<Vec<WalrusVariant>> {
     let en = match &input.data {
         syn::Data::Enum(en) => en,
         syn::Data::Struct(_) => {
@@ -54,42 +71,101 @@ fn get_enum_variants(input: &DeriveInput) -> Vec<WalrusVariant> {
         .iter()
         .cloned()
         .map(|mut variant| {
-            WalrusVariant {
+            let attrs = walrus_attrs(&mut variant.attrs);
+
+            Ok(WalrusVariant {
                 fields: variant.fields
                     .iter_mut()
-                    .map(get_walrus_field_opts)
-                    .collect(),
+                    .map(|field| {
+                        syn::parse(walrus_attrs(&mut field.attrs))
+                    })
+                    .collect::<Result<_>>()?,
                 syn: variant,
-            }
+                opts: syn::parse(attrs)?,
+            })
         })
         .collect()
 }
 
-fn get_walrus_field_opts(variant: &mut syn::Field) -> WalrusFieldOpts {
-    let mut ret = WalrusFieldOpts::default();
+impl Parse for WalrusFieldOpts {
+    fn parse(input: ParseStream) -> Result<Self> {
+        enum Attr {
+            SkipVisit,
+        }
+
+        let attrs = Punctuated::<_, syn::token::Comma>::parse_terminated(input)?;
+        let mut ret = WalrusFieldOpts::default();
+        for attr in attrs {
+            match attr {
+                Attr::SkipVisit => ret.skip_visit = true,
+            }
+        }
+        return Ok(ret);
+
+        impl Parse for Attr {
+            fn parse(input: ParseStream) -> Result<Self> {
+				let attr: Ident = input.parse()?;
+				if attr == "skip_visit" {
+					return Ok(Attr::SkipVisit)
+				}
+				return Err(Error::new(attr.span(), "unexpected attribute"));
+            }
+        }
+    }
+}
+
+impl Parse for WalrusVariantOpts {
+    fn parse(input: ParseStream) -> Result<Self> {
+        enum Attr {
+            DisplayName(syn::Ident),
+            DisplayExtra(syn::Ident),
+        }
+
+        let attrs = Punctuated::<_, syn::token::Comma>::parse_terminated(input)?;
+        let mut ret = WalrusVariantOpts::default();
+        for attr in attrs {
+            match attr {
+                Attr::DisplayName(ident) => ret.display_name = Some(ident),
+                Attr::DisplayExtra(ident) => ret.display_extra = Some(ident),
+            }
+        }
+        return Ok(ret);
+
+        impl Parse for Attr {
+            fn parse(input: ParseStream) -> Result<Self> {
+				let attr: Ident = input.parse()?;
+				if attr == "display_name" {
+                    input.parse::<Token![=]>()?;
+                    let name = input.call(Ident::parse_any)?;
+					return Ok(Attr::DisplayName(name))
+				}
+				if attr == "display_extra" {
+                    input.parse::<Token![=]>()?;
+                    let name = input.call(Ident::parse_any)?;
+					return Ok(Attr::DisplayExtra(name))
+				}
+				return Err(Error::new(attr.span(), "unexpected attribute"));
+            }
+        }
+    }
+}
+
+fn walrus_attrs(attrs: &mut Vec<syn::Attribute>) -> TokenStream {
+    let mut ret = proc_macro2::TokenStream::new();
     let ident = syn::Path::from(syn::Ident::new("walrus", Span::call_site()));
-    for i in (0..variant.attrs.len()).rev() {
-        if variant.attrs[i].path != ident {
+    for i in (0..attrs.len()).rev() {
+        if attrs[i].path != ident {
             continue
         }
-        let attr = variant.attrs.remove(i);
+        let attr = attrs.remove(i);
         let group = match attr.tts.into_iter().next().unwrap() {
             proc_macro2::TokenTree::Group(g) => g,
             _ => panic!("#[walrus(...)] expected"),
         };
-        for token in group.stream() {
-            let ident = match token {
-                proc_macro2::TokenTree::Ident(ident) => ident,
-                _ => panic!("unexpected syntax in #[walrus]"),
-            };
-            if ident == "skip_visit" {
-                ret.skip_visit = true;
-            } else {
-                panic!("unexpected walrus attribute: {}", ident)
-            }
-        }
+        ret.extend(group.stream());
+        ret.extend(quote!{ , });
     }
-    return ret
+    return ret.into()
 }
 
 fn create_types(attrs: &[syn::Attribute], variants: &[WalrusVariant]) -> impl quote::ToTokens {
@@ -266,6 +342,54 @@ fn create_types(attrs: &[syn::Attribute], variants: &[WalrusVariant]) -> impl qu
     }
 }
 
+fn visit_fields<'a>(variant: &'a WalrusVariant)
+    -> impl Iterator<Item = (syn::Ident, proc_macro2::TokenStream, bool)> + 'a
+{
+    return variant.syn.fields
+        .iter()
+        .zip(&variant.fields)
+        .enumerate()
+        .filter(|(_, (_, info))| !info.skip_visit)
+        .map(move |(i, (field, _info))| {
+            let field_name = match &field.ident {
+                Some(name) => quote! { #name },
+                None => quote! { #i },
+            };
+            let (ty_name, list) = extract_name_and_if_list(&field.ty);
+            let mut method_name = "visit_".to_string();
+            method_name.push_str(&ty_name.to_string().to_snake_case());
+            let method_name = syn::Ident::new(&method_name, Span::call_site());
+            (method_name, field_name, list)
+        });
+
+    fn extract_name_and_if_list(ty: &syn::Type) -> (&syn::Ident, bool) {
+        let path = match ty {
+            syn::Type::Path(p) => &p.path,
+            _ => panic!("field types must be paths"),
+        };
+        let segment = path.segments.last().unwrap().into_value();
+        let args = match &segment.arguments {
+            syn::PathArguments::None => return (&segment.ident, false),
+            syn::PathArguments::AngleBracketed(a) => &a.args,
+            _ => panic!("invalid path in #[walrus_expr]"),
+        };
+        let mut ty = match args.first().unwrap().into_value() {
+            syn::GenericArgument::Type(ty) => ty,
+            _ => panic!("invalid path in #[walrus_expr]"),
+        };
+        if let syn::Type::Slice(t) = ty {
+            ty = &t.elem;
+        }
+        match ty {
+            syn::Type::Path(p) => {
+                let segment = p.path.segments.last().unwrap().into_value();
+                (&segment.ident, true)
+            }
+            _ => panic!("invalid path in #[walrus_expr]"),
+        }
+    }
+}
+
 fn create_visit(variants: &[WalrusVariant]) -> impl quote::ToTokens {
     let mut visit_impls = Vec::new();
     let mut visitor_trait_methods = Vec::new();
@@ -280,47 +404,8 @@ fn create_visit(variants: &[WalrusVariant]) -> impl quote::ToTokens {
         let method_name = syn::Ident::new(&method_name, Span::call_site());
         let method_id_name = syn::Ident::new(&format!("{}_id", method_name), Span::call_site());
 
-        fn extract_name_and_if_list(ty: &syn::Type) -> (&syn::Ident, bool) {
-            let path = match ty {
-                syn::Type::Path(p) => &p.path,
-                _ => panic!("field types must be paths"),
-            };
-            let segment = path.segments.last().unwrap().into_value();
-            let args = match &segment.arguments {
-                syn::PathArguments::None => return (&segment.ident, false),
-                syn::PathArguments::AngleBracketed(a) => &a.args,
-                _ => panic!("invalid path in #[walrus_expr]"),
-            };
-            let mut ty = match args.first().unwrap().into_value() {
-                syn::GenericArgument::Type(ty) => ty,
-                _ => panic!("invalid path in #[walrus_expr]"),
-            };
-            if let syn::Type::Slice(t) = ty {
-                ty = &t.elem;
-            }
-            match ty {
-                syn::Type::Path(p) => {
-                    let segment = p.path.segments.last().unwrap().into_value();
-                    (&segment.ident, true)
-                }
-                _ => panic!("invalid path in #[walrus_expr]"),
-            }
-        }
-
-        let visit_fields = variant.syn.fields
-            .iter()
-            .zip(&variant.fields)
-            .enumerate()
-            .filter(|(_, (_, info))| !info.skip_visit)
-            .map(|(i, (field, _info))| {
-                let field_name = match &field.ident {
-                    Some(name) => quote! { #name },
-                    None => quote! { #i },
-                };
-                let (ty_name, list) = extract_name_and_if_list(&field.ty);
-                let mut method_name = "visit_".to_string();
-                method_name.push_str(&ty_name.to_string().to_snake_case());
-                let method_name = syn::Ident::new(&method_name, Span::call_site());
+        let visit_fields = visit_fields(variant)
+            .map(|(method_name, field_name, list)| {
                 if list {
                     quote! {
                         for item in self.#field_name.iter() {
@@ -424,8 +509,6 @@ fn create_visit(variants: &[WalrusVariant]) -> impl quote::ToTokens {
 }
 
 fn create_matchers(variants: &[WalrusVariant]) -> impl quote::ToTokens {
-    use syn::punctuated::Punctuated;
-
     let matchers: Vec<_> = variants
         .iter()
         .map(|v| {
@@ -556,6 +639,74 @@ fn create_matchers(variants: &[WalrusVariant]) -> impl quote::ToTokens {
             use super::matcher::Matcher;
 
             #( #matchers )*
+        }
+    }
+}
+
+fn create_display(variants: &[WalrusVariant]) -> impl quote::ToTokens {
+    let mut display_methods = Vec::new();
+    for variant in variants {
+        let name = &variant.syn.ident;
+
+        let mut method_name = "visit_".to_string();
+        method_name.push_str(&name.to_string().to_snake_case());
+        let method_name = syn::Ident::new(&method_name, Span::call_site());
+
+        let instr_name = match &variant.opts.display_name {
+            Some(f) => quote! { #f(expr, self) },
+            None => {
+                let instr = name.to_string().to_snake_case().replace("_", ".");
+                quote! { self.f.push_str(#instr) }
+            }
+        };
+        let extra = match &variant.opts.display_extra {
+            Some(extra) => quote! { #extra(expr, self); },
+            None => quote! {},
+        };
+        display_methods.push(quote! {
+            fn #method_name(&mut self, expr: &#name) {
+                #instr_name;
+                #extra
+                expr.visit(self);
+            }
+        });
+    }
+    quote! {
+        impl<'expr> Visitor<'expr> for crate::module::functions::DisplayExpr<'expr, '_> {
+            fn local_function(&self) -> &'expr crate::module::functions::LocalFunction {
+                self.func
+            }
+
+            fn visit_expr_id(&mut self, expr: &ExprId) {
+                self.expr_id(*expr)
+            }
+
+            fn visit_local_id(&mut self, local: &crate::ir::LocalId) {
+                self.id(*local);
+            }
+
+            fn visit_memory_id(&mut self, memory: &crate::module::memories::MemoryId) {
+                self.id(*memory);
+            }
+
+            fn visit_table_id(&mut self, table: &crate::module::tables::TableId) {
+                self.id(*table);
+            }
+
+            fn visit_global_id(&mut self, global: &crate::module::globals::GlobalId) {
+                self.id(*global);
+            }
+
+            fn visit_function_id(&mut self, function: &crate::module::functions::FunctionId) {
+                self.id(*function);
+            }
+
+            fn visit_value(&mut self, value: &crate::ir::Value) {
+                self.f.push_str(" ");
+                self.f.push_str(&value.to_string());
+            }
+
+            #(#display_methods)*
         }
     }
 }

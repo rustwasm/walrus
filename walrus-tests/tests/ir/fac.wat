@@ -29,32 +29,27 @@
   (export "fac" (func 0)))
 
 ;; CHECK: (func
-;; NEXT:    (block ;; e0
-;; NEXT:      (block ;; e1
-;; NEXT:        (local.set
-;; NEXT:          1
+;; NEXT:    (block
+;; NEXT:      (block
+;; NEXT:        (local.set 1
 ;; NEXT:          (local.get 0)
 ;; NEXT:        )
-;; NEXT:        (loop ;; e4
-;; NEXT:          (br_if
-;; NEXT:            e0
+;; NEXT:        (loop
+;; NEXT:          (br.if (;e0;)
 ;; NEXT:            (i32.eqz
 ;; NEXT:              (local.get 0)
 ;; NEXT:            )
-;; NEXT:            ()
 ;; NEXT:          )
-;; NEXT:          (local.set
-;; NEXT:            1
+;; NEXT:          (local.set 1
 ;; NEXT:            (i32.mul
 ;; NEXT:              (local.get 1)
 ;; NEXT:              (local.get 0)
 ;; NEXT:            )
 ;; NEXT:          )
-;; NEXT:          (local.set
-;; NEXT:            0
+;; NEXT:          (local.set 0
 ;; NEXT:            (i32.sub
 ;; NEXT:              (local.get 0)
-;; NEXT:              (i32.const 1)
+;; NEXT:              (const 1)
 ;; NEXT:            )
 ;; NEXT:          )
 ;; NEXT:        )

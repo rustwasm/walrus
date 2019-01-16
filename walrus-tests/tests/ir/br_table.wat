@@ -16,26 +16,23 @@
     i32.const 100))
 
 ;; CHECK: (func
-;; NEXT:    (block ;; e0
-;; NEXT:      (block ;; e1
-;; NEXT:        (block ;; e2
-;; NEXT:          (block ;; e3
-;; NEXT:            (br_table
+;; NEXT:    (block
+;; NEXT:      (block
+;; NEXT:        (block
+;; NEXT:          (block
+;; NEXT:            (br.table (;default:e0  [e2 e1];)
 ;; NEXT:              (local.get 0)
-;; NEXT:              e0 ;; default
-;; NEXT:              [e2 e1]
-;; NEXT:              ()
 ;; NEXT:            )
 ;; NEXT:          )
 ;; NEXT:          (return
-;; NEXT:            (i32.const 300)
+;; NEXT:            (const 300)
 ;; NEXT:          )
 ;; NEXT:        )
 ;; NEXT:        (return
-;; NEXT:          (i32.const 200)
+;; NEXT:          (const 200)
 ;; NEXT:        )
 ;; NEXT:      )
-;; NEXT:      (i32.const 100)
+;; NEXT:      (const 100)
 ;; NEXT:    )
 ;; NEXT:  )
 

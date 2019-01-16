@@ -11,27 +11,23 @@
   (export "count_to_ten" (func 0)))
 
 ;; CHECK: (func
-;; NEXT:    (block ;; e0
-;; NEXT:      (local.set
-;; NEXT:        0
-;; NEXT:        (i32.const 9)
+;; NEXT:    (block
+;; NEXT:      (local.set 0
+;; NEXT:        (const 9)
 ;; NEXT:      )
-;; NEXT:      (loop ;; e3
-;; NEXT:        (br_if
-;; NEXT:          e0
+;; NEXT:      (loop
+;; NEXT:        (br.if (;e0;)
 ;; NEXT:          (i32.eqz
 ;; NEXT:            (local.get 0)
 ;; NEXT:          )
-;; NEXT:          ()
 ;; NEXT:        )
-;; NEXT:        (local.set
-;; NEXT:          0
+;; NEXT:        (local.set 0
 ;; NEXT:          (i32.add
 ;; NEXT:            (local.get 0)
-;; NEXT:            (i32.const 1)
+;; NEXT:            (const 1)
 ;; NEXT:          )
 ;; NEXT:        )
 ;; NEXT:      )
-;; NEXT:      (i32.const 10)
+;; NEXT:      (const 10)
 ;; NEXT:    )
 ;; NEXT:  )

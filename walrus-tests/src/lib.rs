@@ -90,8 +90,11 @@ impl FileCheck {
     }
 }
 
-fn matches(actual: &str, expected: &str) -> bool {
-    println!("{:?}", actual.trim());
-    println!("{:?}", expected.trim());
-    actual.trim().starts_with(expected.trim())
+fn matches(mut actual: &str, expected: &str) -> bool {
+    actual = actual.trim();
+    // skip a leading comment
+    if actual.starts_with("(;") {
+        actual = actual[actual.find(";)").unwrap() + 2..].trim();
+    }
+    actual.starts_with(expected.trim())
 }

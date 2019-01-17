@@ -55,6 +55,9 @@ impl Used {
                 }
             }
         }
+        if let Some(f) = module.start {
+            stack.push_func(f);
+        }
 
         while stack.functions.len() > 0 || stack.tables.len() > 0 {
             while let Some(f) = stack.functions.pop() {

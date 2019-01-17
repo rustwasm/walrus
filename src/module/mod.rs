@@ -15,7 +15,7 @@ use crate::emit::{Emit, EmitContext, IdsToIndices};
 use crate::error::Result;
 use crate::module::elements::ModuleElements;
 use crate::module::exports::ModuleExports;
-use crate::module::functions::{ModuleFunctions, Function};
+use crate::module::functions::{ModuleFunctions, Function, FunctionId};
 use crate::module::globals::ModuleGlobals;
 use crate::module::imports::ModuleImports;
 use crate::module::locals::ModuleLocals;
@@ -42,6 +42,7 @@ pub struct Module {
     // TODO: make this an internal type, not a parity-wasm type
     pub(crate) data: parity::DataSection,
     pub(crate) elements: ModuleElements,
+    pub(crate) start: Option<FunctionId>,
 }
 
 impl Module {
@@ -79,11 +80,11 @@ impl Module {
                 Section::Code(s) => ret.parse_local_functions(&module, s, &mut indices)?,
                 Section::Export(s) => ret.parse_exports(s, &mut indices)?,
                 Section::Element(s) => ret.parse_elements(s, &mut indices)?,
+                Section::Start(idx) => ret.start = Some(indices.get_func(*idx)?),
 
                 // TODO: handle these
                 Section::Unparsed { .. } => {}
                 Section::Custom(_) => {}
-                Section::Start(_) => {}
                 Section::Name(_) => {}
                 Section::Reloc(_) => {}
             }
@@ -124,7 +125,10 @@ impl Module {
         self.globals.emit(&mut cx);
         self.funcs.emit(&mut cx);
         self.exports.emit(&mut cx);
-        // TODO: start section
+        if let Some(start) = self.start {
+            let idx = cx.indices.get_func_index(start);
+            cx.dst.sections_mut().push(parity::Section::Start(idx));
+        }
         self.elements.emit(&mut cx);
 
         module.sections_mut().sort_by_key(|s| match s {

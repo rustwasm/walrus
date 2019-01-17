@@ -334,7 +334,7 @@ impl Emit for ModuleFunctions {
         }
 
         assert_eq!(funcs.len(), codes.len());
-        if codes.len() == 0 {
+        if codes.is_empty() {
             return;
         }
 

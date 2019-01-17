@@ -6,6 +6,7 @@ use crate::module::functions::FunctionId;
 use crate::module::tables::{ModuleTables, TableKind};
 use crate::module::Module;
 use crate::passes::Used;
+use failure::{bail, format_err};
 use id_arena::{Arena, Id};
 use parity_wasm::elements;
 use std::collections::HashMap;
@@ -42,7 +43,7 @@ impl ModuleElements {
                 for &func in segment.members() {
                     match module.funcs.function_for_index(func) {
                         Some(id) => list.push(id),
-                        None => failure::bail!("invalid segment initialization"),
+                        None => bail!("invalid segment initialization in segment {}", i),
                     }
                 }
                 let id = elements.next_id();
@@ -55,28 +56,28 @@ impl ModuleElements {
             let table = module
                 .tables
                 .table_for_index(segment.index())
-                .ok_or_else(|| failure::format_err!("invalid table index"))?;
+                .ok_or_else(|| format_err!("invalid table index in segment {}", i))?;
             let list = match &mut module.tables.get_mut(table).kind {
                 TableKind::Function(list) => list,
             };
 
             let offset = segment.offset().as_ref().unwrap();
             if offset.code().len() != 2 {
-                failure::bail!("invalid initialization expression");
+                bail!("invalid initialization expression in segment {}", i);
             }
             match offset.code()[1] {
                 elements::Instruction::End => {}
-                _ => failure::bail!("invalid initialization expression"),
+                _ => bail!("invalid initialization expression in segment {}", i),
             }
             let offset = match offset.code()[0] {
                 elements::Instruction::I32Const(n) => n as usize,
-                _ => failure::bail!("invalid initialization expression"),
+                _ => bail!("invalid initialization expression in segment {}", i),
             };
 
             for (i, &func) in segment.members().iter().enumerate() {
                 let id = match module.funcs.function_for_index(func) {
                     Some(i) => i,
-                    None => failure::bail!("invalid segment initialization"),
+                    None => bail!("invalid segment initialization in segment {}", i),
                 };
                 while i + offset + 1 > list.len() {
                     list.push(None);

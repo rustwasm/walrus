@@ -380,17 +380,17 @@ fn validate_instruction<'a>(
             ctx.push_operands(&result_tys, &result_exprs, expr.into());
         }
         Instruction::CallIndirect(type_idx, table_idx) => {
-            let type_id = ctx
-                .module
-                .types
-                .type_for_index(*type_idx)
-                .ok_or_else(|| format_err!("invalid type index in `call_indirect`"))?;
+            let type_id = ctx.module.types.type_for_index(*type_idx).ok_or_else(|| {
+                format_err!("invalid type index in `call_indirect: {}`", type_idx)
+            })?;
             let ty = ctx.module.types.types()[type_id].clone();
             let table = ctx
                 .module
                 .tables
                 .table_for_index((*table_idx) as u32)
-                .ok_or_else(|| format_err!("invalid index in `call_indirect`"))?;
+                .ok_or_else(|| {
+                    format_err!("invalid table index in `call_indirect`: {}", table_idx)
+                })?;
             let (_, func) = ctx.pop_operand_expected(Some(ValType::I32))?;
             let args = ctx.pop_operands(ty.params())?.into_boxed_slice();
             let expr = ctx.func.alloc(CallIndirect {

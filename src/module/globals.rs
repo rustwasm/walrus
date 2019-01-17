@@ -1,14 +1,12 @@
 //! Globals within a wasm module.
 
-use crate::error::{ErrorKind, Result};
+use crate::const_value::Const;
+use crate::error::Result;
 use crate::module::emit::{Emit, IdsToIndices};
-use crate::module::functions::{Function, LocalFunction};
-use crate::module::Module;
 use crate::passes::Used;
-use crate::ty::{Type, ValType};
-use crate::validation_context::ValidationContext;
-use failure::Fail;
-use id_arena::{Arena, ArenaBehavior, DefaultArenaBehavior, Id};
+use crate::ty::ValType;
+use failure::ResultExt;
+use id_arena::{Arena, Id};
 use parity_wasm::elements;
 use std::collections::HashMap;
 
@@ -28,8 +26,8 @@ pub struct Global {
     /// Whether this global is mutable or not.
     pub mutable: bool,
 
-    /// The initialization expression.
-    pub init_expr: LocalFunction,
+    /// The initialized constant value
+    pub init: Const,
 }
 
 impl Global {
@@ -49,25 +47,19 @@ pub struct ModuleGlobals {
 
 impl ModuleGlobals {
     /// Construct a new, empty set of globals for a module.
-    pub fn parse(
-        raw_module: &elements::Module,
-        global_section: &elements::GlobalSection,
-    ) -> Result<ModuleGlobals> {
+    pub fn parse(global_section: &elements::GlobalSection) -> Result<ModuleGlobals> {
         let capacity = global_section.entries().len();
         let mut globals = ModuleGlobals {
             arena: Arena::with_capacity(capacity),
             index_to_global_id: HashMap::with_capacity(capacity),
         };
 
-        let validation = ValidationContext::for_module(raw_module)?;
-
         for (i, g) in global_section.entries().iter().enumerate() {
             globals.add_global_for_index(
-                &validation,
                 i as u32,
                 ValType::from(&g.global_type().content_type()),
                 g.global_type().is_mutable(),
-                g.init_expr().code(),
+                g.init_expr(),
             )?;
         }
 
@@ -83,14 +75,15 @@ impl ModuleGlobals {
     /// Create the global for this function at the given index.
     fn add_global_for_index(
         &mut self,
-        validation: &ValidationContext,
         index: u32,
         ty: ValType,
         mutable: bool,
-        init_expr: &[elements::Instruction],
+        init_expr: &elements::InitExpr,
     ) -> Result<()> {
         assert!(!self.index_to_global_id.contains_key(&index));
-        let id = self.new_global(validation, ty, mutable, init_expr)?;
+        let id = self
+            .new_global(ty, mutable, init_expr)
+            .with_context(|_| format!("adding global {}", index))?;
         self.index_to_global_id.insert(index, id);
         Ok(())
     }
@@ -99,34 +92,16 @@ impl ModuleGlobals {
     /// wasm globals.
     pub fn new_global(
         &mut self,
-        validation: &ValidationContext,
         ty: ValType,
         mutable: bool,
-        init_expr: &[elements::Instruction],
+        init_expr: &elements::InitExpr,
     ) -> Result<GlobalId> {
-        let dummy_module = &mut Module::default();
-        let dummy_id = DefaultArenaBehavior::<Function>::new_id(0, 0);
-        let dummy_ty = dummy_module.types.types_mut().insert(Type::new(
-            DefaultArenaBehavior::<Type>::new_id(0, 0),
-            vec![].into_boxed_slice(),
-            vec![ty].into_boxed_slice(),
-        ));
-        let dummy_body =
-            elements::FuncBody::new(vec![], elements::Instructions::new(init_expr.to_vec()));
-        let init_expr =
-            LocalFunction::parse(dummy_module, dummy_id, dummy_ty, validation, &dummy_body)?;
-        if !init_expr.is_const() {
-            return Err(ErrorKind::InvalidWasm
-                .context("global's initialization expression is not constant")
-                .into());
-        }
-
         let id = self.arena.next_id();
         let id2 = self.arena.alloc(Global {
             id,
             ty,
             mutable,
-            init_expr,
+            init: Const::eval(init_expr)?,
         });
         debug_assert_eq!(id, id2);
         Ok(id)
@@ -158,8 +133,7 @@ impl Emit for ModuleGlobals {
                  its constructor"
             );
 
-            let init_expr = global.init_expr.emit_instructions(indices);
-            let init_expr = elements::InitExpr::new(init_expr);
+            let init_expr = global.init.emit_instructions(indices);
 
             let ty = elements::GlobalType::new(global.ty.into(), global.mutable);
             let global = elements::GlobalEntry::new(ty, init_expr);

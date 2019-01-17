@@ -1,12 +1,15 @@
 //! Table elements within a wasm module.
 
+use crate::const_value::Const;
 use crate::error::Result;
+use crate::ir::Value;
 use crate::module::emit::{Emit, IdsToIndices};
 use crate::module::functions::FunctionId;
 use crate::module::tables::{ModuleTables, TableKind};
 use crate::module::Module;
 use crate::passes::Used;
-use failure::{bail, format_err};
+use crate::ty::ValType;
+use failure::{bail, format_err, ResultExt};
 use id_arena::{Arena, Id};
 use parity_wasm::elements;
 use std::collections::HashMap;
@@ -57,32 +60,37 @@ impl ModuleElements {
                 .tables
                 .table_for_index(segment.index())
                 .ok_or_else(|| format_err!("invalid table index in segment {}", i))?;
-            let list = match &mut module.tables.get_mut(table).kind {
-                TableKind::Function(list) => list,
+            let table = match &mut module.tables.get_mut(table).kind {
+                TableKind::Function(t) => t,
             };
+
+            let funcs = &module.funcs;
+            let functions =
+                segment
+                    .members()
+                    .iter()
+                    .map(|func| match funcs.function_for_index(*func) {
+                        Some(i) => Ok(i),
+                        None => bail!("invalid segment initialization in segment {}", i),
+                    });
 
             let offset = segment.offset().as_ref().unwrap();
-            if offset.code().len() != 2 {
-                bail!("invalid initialization expression in segment {}", i);
-            }
-            match offset.code()[1] {
-                elements::Instruction::End => {}
-                _ => bail!("invalid initialization expression in segment {}", i),
-            }
-            let offset = match offset.code()[0] {
-                elements::Instruction::I32Const(n) => n as usize,
-                _ => bail!("invalid initialization expression in segment {}", i),
-            };
-
-            for (i, &func) in segment.members().iter().enumerate() {
-                let id = match module.funcs.function_for_index(func) {
-                    Some(i) => i,
-                    None => bail!("invalid segment initialization in segment {}", i),
-                };
-                while i + offset + 1 > list.len() {
-                    list.push(None);
+            let offset = Const::eval(offset).with_context(|_e| format!("in segment {}", i))?;
+            match offset {
+                Const::Value(Value::I32(n)) => {
+                    let offset = n as usize;
+                    for (i, id) in functions.enumerate() {
+                        while i + offset + 1 > table.elements.len() {
+                            table.elements.push(None);
+                        }
+                        table.elements[i + offset] = Some(id?);
+                    }
                 }
-                list[i + offset] = Some(id);
+                Const::Global(global) if module.globals.arena[global].ty == ValType::I32 => {
+                    let list = functions.collect::<Result<_>>()?;
+                    table.relative_elements.push((global, list));
+                }
+                _ => bail!("non-i32 constant in segment {}", i),
             }
         }
 
@@ -119,12 +127,12 @@ impl Emit for ModuleElements {
                 TableKind::Function(list) => Some((t.id(), list)),
             })
             .collect::<Vec<_>>();
-        active.sort();
+        active.sort_by_key(|pair| pair.0);
 
         // Append segments as we find them for all table initializers. We can
         // skip initializers for unused tables, and othrewise we just want to
         // create an initializer for each contiguous chunk of function indices.
-        for (table_id, initializer) in active {
+        for (table_id, table) in active {
             let table_index = indices.get_table_index(table_id);
 
             let mut add = |offset: usize, members: Vec<u32>| {
@@ -143,7 +151,7 @@ impl Emit for ModuleElements {
 
             let mut offset = 0;
             let mut cur = Vec::new();
-            for (i, item) in initializer.iter().enumerate() {
+            for (i, item) in table.elements.iter().enumerate() {
                 match item {
                     Some(item) => {
                         if cur.len() == 0 {
@@ -162,6 +170,17 @@ impl Emit for ModuleElements {
 
             if cur.len() > 0 {
                 add(offset, cur);
+            }
+
+            for (global, list) in table.relative_elements.iter() {
+                let init = Const::Global(*global).emit_instructions(indices);
+                let members = list.iter().map(|i| indices.get_func_index(*i)).collect();
+                segments.push(elements::ElementSegment::new(
+                    table_index,
+                    Some(init),
+                    members,
+                    false,
+                ));
             }
         }
 

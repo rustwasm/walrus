@@ -82,8 +82,14 @@ impl Used {
                 let table = &module.tables.arena[t];
                 match &table.kind {
                     TableKind::Function(list) => {
-                        for id in list {
+                        for id in list.elements.iter() {
                             if let Some(id) = id {
+                                stack.push_func(*id);
+                            }
+                        }
+                        for (global, list) in list.relative_elements.iter() {
+                            stack.used.globals.insert(*global);
+                            for id in list {
                                 stack.push_func(*id);
                             }
                         }

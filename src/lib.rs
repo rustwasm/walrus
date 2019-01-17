@@ -5,6 +5,7 @@
 
 mod arena_set;
 mod chunk_list;
+pub mod const_value;
 pub mod dot;
 pub mod error;
 pub mod ir;

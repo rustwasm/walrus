@@ -2,6 +2,7 @@
 
 use crate::module::emit::{Emit, IdsToIndices};
 use crate::module::functions::FunctionId;
+use crate::module::globals::GlobalId;
 use crate::passes::Used;
 use id_arena::{Arena, Id};
 use parity_wasm::elements;
@@ -28,7 +29,19 @@ pub enum TableKind {
     /// A table of `anyfunc` functions.
     ///
     /// Contains the initialization list for this table, if any.
-    Function(Vec<Option<FunctionId>>),
+    Function(FunctionTable),
+}
+
+/// Components of a table of functions (`anyfunc` table)
+#[derive(Debug, Default)]
+pub struct FunctionTable {
+    /// Layout of this function table that we know of, or those elements which
+    /// have constant initializers.
+    pub elements: Vec<Option<FunctionId>>,
+
+    /// Elements of this table which are relative to a global, typically
+    /// imported.
+    pub relative_elements: Vec<(GlobalId, Vec<FunctionId>)>,
 }
 
 impl Table {
@@ -93,7 +106,7 @@ impl ModuleTables {
             initial_size: limits.initial(),
             maximum_size: limits.maximum(),
             kind: match ty {
-                elements::TableElementType::AnyFunc => TableKind::Function(Vec::new()),
+                elements::TableElementType::AnyFunc => TableKind::Function(Default::default()),
             },
         });
         debug_assert_eq!(id, id2);

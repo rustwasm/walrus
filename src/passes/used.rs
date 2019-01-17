@@ -5,10 +5,9 @@ use crate::module::functions::{FunctionId, FunctionKind, LocalFunction};
 use crate::module::globals::GlobalId;
 use crate::module::imports::ImportId;
 use crate::module::memories::MemoryId;
-use crate::module::tables::TableId;
+use crate::module::tables::{TableId, TableKind};
 use crate::module::Module;
 use crate::ty::TypeId;
-use parity_wasm::elements;
 use std::collections::HashSet;
 
 /// Finds the things within a module that are used.
@@ -80,9 +79,9 @@ impl Used {
                 }
                 ItemToVisit::Table(t) => {
                     let table = &module.tables.arena[t];
-                    match table.ty {
-                        elements::TableElementType::AnyFunc => {
-                            for id in module.elements.elements(t) {
+                    match &table.kind {
+                        TableKind::Function(list) => {
+                            for id in list {
                                 if let Some(id) = id {
                                     stack.push_func(*id);
                                 }

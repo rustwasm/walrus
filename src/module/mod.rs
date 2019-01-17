@@ -81,7 +81,7 @@ impl Module {
                 Section::Function(s) => ret.declare_local_functions(s)?,
                 Section::Code(s) => ret.parse_local_functions(&module, s)?,
                 Section::Export(s) => ret.exports = ModuleExports::parse(&ret, s)?,
-                Section::Element(s) => ret.elements = ModuleElements::parse(&ret, s)?,
+                Section::Element(s) => ret.elements = ModuleElements::parse(&mut ret, s)?,
 
                 // TODO: handle these
                 Section::Unparsed { .. } => {}
@@ -127,7 +127,8 @@ impl Module {
         self.funcs.emit(&self.locals, &used, &mut module, indices);
         self.exports.emit(&(), &used, &mut module, indices);
         // TODO: start section
-        self.elements.emit(&(), &used, &mut module, indices);
+        self.elements
+            .emit(&self.tables, &used, &mut module, indices);
 
         module.sections_mut().sort_by_key(|s| match s {
             parity::Section::Type(_) => 1,

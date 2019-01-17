@@ -1,6 +1,7 @@
 //! Tables within a wasm module.
 
 use crate::module::emit::{Emit, IdsToIndices};
+use crate::module::functions::FunctionId;
 use crate::passes::Used;
 use id_arena::{Arena, Id};
 use parity_wasm::elements;
@@ -13,10 +14,21 @@ pub type TableId = Id<Table>;
 #[derive(Debug)]
 pub struct Table {
     id: TableId,
-    /// The type of each element within this table.
-    pub ty: elements::TableElementType,
-    /// The size limits for this table.
-    pub limits: elements::ResizableLimits,
+    /// The initial size of this table
+    pub initial_size: u32,
+    /// The maximum size of this table
+    pub maximum_size: Option<u32>,
+    /// Which kind of table this is
+    pub kind: TableKind,
+}
+
+/// The kinds of tables that can exist
+#[derive(Debug)]
+pub enum TableKind {
+    /// A table of `anyfunc` functions.
+    ///
+    /// Contains the initialization list for this table, if any.
+    Function(Vec<Option<FunctionId>>),
 }
 
 impl Table {
@@ -76,9 +88,31 @@ impl ModuleTables {
         limits: elements::ResizableLimits,
     ) -> TableId {
         let id = self.arena.next_id();
-        let id2 = self.arena.alloc(Table { id, ty, limits });
+        let id2 = self.arena.alloc(Table {
+            id,
+            initial_size: limits.initial(),
+            maximum_size: limits.maximum(),
+            kind: match ty {
+                elements::TableElementType::AnyFunc => TableKind::Function(Vec::new()),
+            },
+        });
         debug_assert_eq!(id, id2);
         id
+    }
+
+    /// Iterates over all tables in this section.
+    pub fn iter(&self) -> impl Iterator<Item = &Table> {
+        self.arena.iter().map(|p| p.1)
+    }
+
+    /// Returns the actual table associated with an ID
+    pub fn get(&self, table: TableId) -> &Table {
+        &self.arena[table]
+    }
+
+    /// Returns the actual table associated with an ID
+    pub fn get_mut(&mut self, table: TableId) -> &mut Table {
+        &mut self.arena[table]
     }
 }
 
@@ -100,7 +134,7 @@ impl Emit for ModuleTables {
             }
 
             indices.set_table_index(id, tables.len() as u32 + import_count);
-            let table = elements::TableType::new(table.limits.initial(), table.limits.maximum());
+            let table = elements::TableType::new(table.initial_size, table.maximum_size);
             tables.push(table);
         }
 

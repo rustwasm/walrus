@@ -77,7 +77,7 @@ impl Module {
                 }
                 Section::Table(s) => ret.tables = ModuleTables::parse(s),
                 Section::Memory(s) => ret.memories = ModuleMemories::parse(s),
-                Section::Global(s) => ret.globals = ModuleGlobals::parse(&module, s)?,
+                Section::Global(s) => ret.globals = ModuleGlobals::parse(s)?,
                 Section::Function(s) => ret.declare_local_functions(s)?,
                 Section::Code(s) => ret.parse_local_functions(&module, s)?,
                 Section::Export(s) => ret.exports = ModuleExports::parse(&ret, s)?,

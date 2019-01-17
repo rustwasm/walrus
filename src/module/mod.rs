@@ -1,5 +1,6 @@
 //! A high-level API for manipulating wasm modules.
 
+pub mod elements;
 pub(crate) mod emit;
 pub mod exports;
 pub mod functions;
@@ -10,6 +11,7 @@ pub mod memories;
 pub mod tables;
 pub mod types;
 
+use self::elements::ModuleElements;
 use self::emit::{Emit, IdsToIndices};
 use self::exports::ModuleExports;
 use self::functions::Function;
@@ -23,7 +25,7 @@ use self::types::ModuleTypes;
 use crate::error::Result;
 use crate::passes;
 use failure::ResultExt;
-use parity_wasm::elements;
+use parity_wasm::elements as parity;
 use std::fs;
 use std::path::Path;
 
@@ -39,7 +41,8 @@ pub struct Module {
     pub(crate) exports: ModuleExports,
     pub(crate) memories: ModuleMemories,
     // TODO: make this an internal type, not a parity-wasm type
-    pub(crate) data: elements::DataSection,
+    pub(crate) data: parity::DataSection,
+    pub(crate) elements: ModuleElements,
 }
 
 impl Module {
@@ -55,7 +58,7 @@ impl Module {
     pub fn from_buffer(mut wasm: &[u8]) -> Result<Module> {
         use parity_wasm::elements::Deserialize;
 
-        let module = elements::Module::deserialize(&mut wasm)?;
+        let module = parity::Module::deserialize(&mut wasm)?;
         if wasm.len() > 0 {
             failure::bail!("invalid wasm file");
         }
@@ -77,14 +80,13 @@ impl Module {
                 Section::Global(s) => ret.globals = ModuleGlobals::parse(&module, s)?,
                 Section::Function(s) => ret.declare_local_functions(s)?,
                 Section::Code(s) => ret.parse_local_functions(&module, s)?,
-
                 Section::Export(s) => ret.exports = ModuleExports::parse(&ret, s)?,
+                Section::Element(s) => ret.elements = ModuleElements::parse(&mut ret, s)?,
 
                 // TODO: handle these
                 Section::Unparsed { .. } => {}
                 Section::Custom(_) => {}
                 Section::Start(_) => {}
-                Section::Element(_) => {}
                 Section::Name(_) => {}
                 Section::Reloc(_) => {}
             }
@@ -112,10 +114,10 @@ impl Module {
     pub fn emit_wasm(&self) -> Result<Vec<u8>> {
         let roots = self.exports.arena.iter().map(|(id, _)| id);
         let used = passes::Used::new(self, roots);
-        let data = elements::Section::Data(self.data.clone());
+        let data = parity::Section::Data(self.data.clone());
 
         let indices = &mut IdsToIndices::default();
-        let mut module = elements::Module::new(vec![data]);
+        let mut module = parity::Module::new(vec![data]);
 
         self.types.emit(&(), &used, &mut module, indices);
         self.imports.emit(&(), &used, &mut module, indices);
@@ -124,30 +126,30 @@ impl Module {
         self.globals.emit(&(), &used, &mut module, indices);
         self.funcs.emit(&self.locals, &used, &mut module, indices);
         self.exports.emit(&(), &used, &mut module, indices);
-
         // TODO: start section
-        // TODO: element section
+        self.elements
+            .emit(&self.tables, &used, &mut module, indices);
 
         module.sections_mut().sort_by_key(|s| match s {
-            elements::Section::Type(_) => 1,
-            elements::Section::Import(_) => 2,
-            elements::Section::Function(_) => 3,
-            elements::Section::Table(_) => 4,
-            elements::Section::Memory(_) => 5,
-            elements::Section::Global(_) => 6,
-            elements::Section::Export(_) => 7,
-            elements::Section::Start(_) => 8,
-            elements::Section::Element(_) => 9,
-            elements::Section::Code(_) => 10,
-            elements::Section::Data(_) => 11,
+            parity::Section::Type(_) => 1,
+            parity::Section::Import(_) => 2,
+            parity::Section::Function(_) => 3,
+            parity::Section::Table(_) => 4,
+            parity::Section::Memory(_) => 5,
+            parity::Section::Global(_) => 6,
+            parity::Section::Export(_) => 7,
+            parity::Section::Start(_) => 8,
+            parity::Section::Element(_) => 9,
+            parity::Section::Code(_) => 10,
+            parity::Section::Data(_) => 11,
 
-            elements::Section::Custom(_)
-            | elements::Section::Unparsed { .. }
-            | elements::Section::Reloc(_)
-            | elements::Section::Name(_) => 12,
+            parity::Section::Custom(_)
+            | parity::Section::Unparsed { .. }
+            | parity::Section::Reloc(_)
+            | parity::Section::Name(_) => 12,
         });
         let buffer =
-            elements::serialize(module).context("failed to serialize wasm module to file")?;
+            parity::serialize(module).context("failed to serialize wasm module to file")?;
         Ok(buffer)
     }
 }

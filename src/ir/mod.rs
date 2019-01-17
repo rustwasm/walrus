@@ -11,6 +11,8 @@ use crate::module::functions::FunctionId;
 use crate::module::functions::{DisplayExpr, DotExpr};
 use crate::module::globals::GlobalId;
 use crate::module::memories::MemoryId;
+use crate::module::tables::TableId;
+use crate::ty::TypeId;
 use crate::ty::ValType;
 use id_arena::Id;
 use std::fmt;
@@ -129,6 +131,18 @@ pub enum Expr {
     Call {
         /// The function being invoked.
         func: FunctionId,
+        /// The arguments to the function.
+        args: Box<[ExprId]>,
+    },
+
+    /// `call_indirect`
+    CallIndirect {
+        /// The type signature of the function we're calling
+        ty: TypeId,
+        /// The table which `func` below is indexing into
+        table: TableId,
+        /// The index of the function we're invoking
+        func: ExprId,
         /// The arguments to the function.
         args: Box<[ExprId]>,
     },
@@ -341,6 +355,7 @@ impl Expr {
             | Expr::BrIf(..)
             | Expr::IfElse(..)
             | Expr::MemorySize(..)
+            | Expr::CallIndirect(..)
             | Expr::Drop(..) => false,
         }
     }

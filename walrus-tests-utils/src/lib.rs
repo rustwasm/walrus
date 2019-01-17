@@ -31,8 +31,13 @@ pub fn wat2wasm(path: &Path) -> Vec<u8> {
     let mut cmd = Command::new("wat2wasm");
     cmd.arg(path).arg("-o").arg(file.path());
     println!("running: {:?}", cmd);
-    let status = cmd.status().expect("should spawn wat2wasm OK");
-    assert!(status.success(), "should run wat2wasm OK");
+    let output = cmd.output().expect("should spawn wat2wasm OK");
+
+    if !output.status.success() {
+        println!("status: {}", output.status);
+        println!("stderr: {}", String::from_utf8_lossy(&output.stderr));
+        panic!("expected ok");
+    }
 
     fs::read(file.path()).unwrap()
 }

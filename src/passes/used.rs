@@ -1,10 +1,11 @@
 use crate::ir::*;
+use crate::module::elements::ElementId;
 use crate::module::exports::{ExportId, ExportItem};
 use crate::module::functions::{FunctionId, FunctionKind, LocalFunction};
 use crate::module::globals::GlobalId;
 use crate::module::imports::ImportId;
 use crate::module::memories::MemoryId;
-use crate::module::tables::TableId;
+use crate::module::tables::{TableId, TableKind};
 use crate::module::Module;
 use crate::ty::TypeId;
 use std::collections::HashSet;
@@ -14,7 +15,7 @@ use std::collections::HashSet;
 /// This is useful for implementing something like a linker's `--gc-sections` so
 /// that our emitted `.wasm` binaries are small and don't contain things that
 /// are not used.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Used {
     /// The module's used imports.
     pub imports: HashSet<ImportId>,
@@ -28,6 +29,8 @@ pub struct Used {
     pub globals: HashSet<GlobalId>,
     /// The module's used memories.
     pub memories: HashSet<MemoryId>,
+    /// The module's used passive segments.
+    pub elements: HashSet<ElementId>,
 }
 
 impl Used {
@@ -36,55 +39,56 @@ impl Used {
     where
         R: IntoIterator<Item = ExportId>,
     {
-        let mut stack = vec![];
-
-        let mut used = Used {
-            imports: HashSet::new(),
-            tables: HashSet::new(),
-            types: HashSet::new(),
-            funcs: HashSet::new(),
-            globals: HashSet::new(),
-            memories: HashSet::new(),
+        let mut used = Used::default();
+        let mut stack = UsedStack {
+            used: &mut used,
+            functions: Vec::new(),
+            tables: Vec::new(),
         };
 
         for r in roots {
             match module.exports.arena[r].item {
-                ExportItem::Function(f) => {
-                    if used.funcs.insert(f) {
-                        stack.push(f);
-                    }
-                }
-                ExportItem::Table(t) => {
-                    used.tables.insert(t);
-                    // TODO: add all functions in an anyfunc table
-                }
+                ExportItem::Function(f) => stack.push_func(f),
+                ExportItem::Table(t) => stack.push_table(t),
                 ExportItem::Memory(m) => {
-                    used.memories.insert(m);
+                    stack.used.memories.insert(m);
                 }
                 ExportItem::Global(g) => {
-                    used.globals.insert(g);
+                    stack.used.globals.insert(g);
                 }
             }
         }
 
-        while let Some(f) = stack.pop() {
-            let func = &module.funcs.arena[f];
-            used.types.insert(func.ty(&module));
+        while stack.functions.len() > 0 || stack.tables.len() > 0 {
+            while let Some(f) = stack.functions.pop() {
+                let func = &module.funcs.arena[f];
+                stack.used.types.insert(func.ty(&module));
 
-            match &func.kind {
-                FunctionKind::Local(func) => {
-                    let v = &mut UsedVisitor {
-                        func,
-                        used: &mut used,
-                        stack: &mut stack,
-                    };
+                match &func.kind {
+                    FunctionKind::Local(func) => {
+                        func.entry_block().visit(&mut UsedVisitor {
+                            func,
+                            stack: &mut stack,
+                        });
+                    }
+                    FunctionKind::Import(i) => {
+                        stack.used.imports.insert(i.import);
+                    }
+                    FunctionKind::Uninitialized(_) => unreachable!(),
+                }
+            }
 
-                    func.entry_block().visit(v);
+            while let Some(t) = stack.tables.pop() {
+                let table = &module.tables.arena[t];
+                match &table.kind {
+                    TableKind::Function(list) => {
+                        for id in list {
+                            if let Some(id) = id {
+                                stack.push_func(*id);
+                            }
+                        }
+                    }
                 }
-                FunctionKind::Import(i) => {
-                    used.imports.insert(i.import);
-                }
-                FunctionKind::Uninitialized(_) => unreachable!(),
             }
         }
 
@@ -92,39 +96,53 @@ impl Used {
     }
 }
 
-struct UsedVisitor<'a> {
-    func: &'a LocalFunction,
+struct UsedStack<'a> {
     used: &'a mut Used,
-    stack: &'a mut Vec<FunctionId>,
+    functions: Vec<FunctionId>,
+    tables: Vec<TableId>,
 }
 
-impl UsedVisitor<'_> {
-    fn mark(&mut self, f: FunctionId) {
+impl UsedStack<'_> {
+    fn push_func(&mut self, f: FunctionId) {
         if self.used.funcs.insert(f) {
-            self.stack.push(f);
+            self.functions.push(f);
+        }
+    }
+
+    fn push_table(&mut self, f: TableId) {
+        if self.used.tables.insert(f) {
+            self.tables.push(f);
         }
     }
 }
 
-impl<'expr> Visitor<'expr> for UsedVisitor<'expr> {
+struct UsedVisitor<'a, 'b> {
+    func: &'a LocalFunction,
+    stack: &'a mut UsedStack<'b>,
+}
+
+impl<'expr> Visitor<'expr> for UsedVisitor<'expr, '_> {
     fn local_function(&self) -> &'expr LocalFunction {
         self.func
     }
 
     fn visit_function_id(&mut self, &func: &FunctionId) {
-        self.mark(func);
+        self.stack.push_func(func);
     }
 
     fn visit_memory_id(&mut self, &m: &MemoryId) {
-        self.used.memories.insert(m);
+        self.stack.used.memories.insert(m);
     }
 
     fn visit_global_id(&mut self, &g: &GlobalId) {
-        self.used.globals.insert(g);
+        self.stack.used.globals.insert(g);
     }
 
     fn visit_table_id(&mut self, &t: &TableId) {
-        self.used.tables.insert(t);
-        // TODO: need to recurse into table entries
+        self.stack.push_table(t);
+    }
+
+    fn visit_type_id(&mut self, &t: &TypeId) {
+        self.stack.used.types.insert(t);
     }
 }

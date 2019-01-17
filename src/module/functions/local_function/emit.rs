@@ -137,6 +137,17 @@ impl Emit<'_> {
                 self.emit(elements::Instruction::Call(idx))
             }
 
+            CallIndirect(e) => {
+                for x in e.args.iter() {
+                    self.visit(*x);
+                }
+                self.visit(e.func);
+                let idx = self.indices.get_type_index(e.ty);
+                let table = self.indices.get_table_index(e.table);
+                assert!(table < 256); // TODO: update parity-wasm to accept u32
+                self.emit(elements::Instruction::CallIndirect(idx, table as u8))
+            }
+
             LocalGet(e) => {
                 let idx = self.indices.get_local_index(e.local);
                 self.emit(elements::Instruction::GetLocal(idx))

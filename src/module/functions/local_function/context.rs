@@ -110,11 +110,16 @@ impl<'a> FunctionContext<'a> {
         impl_pop_operand_expected(&mut self.operands, &mut self.controls, expected)
     }
 
-    pub fn push_operands<E>(&mut self, types: &[ValType], exprs: &[E])
+    pub fn push_operands<E>(&mut self, types: &[ValType], exprs: &[E], expr: ExprId)
     where
         E: Copy + Into<ExprId>,
     {
-        impl_push_operands(&mut self.operands, types, exprs)
+        assert_eq!(types.len(), exprs.len());
+        if types.is_empty() && self.controls.len() > 0 {
+            self.add_to_current_frame_block(expr);
+        } else {
+            impl_push_operands(&mut self.operands, types, exprs)
+        }
     }
 
     pub fn pop_operands(&mut self, expected: &[ValType]) -> Result<Vec<ExprId>> {

@@ -266,10 +266,6 @@ impl Emit for ModuleFunctions {
         module: &mut elements::Module,
         indices: &mut IdsToIndices,
     ) {
-        if used.funcs.is_empty() {
-            return;
-        }
-
         // Partition used functions into two sets: imported and local
         // functions. Find the size of each local function. Sort imported
         // functions in order so that we can get their index in the function
@@ -277,19 +273,20 @@ impl Emit for ModuleFunctions {
         let mut sizes = HashMap::new();
         let mut imports = BTreeMap::new();
         for (id, f) in &self.arena {
-            if used.funcs.contains(&id) {
-                match f.kind {
-                    FunctionKind::Local(ref l) => {
-                        let old = sizes.insert(id, l.size());
-                        assert!(old.is_none());
-                    }
-                    FunctionKind::Import(ref i) => {
-                        let idx = indices.get_import_index(i.import);
-                        let old = imports.insert(idx, id);
-                        assert!(old.is_none());
-                    }
-                    FunctionKind::Uninitialized(_) => unreachable!(),
+            if !used.funcs.contains(&id) {
+                continue;
+            }
+            match f.kind {
+                FunctionKind::Local(ref l) => {
+                    let old = sizes.insert(id, l.size());
+                    assert!(old.is_none());
                 }
+                FunctionKind::Import(ref i) => {
+                    let idx = indices.get_import_index(i.import);
+                    let old = imports.insert(idx, id);
+                    assert!(old.is_none());
+                }
+                FunctionKind::Uninitialized(_) => unreachable!(),
             }
         }
 
@@ -334,6 +331,11 @@ impl Emit for ModuleFunctions {
             let instructions = func.emit_instructions(indices);
             let instructions = elements::Instructions::new(instructions);
             codes.push(elements::FuncBody::new(locals, instructions));
+        }
+
+        assert_eq!(funcs.len(), codes.len());
+        if codes.is_empty() {
+            return;
         }
 
         let funcs = elements::FunctionSection::with_entries(funcs);

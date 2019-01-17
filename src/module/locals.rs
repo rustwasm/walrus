@@ -54,6 +54,7 @@ impl ModuleLocals {
     }
 
     /// Get the set of locals for this module.
+    #[allow(dead_code)]
     pub(crate) fn locals_mut(&mut self) -> &mut Arena<Local> {
         &mut self.locals
     }

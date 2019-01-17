@@ -42,7 +42,8 @@ impl Used {
         let mut used = Used::default();
         let mut stack = UsedStack {
             used: &mut used,
-            stack: Vec::new(),
+            functions: Vec::new(),
+            tables: Vec::new(),
         };
 
         for r in roots {
@@ -58,33 +59,32 @@ impl Used {
             }
         }
 
-        while let Some(item) = stack.stack.pop() {
-            match item {
-                ItemToVisit::Function(f) => {
-                    let func = &module.funcs.arena[f];
-                    stack.used.types.insert(func.ty(&module));
+        while stack.functions.len() > 0 || stack.tables.len() > 0 {
+            while let Some(f) = stack.functions.pop() {
+                let func = &module.funcs.arena[f];
+                stack.used.types.insert(func.ty(&module));
 
-                    match &func.kind {
-                        FunctionKind::Local(func) => {
-                            func.entry_block().visit(&mut UsedVisitor {
-                                func,
-                                stack: &mut stack,
-                            });
-                        }
-                        FunctionKind::Import(i) => {
-                            stack.used.imports.insert(i.import);
-                        }
-                        FunctionKind::Uninitialized(_) => unreachable!(),
+                match &func.kind {
+                    FunctionKind::Local(func) => {
+                        func.entry_block().visit(&mut UsedVisitor {
+                            func,
+                            stack: &mut stack,
+                        });
                     }
+                    FunctionKind::Import(i) => {
+                        stack.used.imports.insert(i.import);
+                    }
+                    FunctionKind::Uninitialized(_) => unreachable!(),
                 }
-                ItemToVisit::Table(t) => {
-                    let table = &module.tables.arena[t];
-                    match &table.kind {
-                        TableKind::Function(list) => {
-                            for id in list {
-                                if let Some(id) = id {
-                                    stack.push_func(*id);
-                                }
+            }
+
+            while let Some(t) = stack.tables.pop() {
+                let table = &module.tables.arena[t];
+                match &table.kind {
+                    TableKind::Function(list) => {
+                        for id in list {
+                            if let Some(id) = id {
+                                stack.push_func(*id);
                             }
                         }
                     }
@@ -98,19 +98,20 @@ impl Used {
 
 struct UsedStack<'a> {
     used: &'a mut Used,
-    stack: Vec<ItemToVisit>,
+    functions: Vec<FunctionId>,
+    tables: Vec<TableId>,
 }
 
 impl UsedStack<'_> {
     fn push_func(&mut self, f: FunctionId) {
         if self.used.funcs.insert(f) {
-            self.stack.push(ItemToVisit::Function(f));
+            self.functions.push(f);
         }
     }
 
     fn push_table(&mut self, f: TableId) {
         if self.used.tables.insert(f) {
-            self.stack.push(ItemToVisit::Table(f));
+            self.tables.push(f);
         }
     }
 }
@@ -118,11 +119,6 @@ impl UsedStack<'_> {
 struct UsedVisitor<'a, 'b> {
     func: &'a LocalFunction,
     stack: &'a mut UsedStack<'b>,
-}
-
-enum ItemToVisit {
-    Function(FunctionId),
-    Table(TableId),
 }
 
 impl<'expr> Visitor<'expr> for UsedVisitor<'expr, '_> {

@@ -1,14 +1,14 @@
 //! Globals within a wasm module.
 
 use crate::const_value::Const;
+use crate::emit::{Emit, EmitContext};
 use crate::error::Result;
-use crate::module::emit::{Emit, IdsToIndices};
-use crate::passes::Used;
+use crate::module::imports::ImportId;
+use crate::module::parse::IndicesToIds;
+use crate::module::Module;
 use crate::ty::ValType;
-use failure::ResultExt;
 use id_arena::{Arena, Id};
 use parity_wasm::elements;
-use std::collections::HashMap;
 
 /// The id of a global.
 pub type GlobalId = Id<Global>;
@@ -26,8 +26,17 @@ pub struct Global {
     /// Whether this global is mutable or not.
     pub mutable: bool,
 
-    /// The initialized constant value
-    pub init: Const,
+    /// The kind of global this is
+    pub kind: GlobalKind,
+}
+
+/// The different kinds of globals a wasm module can have
+#[derive(Debug)]
+pub enum GlobalKind {
+    /// An imported global without a known initializer
+    Import(ImportId),
+    /// A locally declare global with the specified identifier
+    Local(Const),
 }
 
 impl Global {
@@ -41,91 +50,82 @@ impl Global {
 #[derive(Debug, Default)]
 pub struct ModuleGlobals {
     /// The arena where the globals are stored.
-    pub arena: Arena<Global>,
-    index_to_global_id: HashMap<u32, GlobalId>,
+    arena: Arena<Global>,
 }
 
 impl ModuleGlobals {
-    /// Construct a new, empty set of globals for a module.
-    pub fn parse(global_section: &elements::GlobalSection) -> Result<ModuleGlobals> {
-        let capacity = global_section.entries().len();
-        let mut globals = ModuleGlobals {
-            arena: Arena::with_capacity(capacity),
-            index_to_global_id: HashMap::with_capacity(capacity),
-        };
-
-        for (i, g) in global_section.entries().iter().enumerate() {
-            globals.add_global_for_index(
-                i as u32,
-                ValType::from(&g.global_type().content_type()),
-                g.global_type().is_mutable(),
-                g.init_expr(),
-            )?;
-        }
-
-        Ok(globals)
-    }
-
-    /// Get the global associated with the given index in the input wasm, if it
-    /// exists.
-    pub fn global_for_index(&self, index: u32) -> Option<GlobalId> {
-        self.index_to_global_id.get(&index).cloned()
-    }
-
-    /// Create the global for this function at the given index.
-    fn add_global_for_index(
-        &mut self,
-        index: u32,
-        ty: ValType,
-        mutable: bool,
-        init_expr: &elements::InitExpr,
-    ) -> Result<()> {
-        assert!(!self.index_to_global_id.contains_key(&index));
-        let id = self
-            .new_global(ty, mutable, init_expr)
-            .with_context(|_| format!("adding global {}", index))?;
-        self.index_to_global_id.insert(index, id);
-        Ok(())
+    /// Adds a new imported global to this list.
+    pub fn add_import(&mut self, ty: ValType, mutable: bool, import_id: ImportId) -> GlobalId {
+        let id = self.arena.next_id();
+        self.arena.alloc(Global {
+            id,
+            ty,
+            mutable,
+            kind: GlobalKind::Import(import_id),
+        })
     }
 
     /// Construct a new global, that does not originate from any of the input
     /// wasm globals.
-    pub fn new_global(
-        &mut self,
-        ty: ValType,
-        mutable: bool,
-        init_expr: &elements::InitExpr,
-    ) -> Result<GlobalId> {
+    pub fn add_local(&mut self, ty: ValType, mutable: bool, init: Const) -> GlobalId {
         let id = self.arena.next_id();
-        let id2 = self.arena.alloc(Global {
+        self.arena.alloc(Global {
             id,
             ty,
             mutable,
-            init: Const::eval(init_expr)?,
-        });
-        debug_assert_eq!(id, id2);
-        Ok(id)
+            kind: GlobalKind::Local(init),
+        })
+    }
+
+    /// Gets a reference to a memory given its id
+    pub fn get(&self, id: GlobalId) -> &Global {
+        &self.arena[id]
+    }
+
+    /// Gets a reference to a memory given its id
+    pub fn get_mut(&mut self, id: GlobalId) -> &mut Global {
+        &mut self.arena[id]
+    }
+
+    /// Get a shared reference to this module's globals.
+    pub fn iter(&self) -> impl Iterator<Item = &Global> {
+        self.arena.iter().map(|(_, f)| f)
+    }
+}
+
+impl Module {
+    /// Construct a new, empty set of globals for a module.
+    pub(crate) fn parse_globals(
+        &mut self,
+        section: &elements::GlobalSection,
+        ids: &mut IndicesToIds,
+    ) -> Result<()> {
+        for g in section.entries() {
+            let id = self.globals.add_local(
+                ValType::from(&g.global_type().content_type()),
+                g.global_type().is_mutable(),
+                Const::eval(g.init_expr())?,
+            );
+            ids.push_global(id);
+        }
+        Ok(())
     }
 }
 
 impl Emit for ModuleGlobals {
-    type Extra = ();
-
-    fn emit(&self, _: &(), used: &Used, module: &mut elements::Module, indices: &mut IdsToIndices) {
-        if used.globals.is_empty() {
-            return;
-        }
-
-        let mut globals = Vec::with_capacity(used.globals.len());
-
-        let import_count = module.import_count(elements::ImportCountType::Global) as u32;
+    fn emit(&self, cx: &mut EmitContext) {
+        let mut globals = Vec::with_capacity(cx.used.globals.len());
 
         for (id, global) in &self.arena {
-            if !used.globals.contains(&id) {
+            if !cx.used.globals.contains(&id) {
                 continue;
             }
+            let init = match &global.kind {
+                GlobalKind::Import(_) => continue, // emitted in import section
+                GlobalKind::Local(init) => init,
+            };
 
-            indices.set_global_index(id, globals.len() as u32 + import_count);
+            cx.indices.push_global(id);
 
             assert!(
                 !global.mutable,
@@ -133,15 +133,17 @@ impl Emit for ModuleGlobals {
                  its constructor"
             );
 
-            let init_expr = global.init.emit_instructions(indices);
+            let init_expr = init.emit_instructions(cx.indices);
 
             let ty = elements::GlobalType::new(global.ty.into(), global.mutable);
             let global = elements::GlobalEntry::new(ty, init_expr);
             globals.push(global);
         }
 
-        let globals = elements::GlobalSection::with_entries(globals);
-        let globals = elements::Section::Global(globals);
-        module.sections_mut().push(globals);
+        if !globals.is_empty() {
+            let globals = elements::GlobalSection::with_entries(globals);
+            let globals = elements::Section::Global(globals);
+            cx.dst.sections_mut().push(globals);
+        }
     }
 }

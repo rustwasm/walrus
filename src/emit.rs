@@ -7,29 +7,25 @@ use crate::ir::LocalId;
 use crate::module::elements::ElementId;
 use crate::module::functions::FunctionId;
 use crate::module::globals::GlobalId;
-use crate::module::imports::ImportId;
 use crate::module::memories::MemoryId;
 use crate::module::tables::TableId;
+use crate::module::Module;
 use crate::passes::Used;
 use crate::ty::TypeId;
 use parity_wasm::elements;
 use std::collections::HashMap;
 
-/// Anything that can be lowered to raw wasm structures.
-pub(crate) trait Emit {
-    /// Extra data, if any, passed into `emit`.
-    type Extra;
+pub struct EmitContext<'a> {
+    pub module: &'a Module,
+    pub used: &'a Used,
+    pub indices: &'a mut IdsToIndices,
+    pub dst: &'a mut elements::Module,
+}
 
-    /// Emit `self` into the given module.
-    ///
-    /// Anything that is not in the `used` set should not be emitted.
-    fn emit(
-        &self,
-        extra: &Self::Extra,
-        used: &Used,
-        module: &mut elements::Module,
-        indices: &mut IdsToIndices,
-    );
+/// Anything that can be lowered to raw wasm structures.
+pub trait Emit {
+    /// Emit `self` into the given context.
+    fn emit(&self, cx: &mut EmitContext);
 }
 
 /// Maps our high-level identifiers to the raw indices they end up emitted at.
@@ -40,8 +36,7 @@ pub(crate) trait Emit {
 /// function references that type, it needs to reference it by its `i` index
 /// since the identifier `A` doesn't exist at the raw wasm level.
 #[derive(Debug, Default)]
-pub(crate) struct IdsToIndices {
-    imports: HashMap<ImportId, u32>,
+pub struct IdsToIndices {
     tables: HashMap<TableId, u32>,
     types: HashMap<TypeId, u32>,
     funcs: HashMap<FunctionId, u32>,
@@ -51,13 +46,13 @@ pub(crate) struct IdsToIndices {
     elements: HashMap<ElementId, u32>,
 }
 
-macro_rules! define_get_set_index {
-    ( $get_name:ident, $set_name:ident, $id_ty:ty, $member:ident ) => {
+macro_rules! define_get_push_index {
+    ( $get_name:ident, $push_name:ident, $id_ty:ty, $member:ident ) => {
         impl IdsToIndices {
             /// Get the index for the given identifier.
             #[inline]
             #[allow(dead_code)] // not everything is used just yet
-            pub(crate) fn $get_name(&self, id: $id_ty) -> u32 {
+            pub fn $get_name(&self, id: $id_ty) -> u32 {
                 self.$member.get(&id).cloned().expect(
                     "Should never try and get the index for an identifier that has not already had \
                      its index set. This means that either we are attempting to get the index of \
@@ -65,21 +60,42 @@ macro_rules! define_get_set_index {
                 )
             }
 
-            /// Set the index for the given identifier.
+            /// Adds the given identifier to this set, assigning it the next
+            /// available index.
             #[inline]
-            pub(crate) fn $set_name(&mut self, id: $id_ty, index: u32) {
-                let existing = self.$member.insert(id, index);
-                assert!(existing.is_none(), "should never re-assign an index for an identifier");
+            pub fn $push_name(&mut self, id: $id_ty) {
+                let idx = self.$member.len() as u32;
+                self.$member.insert(id, idx);
             }
         }
     };
 }
 
-define_get_set_index!(get_import_index, set_import_index, ImportId, imports);
-define_get_set_index!(get_table_index, set_table_index, TableId, tables);
-define_get_set_index!(get_type_index, set_type_index, TypeId, types);
-define_get_set_index!(get_func_index, set_func_index, FunctionId, funcs);
-define_get_set_index!(get_global_index, set_global_index, GlobalId, globals);
-define_get_set_index!(get_local_index, set_local_index, LocalId, locals);
-define_get_set_index!(get_memory_index, set_memory_index, MemoryId, memories);
-define_get_set_index!(get_element_index, set_element_index, ElementId, elements);
+define_get_push_index!(get_table_index, push_table, TableId, tables);
+define_get_push_index!(get_type_index, push_type, TypeId, types);
+define_get_push_index!(get_func_index, push_func, FunctionId, funcs);
+define_get_push_index!(get_global_index, push_global, GlobalId, globals);
+define_get_push_index!(get_memory_index, push_memory, MemoryId, memories);
+define_get_push_index!(get_element_index, push_element, ElementId, elements);
+
+impl IdsToIndices {
+    /// Get the index for the given identifier.
+    #[inline]
+    pub fn get_local_index(&self, id: LocalId) -> u32 {
+        self.locals.get(&id).cloned().expect(
+            "Should never try and get the index for an identifier that has not already had \
+             its index set. This means that either we are attempting to get the index of \
+             an unused identifier, or that we are emitting sections in the wrong order.",
+        )
+    }
+
+    /// Adds the given identifier to this set, assigning it the next
+    /// available index.
+    #[inline]
+    pub fn set_local_index(&mut self, id: LocalId, index: u32) {
+        assert!(
+            self.locals.insert(id, index).is_none(),
+            "cannot set local index twice"
+        );
+    }
+}

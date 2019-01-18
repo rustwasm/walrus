@@ -3,6 +3,7 @@
 use crate::error::{ErrorKind, Result};
 use crate::ir::{Block, BlockId, BlockKind, ExprId};
 use crate::module::functions::{FunctionId, LocalFunction};
+use crate::module::parse::IndicesToIds;
 use crate::module::Module;
 use crate::ty::ValType;
 use crate::validation_context::ValidationContext;
@@ -45,6 +46,9 @@ pub struct FunctionContext<'a> {
     /// The module that we're adding a function for.
     pub module: &'a mut Module,
 
+    /// Mapping of indexes back to ids.
+    pub indices: &'a IndicesToIds,
+
     /// The arena id of `func`.
     pub func_id: FunctionId,
 
@@ -65,6 +69,7 @@ impl<'a> FunctionContext<'a> {
     /// Create a new function context.
     pub fn new(
         module: &'a mut Module,
+        indices: &'a IndicesToIds,
         func_id: FunctionId,
         func: &'a mut LocalFunction,
         validation: &'a ValidationContext<'a>,
@@ -73,6 +78,7 @@ impl<'a> FunctionContext<'a> {
     ) -> FunctionContext<'a> {
         FunctionContext {
             module,
+            indices,
             func_id,
             func,
             validation,
@@ -84,6 +90,7 @@ impl<'a> FunctionContext<'a> {
     pub fn nested<'b>(&'b mut self, validation: &'b ValidationContext<'b>) -> FunctionContext<'b> {
         FunctionContext {
             module: self.module,
+            indices: self.indices,
             func_id: self.func_id,
             func: self.func,
             validation,

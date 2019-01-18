@@ -1,10 +1,11 @@
 //! Memories used in a wasm module.
 
-use crate::module::emit::{Emit, IdsToIndices};
-use crate::passes::Used;
+use crate::emit::{Emit, EmitContext};
+use crate::module::imports::ImportId;
+use crate::module::parse::IndicesToIds;
+use crate::module::Module;
 use id_arena::{Arena, Id};
 use parity_wasm::elements;
-use std::collections::HashMap;
 
 /// The id of a memory.
 pub type MemoryId = Id<Memory>;
@@ -15,86 +16,109 @@ pub struct Memory {
     id: MemoryId,
     /// Is this memory shared?
     pub shared: bool,
-    /// The size limits for this memory.
-    pub limits: elements::ResizableLimits,
+    /// The initial page size for this memory
+    pub initial: u32,
+    /// The maximum page size for this memory
+    pub maximum: Option<u32>,
+    /// Whether or not this memory is imported, and if so from where
+    pub import: Option<ImportId>,
 }
 
 /// The set of memories in this module.
 #[derive(Debug, Default)]
 pub struct ModuleMemories {
-    memories: Arena<Memory>,
-    index_to_memory_id: HashMap<u32, MemoryId>,
+    arena: Arena<Memory>,
 }
 
 impl ModuleMemories {
-    /// Construct a new, empty set of memories for a module.
-    pub fn parse(memory_section: &elements::MemorySection) -> ModuleMemories {
-        let capacity = memory_section.entries().len();
-        let mut memories = ModuleMemories {
-            memories: Arena::with_capacity(capacity),
-            index_to_memory_id: HashMap::with_capacity(capacity),
-        };
-
-        for (i, m) in memory_section.entries().iter().enumerate() {
-            memories.add_memory_for_index(i as u32, false, m.limits().clone());
-        }
-
-        memories
-    }
-
-    /// Get the memory for the given index in the input wasm, if any exists.
-    pub fn memory_for_index(&self, index: u32) -> Option<MemoryId> {
-        self.index_to_memory_id.get(&index).cloned()
-    }
-
-    /// Create the memory for this function at the given index.
-    fn add_memory_for_index(
+    /// Add an imported memory
+    pub fn add_import(
         &mut self,
-        index: u32,
         shared: bool,
-        limits: elements::ResizableLimits,
+        initial: u32,
+        maximum: Option<u32>,
+        import: ImportId,
     ) -> MemoryId {
-        assert!(!self.index_to_memory_id.contains_key(&index));
-        let id = self.new_memory(shared, limits);
-        self.index_to_memory_id.insert(index, id);
+        let id = self.arena.next_id();
+        let id2 = self.arena.alloc(Memory {
+            id,
+            shared,
+            initial,
+            maximum,
+            import: Some(import),
+        });
+        debug_assert_eq!(id, id2);
         id
     }
 
     /// Construct a new memory, that does not originate from any of the input
     /// wasm memories.
-    pub fn new_memory(&mut self, shared: bool, limits: elements::ResizableLimits) -> MemoryId {
-        let id = self.memories.next_id();
-        let id2 = self.memories.alloc(Memory { id, shared, limits });
+    pub fn add_local(&mut self, shared: bool, initial: u32, maximum: Option<u32>) -> MemoryId {
+        let id = self.arena.next_id();
+        let id2 = self.arena.alloc(Memory {
+            id,
+            shared,
+            initial,
+            maximum,
+            import: None,
+        });
         debug_assert_eq!(id, id2);
         id
+    }
+
+    /// Gets a reference to a memory given its id
+    pub fn get(&self, id: MemoryId) -> &Memory {
+        &self.arena[id]
+    }
+
+    /// Gets a reference to a memory given its id
+    pub fn get_mut(&mut self, id: MemoryId) -> &mut Memory {
+        &mut self.arena[id]
+    }
+
+    /// Get a shared reference to this module's memories.
+    pub fn iter(&self) -> impl Iterator<Item = &Memory> {
+        self.arena.iter().map(|(_, f)| f)
+    }
+}
+
+impl Module {
+    /// Construct a new, empty set of memories for a module.
+    pub(crate) fn parse_memories(
+        &mut self,
+        section: &elements::MemorySection,
+        ids: &mut IndicesToIds,
+    ) {
+        for m in section.entries() {
+            let id = self
+                .memories
+                .add_local(false, m.limits().initial(), m.limits().maximum());
+            ids.push_memory(id);
+        }
     }
 }
 
 impl Emit for ModuleMemories {
-    type Extra = ();
+    fn emit(&self, cx: &mut EmitContext) {
+        let mut memories = Vec::with_capacity(cx.used.memories.len());
 
-    fn emit(&self, _: &(), used: &Used, module: &mut elements::Module, indices: &mut IdsToIndices) {
-        if used.memories.is_empty() {
-            return;
-        }
-
-        let mut memories = Vec::with_capacity(used.memories.len());
-
-        let import_count = module.import_count(elements::ImportCountType::Memory) as u32;
-
-        for (id, mem) in &self.memories {
-            if !used.memories.contains(&id) {
+        for (id, mem) in &self.arena {
+            if !cx.used.memories.contains(&id) {
                 continue;
             }
+            if mem.import.is_some() {
+                continue; // already emitted in the import section
+            }
 
-            indices.set_memory_index(id, memories.len() as u32 + import_count);
-            let memory =
-                elements::MemoryType::new(mem.limits.initial(), mem.limits.maximum(), mem.shared);
+            cx.indices.push_memory(id);
+            let memory = elements::MemoryType::new(mem.initial, mem.maximum, mem.shared);
             memories.push(memory);
         }
 
-        let memories = elements::MemorySection::with_entries(memories);
-        let memories = elements::Section::Memory(memories);
-        module.sections_mut().push(memories);
+        if !memories.is_empty() {
+            let memories = elements::MemorySection::with_entries(memories);
+            let memories = elements::Section::Memory(memories);
+            cx.dst.sections_mut().push(memories);
+        }
     }
 }

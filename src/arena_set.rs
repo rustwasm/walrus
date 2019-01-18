@@ -20,6 +20,7 @@ impl<T: Clone + Eq + Hash> ArenaSet<T> {
     }
 
     /// Construct a new set with the given capacity.
+    #[allow(unused)]
     pub fn with_capacity(capacity: usize) -> ArenaSet<T> {
         ArenaSet {
             arena: Arena::with_capacity(capacity),
@@ -45,6 +46,7 @@ impl<T: Clone + Eq + Hash> ArenaSet<T> {
 
     /// Get a shared reference to the item associated with the given id if it is
     /// in the set.
+    #[allow(unused)]
     pub fn get(&self, id: Id<T>) -> Option<&T> {
         self.arena.get(id)
     }

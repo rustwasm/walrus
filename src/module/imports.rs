@@ -1,23 +1,23 @@
 //! A wasm module's imports.
 
 use crate::arena_set::ArenaSet;
-use crate::error::{Error, ErrorKind, Result};
-use crate::module::emit::{Emit, IdsToIndices};
-use crate::module::types::ModuleTypes;
-use crate::passes::Used;
-use crate::ty::{TypeId, ValType};
-use failure::Fail;
+use crate::emit::{Emit, EmitContext};
+use crate::error::Result;
+use crate::module::functions::FunctionId;
+use crate::module::globals::GlobalId;
+use crate::module::memories::MemoryId;
+use crate::module::parse::IndicesToIds;
+use crate::module::tables::{FunctionTable, TableId, TableKind};
+use crate::module::Module;
+use crate::ty::ValType;
 use id_arena::Id;
 use parity_wasm::elements;
-use std::hash::{Hash, Hasher};
-use std::mem;
-use std::ops;
 
 /// The id of an import.
 pub type ImportId = Id<Import>;
 
 /// A named item imported into the wasm.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, Hash, Eq, PartialEq)]
 pub struct Import {
     /// The module name of this import.
     pub module: String,
@@ -27,229 +27,154 @@ pub struct Import {
     pub kind: ImportKind,
 }
 
-impl Import {
-    fn entry(&self, indices: &IdsToIndices) -> elements::ImportEntry {
-        let external = self.kind.external(indices);
-        elements::ImportEntry::new(self.module.clone(), self.name.clone(), external)
-    }
-}
-
 /// An imported item.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Hash, Eq, PartialEq)]
 pub enum ImportKind {
     /// An imported function.
-    Function {
-        /// The type of this imported function.
-        ty: TypeId,
-    },
+    Function(FunctionId),
     /// An imported table.
-    Table {
-        /// The size limits for this imported table.
-        limits: elements::ResizableLimits,
-        /// The type of this imported table's elements.
-        ty: elements::TableElementType,
-    },
+    Table(TableId),
     /// An imported memory.
-    Memory {
-        /// The size limits for this imported memory.
-        limits: elements::ResizableLimits,
-        /// Is this memory shared across threads?
-        shared: bool,
-    },
+    Memory(MemoryId),
     /// An imported global.
-    Global {
-        /// The type of this imported global.
-        ty: ValType,
-        /// Whether this imported global is mutable or not.
-        mutable: bool,
-    },
-}
-
-impl PartialEq for ImportKind {
-    fn eq(&self, rhs: &ImportKind) -> bool {
-        use self::ImportKind::*;
-        match (self, rhs) {
-            (&Function { ty: t1 }, &Function { ty: t2 }) => t1 == t2,
-            (
-                &Table {
-                    limits: ref l1,
-                    ty: ref t1,
-                },
-                &Table {
-                    limits: ref l2,
-                    ty: ref t2,
-                },
-            ) => l1 == l2 && t1 == t2,
-            (
-                &Memory {
-                    limits: ref l1,
-                    shared: s1,
-                },
-                &Memory {
-                    limits: ref l2,
-                    shared: s2,
-                },
-            ) => l1 == l2 && s1 == s2,
-            (
-                &Global {
-                    ty: t1,
-                    mutable: m1,
-                },
-                &Global {
-                    ty: t2,
-                    mutable: m2,
-                },
-            ) => t1 == t2 && m1 == m2,
-            _ => false,
-        }
-    }
-}
-
-impl Eq for ImportKind {}
-
-impl Hash for ImportKind {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        use self::ImportKind::*;
-
-        fn hash_limits<H: Hasher>(l: &elements::ResizableLimits, h: &mut H) {
-            l.initial().hash(h);
-            l.maximum().hash(h);
-        }
-
-        mem::discriminant(self).hash(state);
-        match self {
-            Function { ty } => {
-                ty.hash(state);
-            }
-            Table { ref limits, ref ty } => {
-                hash_limits(limits, state);
-                // Don't hash `ty` for now because (a) parity-wasm doesn't
-                // implement Hash for it, and (b) there is only a single table
-                // type for wasm at the moment.
-                //
-                // ty.hash(state);
-                let _ = ty;
-            }
-            Memory { ref limits, shared } => {
-                hash_limits(limits, state);
-                shared.hash(state);
-            }
-            Global { ty, mutable } => {
-                ty.hash(state);
-                mutable.hash(state);
-            }
-        }
-    }
-}
-
-impl ImportKind {
-    fn external(&self, indices: &IdsToIndices) -> elements::External {
-        match self {
-            ImportKind::Function { ty } => {
-                let idx = indices.get_type_index(*ty);
-                elements::External::Function(idx)
-            }
-            ImportKind::Table { limits, .. } => {
-                let table = elements::TableType::new(limits.initial(), limits.maximum());
-                elements::External::Table(table)
-            }
-            ImportKind::Memory { limits, shared } => {
-                let mem = elements::MemoryType::new(limits.initial(), limits.maximum(), *shared);
-                elements::External::Memory(mem)
-            }
-            ImportKind::Global { ty, mutable } => {
-                let global = elements::GlobalType::new((*ty).into(), *mutable);
-                elements::External::Global(global)
-            }
-        }
-    }
+    Global(GlobalId),
 }
 
 /// The set of imports in a module.
 #[derive(Debug, Default)]
 pub struct ModuleImports {
-    imports: ArenaSet<Import>,
-}
-
-impl ops::Deref for ModuleImports {
-    type Target = ArenaSet<Import>;
-
-    #[inline]
-    fn deref(&self) -> &ArenaSet<Import> {
-        &self.imports
-    }
-}
-
-impl ops::DerefMut for ModuleImports {
-    #[inline]
-    fn deref_mut(&mut self) -> &mut ArenaSet<Import> {
-        &mut self.imports
-    }
+    arena: ArenaSet<Import>,
 }
 
 impl ModuleImports {
-    /// Construct the import set for a wasm module.
-    pub fn parse(
-        types: &ModuleTypes,
-        import_section: &elements::ImportSection,
-    ) -> Result<ModuleImports> {
-        let mut imports = ArenaSet::with_capacity(import_section.entries().len());
+    /// Gets a reference to an import given its id
+    pub fn get(&self, id: ImportId) -> &Import {
+        &self.arena[id]
+    }
 
-        for exp in import_section.entries() {
+    /// Gets a reference to an import given its id
+    pub fn get_mut(&mut self, id: ImportId) -> &mut Import {
+        &mut self.arena[id]
+    }
+
+    /// Get a shared reference to this module's imports.
+    pub fn iter(&self) -> impl Iterator<Item = &Import> {
+        self.arena.iter().map(|(_, f)| f)
+    }
+}
+
+impl Module {
+    /// Construct the import set for a wasm module.
+    pub(crate) fn parse_imports(
+        &mut self,
+        section: &elements::ImportSection,
+        ids: &mut IndicesToIds,
+    ) -> Result<()> {
+        for exp in section.entries() {
+            let import = self.imports.arena.next_id();
             let kind = match *exp.external() {
                 elements::External::Function(idx) => {
-                    let ty = types.type_for_index(idx).ok_or_else(|| -> Error {
-                        ErrorKind::InvalidWasm
-                            .context("imported function refers to non-existant type")
-                            .into()
-                    })?;
-                    ImportKind::Function { ty }
+                    let ty = ids.get_type(idx)?;
+                    let id = self.funcs.add_import(ty, import);
+                    ids.push_func(id);
+                    ImportKind::Function(id)
                 }
-                elements::External::Table(t) => ImportKind::Table {
-                    limits: t.limits().clone(),
-                    ty: t.elem_type(),
-                },
-                elements::External::Memory(m) => ImportKind::Memory {
-                    limits: m.limits().clone(),
-                    shared: m.limits().shared(),
-                },
-                elements::External::Global(g) => ImportKind::Global {
-                    ty: ValType::from(&g.content_type()),
-                    mutable: g.is_mutable(),
-                },
+                elements::External::Table(t) => {
+                    let kind = match t.elem_type() {
+                        elements::TableElementType::AnyFunc => {
+                            TableKind::Function(FunctionTable::default())
+                        }
+                    };
+                    let id = self.tables.add_import(
+                        t.limits().initial(),
+                        t.limits().maximum(),
+                        kind,
+                        import,
+                    );
+                    ids.push_table(id);
+                    ImportKind::Table(id)
+                }
+                elements::External::Memory(m) => {
+                    let id = self.memories.add_import(
+                        m.limits().shared(),
+                        m.limits().initial(),
+                        m.limits().maximum(),
+                        import,
+                    );
+                    ids.push_memory(id);
+                    ImportKind::Memory(id)
+                }
+                elements::External::Global(g) => {
+                    let id = self.globals.add_import(
+                        ValType::from(&g.content_type()),
+                        g.is_mutable(),
+                        import,
+                    );
+                    ids.push_global(id);
+                    ImportKind::Global(id)
+                }
             };
-            imports.insert(Import {
+            self.imports.arena.insert(Import {
                 module: exp.module().to_string(),
                 name: exp.field().to_string(),
                 kind,
             });
         }
 
-        Ok(ModuleImports { imports })
+        Ok(())
     }
 }
 
 impl Emit for ModuleImports {
-    type Extra = ();
+    fn emit(&self, cx: &mut EmitContext) {
+        let mut imports = Vec::new();
 
-    fn emit(&self, _: &(), used: &Used, module: &mut elements::Module, indices: &mut IdsToIndices) {
-        if used.imports.is_empty() {
-            return;
-        }
-
-        let mut imports = Vec::with_capacity(used.imports.len());
-
-        for (id, imp) in self.imports.iter() {
-            if !used.imports.contains(&id) {
+        for (_id, import) in self.arena.iter() {
+            let used = match import.kind {
+                ImportKind::Function(id) => cx.used.funcs.contains(&id),
+                ImportKind::Global(id) => cx.used.globals.contains(&id),
+                ImportKind::Memory(id) => cx.used.memories.contains(&id),
+                ImportKind::Table(id) => cx.used.tables.contains(&id),
+            };
+            if !used {
                 continue;
             }
 
-            indices.set_import_index(id, imports.len() as u32);
-            imports.push(imp.entry(indices));
+            let external = match import.kind {
+                ImportKind::Function(id) => {
+                    cx.indices.push_func(id);
+                    let ty = cx.module.funcs.get(id).ty();
+                    elements::External::Function(cx.indices.get_type_index(ty))
+                }
+                ImportKind::Global(id) => {
+                    cx.indices.push_global(id);
+                    let global = cx.module.globals.get(id);
+                    let global = elements::GlobalType::new(global.ty.into(), global.mutable);
+                    elements::External::Global(global)
+                }
+                ImportKind::Memory(id) => {
+                    cx.indices.push_memory(id);
+                    let memory = cx.module.memories.get(id);
+                    let memory =
+                        elements::MemoryType::new(memory.initial, memory.maximum, memory.shared);
+                    elements::External::Memory(memory)
+                }
+                ImportKind::Table(id) => {
+                    cx.indices.push_table(id);
+                    let table = cx.module.tables.get(id);
+                    let table = elements::TableType::new(table.initial, table.maximum);
+                    elements::External::Table(table)
+                }
+            };
+            let entry =
+                elements::ImportEntry::new(import.module.clone(), import.name.clone(), external);
+            imports.push(entry);
         }
 
-        let imports = elements::ImportSection::with_entries(imports);
-        let imports = elements::Section::Import(imports);
-        module.sections_mut().push(imports);
+        if !imports.is_empty() {
+            let imports = elements::ImportSection::with_entries(imports);
+            let imports = elements::Section::Import(imports);
+            cx.dst.sections_mut().push(imports);
+        }
     }
 }

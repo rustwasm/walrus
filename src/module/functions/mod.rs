@@ -3,18 +3,15 @@
 mod local_function;
 
 use crate::dot::Dot;
-use crate::error::{ErrorKind, Result};
-use crate::module::emit::{Emit, IdsToIndices};
-use crate::module::imports::{ImportId, ImportKind};
-use crate::module::locals::ModuleLocals;
+use crate::emit::{Emit, EmitContext};
+use crate::error::Result;
+use crate::module::imports::ImportId;
+use crate::module::parse::IndicesToIds;
 use crate::module::Module;
-use crate::passes::Used;
 use crate::ty::TypeId;
 use crate::validation_context::ValidationContext;
-use failure::Fail;
 use id_arena::{Arena, Id};
 use parity_wasm::elements;
-use std::collections::{BTreeMap, HashMap};
 use std::fmt;
 
 pub use self::local_function::LocalFunction;
@@ -47,23 +44,16 @@ impl Function {
         }
     }
 
-    /// Create a new externally defined, imported function.
-    pub fn new_import(id: FunctionId, import: ImportId) -> Function {
-        Function {
-            id,
-            kind: FunctionKind::Import(ImportedFunction { import }),
-        }
-    }
-
     /// Create a new function that is locally defined within the wasm module.
     pub fn parse_local(
         module: &mut Module,
+        indices: &IndicesToIds,
         id: FunctionId,
         ty: TypeId,
         validation: &ValidationContext,
         body: &elements::FuncBody,
     ) -> Result<Function> {
-        let local = LocalFunction::parse(module, id, ty, validation, body)?;
+        let local = LocalFunction::parse(module, indices, id, ty, validation, body)?;
         Ok(Function {
             id,
             kind: FunctionKind::Local(local),
@@ -76,18 +66,11 @@ impl Function {
     }
 
     /// Get this function's type's identifier.
-    pub fn ty(&self, module: &Module) -> TypeId {
-        match self.kind {
-            FunctionKind::Local(ref l) => l.ty,
-            FunctionKind::Import(ImportedFunction { import }) => {
-                match module.imports[import].kind {
-                    ImportKind::Function { ty } => ty,
-                    _ => panic!(
-                        "imported function referencing import that is importing something else"
-                    ),
-                }
-            }
-            FunctionKind::Uninitialized(_) => unreachable!(),
+    pub fn ty(&self) -> TypeId {
+        match &self.kind {
+            FunctionKind::Local(l) => l.ty,
+            FunctionKind::Import(i) => i.ty,
+            FunctionKind::Uninitialized(t) => *t,
         }
     }
 }
@@ -144,6 +127,8 @@ impl FunctionKind {
 pub struct ImportedFunction {
     /// The import that brings this function into the module.
     pub import: ImportId,
+    /// The type signature of this imported function.
+    pub ty: TypeId,
 }
 
 impl Dot for ImportedFunction {
@@ -162,9 +147,7 @@ impl fmt::Display for ImportedFunction {
 #[derive(Debug, Default)]
 pub struct ModuleFunctions {
     /// The arena containing this module's functions.
-    pub arena: Arena<Function>,
-
-    index_to_function_id: HashMap<u32, FunctionId>,
+    arena: Arena<Function>,
 }
 
 impl ModuleFunctions {
@@ -173,58 +156,53 @@ impl ModuleFunctions {
         Default::default()
     }
 
-    /// Get the function for the given index in the input wasm, if any exists.
-    pub fn function_for_index(&self, index: u32) -> Option<FunctionId> {
-        self.index_to_function_id.get(&index).cloned()
+    /// Create a new externally defined, imported function.
+    pub fn add_import(&mut self, ty: TypeId, import: ImportId) -> FunctionId {
+        let id = self.arena.next_id();
+        self.arena.alloc(Function {
+            id,
+            kind: FunctionKind::Import(ImportedFunction { import, ty }),
+        })
     }
 
-    /// Associate the given function with the given index in the input wasm.
-    fn add_function_for_index(&mut self, index: u32, id: FunctionId) {
-        let old = self.index_to_function_id.insert(index, id);
-        assert!(old.is_none());
+    /// Create a new internally defined function
+    pub fn add_local(&mut self, func: LocalFunction) -> FunctionId {
+        let id = self.arena.next_id();
+        self.arena.alloc(Function {
+            id,
+            kind: FunctionKind::Local(func),
+        })
+    }
+
+    /// Gets a reference to a function given its id
+    pub fn get(&self, id: FunctionId) -> &Function {
+        &self.arena[id]
+    }
+
+    /// Gets a reference to a function given its id
+    pub fn get_mut(&mut self, id: FunctionId) -> &mut Function {
+        &mut self.arena[id]
+    }
+
+    /// Get a shared reference to this module's functions.
+    pub fn iter(&self) -> impl Iterator<Item = &Function> {
+        self.arena.iter().map(|(_, f)| f)
     }
 }
 
 impl Module {
-    /// Add the externally defined imported functions in the wasm module to this
-    /// instance.
-    pub fn register_imported_functions(&mut self) {
-        assert_eq!(
-            self.funcs.arena.len(),
-            0,
-            "should not already have any functions"
-        );
-        let mut idx = 0;
-        for (imp_id, imp) in self.imports.iter() {
-            if let ImportKind::Function { .. } = imp.kind {
-                let id = self.funcs.arena.next_id();
-                let id2 = self.funcs.arena.alloc(Function::new_import(id, imp_id));
-                debug_assert_eq!(id, id2);
-
-                self.funcs.add_function_for_index(idx, id);
-                idx += 1;
-            }
-        }
-    }
-
     /// Declare local functions after seeing the `function` section of a wasm
     /// executable.
     pub fn declare_local_functions(
         &mut self,
         func_section: &elements::FunctionSection,
+        ids: &mut IndicesToIds,
     ) -> Result<()> {
-        let import_count = self.funcs.arena.len() as u32;
-
-        for (i, func) in func_section.entries().iter().enumerate() {
-            let ty = self.types.type_for_index(func.type_ref()).ok_or_else(|| {
-                ErrorKind::InvalidWasm
-                    .context("function's type is an out-of-bounds reference into the types section")
-            })?;
+        for func in func_section.entries() {
+            let ty = ids.get_type(func.type_ref())?;
             let id = self.funcs.arena.next_id();
-            let id2 = self.funcs.arena.alloc(Function::new_uninitialized(id, ty));
-            debug_assert_eq!(id, id2);
-            self.funcs
-                .add_function_for_index(i as u32 + import_count, id);
+            self.funcs.arena.alloc(Function::new_uninitialized(id, ty));
+            ids.push_func(id);
         }
 
         Ok(())
@@ -235,21 +213,19 @@ impl Module {
         &mut self,
         raw_module: &elements::Module,
         code_section: &elements::CodeSection,
+        indices: &IndicesToIds,
     ) -> Result<()> {
         let num_imports = self.funcs.arena.len() - code_section.bodies().len();
         let validation = ValidationContext::for_module(raw_module)?;
 
         for (i, body) in code_section.bodies().iter().enumerate() {
             let index = (num_imports + i) as u32;
-            let id = self
-                .funcs
-                .function_for_index(index)
-                .ok_or_else(|| failure::format_err!("code and function section length mismatch"))?;
+            let id = indices.get_func(index)?;
             let ty = match self.funcs.arena[id].kind {
                 FunctionKind::Uninitialized(ty) => ty,
                 _ => unreachable!(),
             };
-            self.funcs.arena[id] = Function::parse_local(self, id, ty, &validation, body)?;
+            self.funcs.arena[id] = Function::parse_local(self, indices, id, ty, &validation, body)?;
         }
 
         Ok(())
@@ -257,44 +233,21 @@ impl Module {
 }
 
 impl Emit for ModuleFunctions {
-    type Extra = ModuleLocals;
-
-    fn emit(
-        &self,
-        locals: &ModuleLocals,
-        used: &Used,
-        module: &mut elements::Module,
-        indices: &mut IdsToIndices,
-    ) {
-        // Partition used functions into two sets: imported and local
-        // functions. Find the size of each local function. Sort imported
-        // functions in order so that we can get their index in the function
-        // index space.
-        let mut sizes = HashMap::new();
-        let mut imports = BTreeMap::new();
+    fn emit(&self, cx: &mut EmitContext) {
+        // Extract all local functions because imported ones were already
+        // emitted as part of the import sectin. Find the size of each local
+        // function. Sort imported functions in order so that we can get their
+        // index in the function index space.
+        let mut functions = Vec::new();
         for (id, f) in &self.arena {
-            if !used.funcs.contains(&id) {
+            if !cx.used.funcs.contains(&id) {
                 continue;
             }
-            match f.kind {
-                FunctionKind::Local(ref l) => {
-                    let old = sizes.insert(id, l.size());
-                    assert!(old.is_none());
-                }
-                FunctionKind::Import(ref i) => {
-                    let idx = indices.get_import_index(i.import);
-                    let old = imports.insert(idx, id);
-                    assert!(old.is_none());
-                }
+            match &f.kind {
+                FunctionKind::Local(l) => functions.push((id, l, l.size())),
+                FunctionKind::Import(_) => {}
                 FunctionKind::Uninitialized(_) => unreachable!(),
             }
-        }
-
-        // Associate each imported function with its index.
-        let mut import_count = 0;
-        for imp in imports.values() {
-            indices.set_func_index(*imp, import_count);
-            import_count += 1;
         }
 
         // Sort local functions from largest to smallest; we will emit them in
@@ -302,33 +255,21 @@ impl Emit for ModuleFunctions {
         // the function as their level of granularity for parallelism. We want
         // larger functions compiled before smaller ones because they will take
         // longer to compile.
-        let mut used_funcs: Vec<_> = self
-            .arena
-            .iter()
-            .filter_map(|(id, f)| {
-                if used.funcs.contains(&id) {
-                    if let FunctionKind::Local(ref l) = f.kind {
-                        return Some((id, l));
-                    }
-                }
-                None
-            })
-            .collect();
-        used_funcs.sort_by_key(|&(id, _f)| sizes[&id]);
-        used_funcs.reverse();
+        functions.sort_by_key(|(_, _, size)| *size);
+        functions.reverse();
 
-        let mut funcs = Vec::with_capacity(used_funcs.len());
-        let mut codes = Vec::with_capacity(used_funcs.len());
+        let mut funcs = Vec::with_capacity(functions.len());
+        let mut codes = Vec::with_capacity(functions.len());
 
-        for (id, func) in used_funcs {
-            indices.set_func_index(id, funcs.len() as u32 + import_count);
+        for (id, func, _size) in functions {
+            cx.indices.push_func(id);
 
-            debug_assert!(used.types.contains(&func.ty));
-            let ty_idx = indices.get_type_index(func.ty);
+            debug_assert!(cx.used.types.contains(&func.ty));
+            let ty_idx = cx.indices.get_type_index(func.ty);
             funcs.push(elements::Func::new(ty_idx));
 
-            let locals = func.emit_locals(locals, indices);
-            let instructions = func.emit_instructions(indices);
+            let locals = func.emit_locals(&cx.module.locals, cx.indices);
+            let instructions = func.emit_instructions(cx.indices);
             let instructions = elements::Instructions::new(instructions);
             codes.push(elements::FuncBody::new(locals, instructions));
         }
@@ -340,10 +281,10 @@ impl Emit for ModuleFunctions {
 
         let funcs = elements::FunctionSection::with_entries(funcs);
         let funcs = elements::Section::Function(funcs);
-        module.sections_mut().push(funcs);
+        cx.dst.sections_mut().push(funcs);
 
         let codes = elements::CodeSection::with_bodies(codes);
         let codes = elements::Section::Code(codes);
-        module.sections_mut().push(codes);
+        cx.dst.sections_mut().push(codes);
     }
 }

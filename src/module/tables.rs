@@ -1,12 +1,13 @@
 //! Tables within a wasm module.
 
-use crate::module::emit::{Emit, IdsToIndices};
+use crate::emit::{Emit, EmitContext};
 use crate::module::functions::FunctionId;
 use crate::module::globals::GlobalId;
-use crate::passes::Used;
+use crate::module::imports::ImportId;
+use crate::module::parse::IndicesToIds;
+use crate::module::Module;
 use id_arena::{Arena, Id};
 use parity_wasm::elements;
-use std::collections::HashMap;
 
 /// The id of a table.
 pub type TableId = Id<Table>;
@@ -16,11 +17,13 @@ pub type TableId = Id<Table>;
 pub struct Table {
     id: TableId,
     /// The initial size of this table
-    pub initial_size: u32,
+    pub initial: u32,
     /// The maximum size of this table
-    pub maximum_size: Option<u32>,
+    pub maximum: Option<u32>,
     /// Which kind of table this is
     pub kind: TableKind,
+    /// Whether or not this table is imported, and if so what imports it.
+    pub import: Option<ImportId>,
 }
 
 /// The kinds of tables that can exist
@@ -55,67 +58,41 @@ impl Table {
 #[derive(Debug, Default)]
 pub struct ModuleTables {
     /// The arena containing this module's tables.
-    pub arena: Arena<Table>,
-    index_to_table_id: HashMap<u32, TableId>,
+    arena: Arena<Table>,
 }
 
 impl ModuleTables {
-    /// Construct a new, empty set of tables for a module.
-    pub fn parse(table_section: &elements::TableSection) -> ModuleTables {
-        let capacity = table_section.entries().len();
-        let mut tables = ModuleTables {
-            arena: Arena::with_capacity(capacity),
-            index_to_table_id: HashMap::with_capacity(capacity),
-        };
-
-        for (i, t) in table_section.entries().iter().enumerate() {
-            tables.add_table_for_index(i as u32, t.elem_type(), t.limits().clone());
-        }
-
-        tables
-    }
-
-    /// Get the table for the given index in the input wasm, if any exists.
-    pub fn table_for_index(&self, index: u32) -> Option<TableId> {
-        self.index_to_table_id.get(&index).cloned()
-    }
-
-    /// Get or create the table for this function at the given index.
-    fn add_table_for_index(
+    /// Adds a new imported table to this list of tables
+    pub fn add_import(
         &mut self,
-        index: u32,
-        ty: elements::TableElementType,
-        limits: elements::ResizableLimits,
+        initial: u32,
+        max: Option<u32>,
+        kind: TableKind,
+        import: ImportId,
     ) -> TableId {
-        assert!(!self.index_to_table_id.contains_key(&index));
-        let id = self.new_table(ty, limits);
-        self.index_to_table_id.insert(index, id);
-        id
+        let id = self.arena.next_id();
+        self.arena.alloc(Table {
+            id,
+            initial: initial,
+            maximum: max,
+            kind,
+            import: Some(import),
+        })
     }
 
     /// Construct a new table, that does not originate from any of the input
     /// wasm tables.
-    pub fn new_table(
-        &mut self,
-        ty: elements::TableElementType,
-        limits: elements::ResizableLimits,
-    ) -> TableId {
+    pub fn add_local(&mut self, initial: u32, max: Option<u32>, kind: TableKind) -> TableId {
         let id = self.arena.next_id();
         let id2 = self.arena.alloc(Table {
             id,
-            initial_size: limits.initial(),
-            maximum_size: limits.maximum(),
-            kind: match ty {
-                elements::TableElementType::AnyFunc => TableKind::Function(Default::default()),
-            },
+            initial: initial,
+            maximum: max,
+            kind,
+            import: None,
         });
         debug_assert_eq!(id, id2);
         id
-    }
-
-    /// Iterates over all tables in this section.
-    pub fn iter(&self) -> impl Iterator<Item = &Table> {
-        self.arena.iter().map(|p| p.1)
     }
 
     /// Returns the actual table associated with an ID
@@ -127,32 +104,56 @@ impl ModuleTables {
     pub fn get_mut(&mut self, table: TableId) -> &mut Table {
         &mut self.arena[table]
     }
+
+    /// Iterates over all tables in this section.
+    pub fn iter(&self) -> impl Iterator<Item = &Table> {
+        self.arena.iter().map(|p| p.1)
+    }
+}
+
+impl Module {
+    /// Construct a new, empty set of tables for a module.
+    pub(crate) fn parse_tables(
+        &mut self,
+        section: &elements::TableSection,
+        ids: &mut IndicesToIds,
+    ) {
+        for t in section.entries() {
+            let id = self.tables.add_local(
+                t.limits().initial(),
+                t.limits().maximum(),
+                match t.elem_type() {
+                    elements::TableElementType::AnyFunc => {
+                        TableKind::Function(FunctionTable::default())
+                    }
+                },
+            );
+            ids.push_table(id);
+        }
+    }
 }
 
 impl Emit for ModuleTables {
-    type Extra = ();
-
-    fn emit(&self, _: &(), used: &Used, module: &mut elements::Module, indices: &mut IdsToIndices) {
-        if used.tables.is_empty() {
-            return;
-        }
-
-        let mut tables = Vec::with_capacity(used.tables.len());
-
-        let import_count = module.import_count(elements::ImportCountType::Table) as u32;
+    fn emit(&self, cx: &mut EmitContext) {
+        let mut tables = Vec::with_capacity(cx.used.tables.len());
 
         for (id, table) in &self.arena {
-            if !used.tables.contains(&id) {
+            if !cx.used.tables.contains(&id) {
                 continue;
             }
+            if table.import.is_some() {
+                continue; // already emitted in the imports section
+            }
 
-            indices.set_table_index(id, tables.len() as u32 + import_count);
-            let table = elements::TableType::new(table.initial_size, table.maximum_size);
+            cx.indices.push_table(id);
+            let table = elements::TableType::new(table.initial, table.maximum);
             tables.push(table);
         }
 
-        let tables = elements::TableSection::with_entries(tables);
-        let tables = elements::Section::Table(tables);
-        module.sections_mut().push(tables);
+        if !tables.is_empty() {
+            let tables = elements::TableSection::with_entries(tables);
+            let tables = elements::Section::Table(tables);
+            cx.dst.sections_mut().push(tables);
+        }
     }
 }

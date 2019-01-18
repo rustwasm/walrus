@@ -9,6 +9,7 @@ pub mod imports;
 pub mod locals;
 pub mod memories;
 mod parse;
+pub mod producers;
 pub mod tables;
 pub mod types;
 
@@ -22,6 +23,7 @@ use crate::module::globals::ModuleGlobals;
 use crate::module::imports::ModuleImports;
 use crate::module::locals::ModuleLocals;
 use crate::module::memories::ModuleMemories;
+use crate::module::producers::ModuleProducers;
 use crate::module::tables::ModuleTables;
 use crate::module::types::ModuleTypes;
 use crate::passes;
@@ -46,6 +48,7 @@ pub struct Module {
     pub(crate) start: Option<FunctionId>,
     custom: Vec<CustomSection>,
     name: Option<String>,
+    pub(crate) producers: ModuleProducers,
 }
 
 #[derive(Debug)]
@@ -101,7 +104,16 @@ impl Module {
                     // if it comes out here then it means the section may be
                     // malformed according to parity-wasm, so skip it.
                     if s.name() == "name" {
-                        continue
+                        continue;
+                    }
+                    if s.name() == "producers" {
+                        match ModuleProducers::parse(s.payload()) {
+                            Ok(s) => ret.producers = s,
+                            Err(e) => {
+                                log::warn!("failed to parse producers section {}", e);
+                            }
+                        }
+                        continue;
                     }
                     ret.custom.push(CustomSection {
                         name: s.name().to_string(),
@@ -135,6 +147,9 @@ impl Module {
                 Section::Reloc(_) => bail!("cannot handle the reloc section"),
             }
         }
+
+        ret.producers
+            .add_processed_by("walrus", env!("CARGO_PKG_VERSION"));
 
         Ok(ret)
     }
@@ -180,6 +195,11 @@ impl Module {
         emit_module_name_section(&mut cx);
         emit_function_name_section(&mut cx);
         emit_local_name_section(&mut cx);
+
+        let producers = parity::CustomSection::new("producers".to_string(), self.producers.emit());
+        module
+            .sections_mut()
+            .push(parity::Section::Custom(producers));
 
         for section in self.custom.iter() {
             let section = parity::CustomSection::new(section.name.clone(), section.value.clone());

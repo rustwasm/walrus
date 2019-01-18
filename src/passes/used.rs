@@ -8,7 +8,7 @@ use crate::module::memories::MemoryId;
 use crate::module::tables::{TableId, TableKind};
 use crate::module::Module;
 use crate::ty::TypeId;
-use std::collections::{HashSet, HashMap};
+use std::collections::{HashMap, HashSet};
 
 /// Finds the things within a module that are used.
 ///
@@ -157,7 +157,10 @@ impl<'expr> Visitor<'expr> for UsedVisitor<'expr, '_> {
     }
 
     fn visit_local_id(&mut self, &l: &LocalId) {
-        self.stack.used.locals.entry(self.id)
+        self.stack
+            .used
+            .locals
+            .entry(self.id)
             .or_insert(HashSet::new())
             .insert(l);
     }

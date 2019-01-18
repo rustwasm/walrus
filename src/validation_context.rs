@@ -5,7 +5,6 @@ use super::error::{ErrorKind, Result};
 use crate::ty::{Type, ValType};
 use failure::{Fail, ResultExt};
 use parity_wasm::elements;
-use std::iter;
 use std::u16;
 use std::u32;
 
@@ -19,7 +18,6 @@ pub struct ValidationContext<'a> {
     tables: ChunkList<'a, elements::TableType>,
     mems: ChunkList<'a, elements::MemoryType>,
     globals: ChunkList<'a, elements::GlobalType>,
-    pub(crate) locals: ChunkList<'a, ValType>,
     pub(crate) labels: ChunkList<'a, Box<[ValType]>>,
     pub(crate) return_: ChunkList<'a, Box<[ValType]>>,
 }
@@ -82,7 +80,6 @@ impl<'a> ValidationContext<'a> {
             tables: ChunkList::with_head(tables),
             mems: ChunkList::with_head(mems),
             globals: ChunkList::with_head(globals),
-            locals: ChunkList::new(),
             labels: ChunkList::new(),
             return_: ChunkList::new(),
         })
@@ -96,27 +93,13 @@ impl<'a> ValidationContext<'a> {
             tables: ChunkList::with_tail(&self.tables),
             mems: ChunkList::with_tail(&self.mems),
             globals: ChunkList::with_tail(&self.globals),
-            locals: ChunkList::with_tail(&self.locals),
             labels: ChunkList::with_tail(&self.labels),
             return_: ChunkList::with_tail(&self.return_),
         }
     }
 
     /// Get a nested validation context for the given function.
-    pub fn for_function<'b>(
-        &'b self,
-        ty: &Type,
-        body: &elements::FuncBody,
-    ) -> Result<ValidationContext<'b>> {
-        let locals = ty
-            .params()
-            .iter()
-            .cloned()
-            .chain(body.locals().iter().flat_map(|l| {
-                iter::repeat(ValType::from(&l.value_type())).take(l.count() as usize)
-            }))
-            .collect();
-
+    pub fn for_function<'b>(&'b self, ty: &Type) -> Result<ValidationContext<'b>> {
         let labels = vec![ty
             .results()
             .iter()
@@ -126,7 +109,6 @@ impl<'a> ValidationContext<'a> {
         let return_ = labels.clone();
 
         Ok(ValidationContext {
-            locals: ChunkList::with_head(locals),
             labels: ChunkList::with_head(labels),
             return_: ChunkList::with_head(return_),
             ..self.nested()
@@ -158,26 +140,13 @@ impl<'a> ValidationContext<'a> {
     }
 
     /// Get the type of the n^th local.
-    pub fn local(&self, n: u32) -> Result<ValType> {
-        self.locals.get(n as usize).cloned().ok_or_else(|| {
-            ErrorKind::InvalidWasm
-                .context(format!(
-                    "local {} is out of bounds ({} locals)",
-                    n,
-                    self.locals.len()
-                ))
-                .into()
-        })
-    }
-
-    /// Get the type of the n^th local.
     pub fn label(&self, n: u32) -> Result<&[ValType]> {
         self.labels.get(n as usize).map(|t| &t[..]).ok_or_else(|| {
             ErrorKind::InvalidWasm
                 .context(format!(
-                    "local {} is out of bounds ({} locals)",
+                    "local {} is out of bounds ({} labels)",
                     n,
-                    self.locals.len()
+                    self.labels.len()
                 ))
                 .into()
         })

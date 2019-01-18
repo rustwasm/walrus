@@ -48,13 +48,31 @@ impl LocalFunction {
     /// same time.
     pub fn parse(
         module: &mut Module,
-        indices: &IndicesToIds,
+        indices: &mut IndicesToIds,
         id: FunctionId,
         ty: TypeId,
         validation: &ValidationContext,
         body: &elements::FuncBody,
     ) -> Result<LocalFunction> {
-        let validation = validation.for_function(&module.types.get(ty), body)?;
+        let validation = validation.for_function(&module.types.get(ty))?;
+
+        // Locals start with the arguments to the function, nad then afterwards
+        // follows all the declared locals inside the function body.
+        let locals =
+            module
+                .types
+                .get(ty)
+                .params()
+                .iter()
+                .cloned()
+                .chain(body.locals().iter().flat_map(|local| {
+                    let ty = ValType::from(&local.value_type());
+                    iter::repeat(ty).take(local.count() as usize)
+                }));
+        for ty in locals {
+            let local_id = module.locals.add(ty);
+            indices.push_local(id, local_id);
+        }
 
         let mut func = LocalFunction {
             ty,
@@ -173,7 +191,7 @@ impl LocalFunction {
 
             fn visit_local_id(&mut self, &id: &LocalId) {
                 if self.seen.insert(id) {
-                    let ty = self.locals.locals()[id].ty();
+                    let ty = self.locals.get(id).ty();
                     self.ty_to_locals.entry(ty).or_insert(Vec::new()).push(id);
                 }
             }
@@ -408,21 +426,15 @@ fn validate_instruction<'a>(
             ctx.push_operands(ty.results(), &result_exprs, expr.into());
         }
         Instruction::GetLocal(n) => {
-            let ty = ctx.validation.local(*n).context("invalid get_local")?;
-            let local = ctx
-                .module
-                .locals
-                .local_for_function_and_index(ctx.func_id, ty, *n);
+            let local = ctx.indices.get_local(ctx.func_id, *n)?;
+            let ty = ctx.module.locals.get(local).ty();
             let expr = ctx.func.alloc(LocalGet { local });
             ctx.push_operand(Some(ty), expr);
         }
         Instruction::SetLocal(n) => {
-            let ty = ctx.validation.local(*n).context("invalid local.set")?;
+            let local = ctx.indices.get_local(ctx.func_id, *n)?;
+            let ty = ctx.module.locals.get(local).ty();
             let (_, value) = ctx.pop_operand_expected(Some(ty))?;
-            let local = ctx
-                .module
-                .locals
-                .local_for_function_and_index(ctx.func_id, ty, *n);
             let expr = ctx.func.alloc(LocalSet { local, value });
             ctx.add_to_current_frame_block(expr);
         }

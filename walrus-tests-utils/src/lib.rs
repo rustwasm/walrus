@@ -29,7 +29,10 @@ pub fn wat2wasm(path: &Path) -> Vec<u8> {
     wasm.set_extension("wasm");
 
     let mut cmd = Command::new("wat2wasm");
-    cmd.arg(path).arg("-o").arg(file.path());
+    cmd.arg(path)
+        .arg("--debug-names")
+        .arg("-o")
+        .arg(file.path());
     println!("running: {:?}", cmd);
     let output = cmd.output().expect("should spawn wat2wasm OK");
 
@@ -66,7 +69,11 @@ pub fn wasm2wat(path: &Path) -> String {
     cmd.arg(path);
     println!("running: {:?}", cmd);
     let output = cmd.output().expect("should spawn wasm2wat OK");
-    assert!(output.status.success(), "should run wasm2wat OK");
+    if !output.status.success() {
+        println!("status: {}", output.status);
+        println!("stderr: {}", String::from_utf8_lossy(&output.stderr));
+        panic!("expected ok");
+    }
     String::from_utf8_lossy(&output.stdout).into_owned()
 }
 

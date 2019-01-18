@@ -12,7 +12,7 @@
 
 ;; CHECK: (module
 ;; NEXT:    (type (;0;) (func (result i32)))
-;; NEXT:    (func (;0;) (type 0) (result i32)
+;; NEXT:    (func $f (type 0) (result i32)
 ;; NEXT:      i32.const 0
 ;; NEXT:      drop
 ;; NEXT:      block  ;; label = @1
@@ -20,4 +20,4 @@
 ;; NEXT:        drop
 ;; NEXT:      end
 ;; NEXT:      i32.const 2)
-;; NEXT:    (export "f" (func 0)))
+;; NEXT:    (export "f" (func $f)))

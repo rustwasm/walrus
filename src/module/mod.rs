@@ -45,6 +45,7 @@ pub struct Module {
     pub(crate) elements: ModuleElements,
     pub(crate) start: Option<FunctionId>,
     custom: Vec<CustomSection>,
+    name: Option<String>,
 }
 
 #[derive(Debug)]
@@ -66,7 +67,10 @@ impl Module {
     pub fn from_buffer(mut wasm: &[u8]) -> Result<Module> {
         use parity_wasm::elements::Deserialize;
 
-        let module = parity::Module::deserialize(&mut wasm)?;
+        let module = match parity::Module::deserialize(&mut wasm)?.parse_names() {
+            Ok(m) => m,
+            Err((_, m)) => m,
+        };
         if wasm.len() > 0 {
             failure::bail!("invalid wasm file");
         }
@@ -75,6 +79,7 @@ impl Module {
         let mut indices = parse::IndicesToIds::default();
 
         for section in module.sections() {
+            use parity_wasm::elements::NameSection;
             use parity_wasm::elements::Section;
 
             match section {
@@ -92,12 +97,41 @@ impl Module {
 
                 Section::Unparsed { .. } => bail!("failed to handle unparsed section"),
                 Section::Custom(s) => {
+                    // we attempted to parse the custom name sections above, so
+                    // if it comes out here then it means the section may be
+                    // malformed according to parity-wasm, so skip it.
+                    if s.name() == "name" {
+                        continue
+                    }
                     ret.custom.push(CustomSection {
                         name: s.name().to_string(),
                         value: s.payload().to_vec(),
-                    })
+                    });
                 }
-                Section::Name(_) => {}
+                Section::Name(NameSection::Module(s)) => {
+                    ret.name = Some(s.name().to_string());
+                }
+                Section::Name(NameSection::Function(s)) => {
+                    for (index, name) in s.names() {
+                        let id = indices.get_func(index)?;
+                        ret.funcs.get_mut(id).name = Some(name.clone());
+                    }
+                }
+                Section::Name(NameSection::Local(s)) => {
+                    for (func_index, names) in s.local_names() {
+                        let func_id = indices.get_func(func_index)?;
+                        for (local_index, name) in names {
+                            let id = indices.get_local(func_id, local_index)?;
+                            ret.locals.get_mut(id).name = Some(name.clone());
+                        }
+                    }
+                }
+                Section::Name(NameSection::Unparsed {
+                    name_type,
+                    name_payload: _,
+                }) => {
+                    bail!("unparsed name section of type {}", name_type);
+                }
                 Section::Reloc(_) => bail!("cannot handle the reloc section"),
             }
         }
@@ -143,11 +177,12 @@ impl Module {
         self.elements.emit(&mut cx);
         self.data.emit(&mut cx);
 
+        emit_module_name_section(&mut cx);
+        emit_function_name_section(&mut cx);
+        emit_local_name_section(&mut cx);
+
         for section in self.custom.iter() {
-            let section = parity::CustomSection::new(
-                section.name.clone(),
-                section.value.clone(),
-            );
+            let section = parity::CustomSection::new(section.name.clone(), section.value.clone());
             module.sections_mut().push(parity::Section::Custom(section));
         }
 
@@ -177,5 +212,59 @@ impl Module {
     /// Returns an iterator over all functions in this module
     pub fn functions(&self) -> impl Iterator<Item = &Function> {
         self.funcs.iter()
+    }
+}
+
+fn emit_module_name_section(cx: &mut EmitContext) {
+    let name = match &cx.module.name {
+        Some(name) => name,
+        None => return,
+    };
+    let section = parity::ModuleNameSection::new(name.clone());
+    let section = parity::NameSection::Module(section);
+    cx.dst.sections_mut().push(parity::Section::Name(section));
+}
+
+fn emit_function_name_section(cx: &mut EmitContext) {
+    let mut map = parity::NameMap::default();
+    for id in cx.used.funcs.iter() {
+        let name = match &cx.module.funcs.get(*id).name {
+            Some(name) => name,
+            None => continue,
+        };
+        map.insert(cx.indices.get_func_index(*id), name.clone());
+    }
+    if map.len() > 0 {
+        let mut section = parity::FunctionNameSection::default();
+        *section.names_mut() = map;
+        let section = parity::NameSection::Function(section);
+        cx.dst.sections_mut().push(parity::Section::Name(section));
+    }
+}
+
+fn emit_local_name_section(cx: &mut EmitContext) {
+    let mut map = parity::IndexMap::default();
+    for id in cx.used.funcs.iter() {
+        let mut locals = parity::NameMap::default();
+
+        if let Some(set) = cx.used.locals.get(id) {
+            for local_id in set {
+                let name = match &cx.module.locals.get(*local_id).name {
+                    Some(name) => name,
+                    None => continue,
+                };
+                locals.insert(cx.indices.get_local_index(*local_id), name.clone());
+            }
+        }
+
+        if locals.len() > 0 {
+            map.insert(cx.indices.get_func_index(*id), locals);
+        }
+    }
+    if map.len() > 0 {
+        let mut section = parity::LocalNameSection::default();
+        *section.local_names_mut() = map;
+        let section = parity::NameSection::Local(section);
+        cx.dst.sections_mut().push(parity::Section::Name(section));
     }
 }

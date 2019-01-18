@@ -6,7 +6,7 @@
 
 ;; CHECK: (module
 ;; NEXT:    (type (;0;) (func))
-;; NEXT:    (func (;0;) (type 0)
+;; NEXT:    (func $f (type 0)
 ;; NEXT:      i32.const 42
 ;; NEXT:      drop)
-;; NEXT:    (export "f" (func 0)))
+;; NEXT:    (export "f" (func $f)))

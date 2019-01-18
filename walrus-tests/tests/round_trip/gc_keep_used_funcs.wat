@@ -10,11 +10,11 @@
 
 ;; CHECK: (module
 ;; NEXT:    (type (;0;) (func (result i32)))
-;; NEXT:    (func (;0;) (type 0) (result i32)
+;; NEXT:    (func $f (type 0) (result i32)
 ;; NEXT:      i32.const 42
 ;; NEXT:      i32.const 1
 ;; NEXT:      i32.add)
-;; NEXT:    (func (;1;) (type 0) (result i32)
-;; NEXT:      call 0)
-;; NEXT:    (export "g" (func 1)))
+;; NEXT:    (func $g (type 0) (result i32)
+;; NEXT:      call $f)
+;; NEXT:    (export "g" (func $g)))
 

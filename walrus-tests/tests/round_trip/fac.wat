@@ -30,7 +30,7 @@
 
 ;; CHECK: (module
 ;; NEXT:    (type (;0;) (func (param i32) (result i32)))
-;; NEXT:    (func (;0;) (type 0) (param i32) (result i32)
+;; NEXT:    (func $fac (type 0) (param i32) (result i32)
 ;; NEXT:      (local i32 i32)
 ;; NEXT:      block  ;; label = @1
 ;; NEXT:        local.get 1
@@ -50,4 +50,4 @@
 ;; NEXT:        end
 ;; NEXT:      end
 ;; NEXT:      local.get 0)
-;; NEXT:    (export "fac" (func 0)))
+;; NEXT:    (export "fac" (func $fac)))

@@ -327,38 +327,6 @@ impl DotExpr<'_, '_> {
     }
 }
 
-macro_rules! const_ {
-    ($ctx:ident, $op:ident, $ty:ident, $val:expr) => {
-        let expr = $ctx.func.alloc($op { value: $val });
-        $ctx.push_operand(Some(ValType::$ty), expr);
-    };
-}
-
-macro_rules! binop {
-    ($ctx:ident, $op:ident, $ty:ident) => {
-        let (_, rhs) = $ctx.pop_operand_expected(Some(ValType::$ty))?;
-        let (_, lhs) = $ctx.pop_operand_expected(Some(ValType::$ty))?;
-        let expr = $ctx.func.alloc(Binop { op: BinaryOp::$op, lhs, rhs });
-        $ctx.push_operand(Some(ValType::$ty), expr);
-    };
-}
-
-macro_rules! unop {
-    ($ctx:ident, $op:ident, $ty:ident) => {
-        let (_, expr) = $ctx.pop_operand_expected(Some(ValType::$ty))?;
-        let expr = $ctx.func.alloc(Unop { op: UnaryOp::$op, expr });
-        $ctx.push_operand(Some(ValType::$ty), expr);
-    };
-}
-
-macro_rules! testop {
-    ($ctx:ident, $op:ident, $ty:ident) => {
-        let (_, expr) = $ctx.pop_operand_expected(Some(ValType::$ty))?;
-        let expr = $ctx.func.alloc(Unop { op: UnaryOp::$op, expr });
-        $ctx.push_operand(Some(ValType::I32), expr);
-    };
-}
-
 fn validate_instruction_sequence<'a>(
     ctx: &mut FunctionContext,
     insts: &'a [Instruction],
@@ -406,6 +374,43 @@ fn validate_instruction<'a>(
     ctx: &mut FunctionContext,
     insts: &'a [Instruction],
 ) -> Result<&'a [Instruction]> {
+    use ValType::*;
+
+    let const_ = |ctx: &mut FunctionContext, ty, value| {
+        let expr = ctx.func.alloc(Const { value });
+        ctx.push_operand(Some(ty), expr);
+    };
+
+    let one_op = |ctx: &mut FunctionContext, input, output, op| -> Result<()> {
+        let (_, expr) = ctx.pop_operand_expected(Some(input))?;
+        let expr = ctx.func.alloc(Unop { op, expr });
+        ctx.push_operand(Some(output), expr);
+        Ok(())
+    };
+    let two_ops = |ctx: &mut FunctionContext, input, output, op| -> Result<()> {
+        let (_, rhs) = ctx.pop_operand_expected(Some(input))?;
+        let (_, lhs) = ctx.pop_operand_expected(Some(input))?;
+        let expr = ctx.func.alloc(Binop { op, lhs, rhs });
+        ctx.push_operand(Some(output), expr);
+        Ok(())
+    };
+
+    let binop = |ctx: &mut FunctionContext, ty, op| -> Result<()> {
+        two_ops(ctx, ty, ty, op)
+    };
+
+    let unop = |ctx: &mut FunctionContext, ty, op| -> Result<()> {
+        one_op(ctx, ty, ty, op)
+    };
+
+    let testop = |ctx: &mut FunctionContext, ty, op| -> Result<()> {
+        one_op(ctx, ty, ValType::I32, op)
+    };
+
+    let relop = |ctx: &mut FunctionContext, ty, op| -> Result<()> {
+        two_ops(ctx, ty, ValType::I32, op)
+    };
+
     assert!(!insts.is_empty());
     match &insts[0] {
         Instruction::Call(idx) => {
@@ -469,16 +474,16 @@ fn validate_instruction<'a>(
             ctx.add_to_current_frame_block(expr);
         }
         Instruction::I32Const(n) => {
-            const_!(ctx, Const, I32, Value::I32(*n));
+            const_(ctx, I32, Value::I32(*n));
         }
         Instruction::I64Const(n) => {
-            const_!(ctx, Const, I64, Value::I64(*n));
+            const_(ctx, I64, Value::I64(*n));
         }
         Instruction::F32Const(n) => {
-            const_!(ctx, Const, F32, Value::F32(f32::from_bits(*n)));
+            const_(ctx, F32, Value::F32(f32::from_bits(*n)));
         }
         Instruction::F64Const(n) => {
-            const_!(ctx, Const, F64, Value::F64(f64::from_bits(*n)));
+            const_(ctx, F64, Value::F64(f64::from_bits(*n)));
         }
         Instruction::V128Const(n) => {
             let val = ((n[0] as u128) << 0)
@@ -497,23 +502,145 @@ fn validate_instruction<'a>(
                 | ((n[13] as u128) << 104)
                 | ((n[14] as u128) << 112)
                 | ((n[15] as u128) << 120);
-            const_!(ctx, Const, V128, Value::V128(val));
+            const_(ctx, V128, Value::V128(val));
         }
-        Instruction::I32Add => {
-            binop!(ctx, I32Add, I32);
-        }
-        Instruction::I32Sub => {
-            binop!(ctx, I32Sub, I32);
-        }
-        Instruction::I32Mul => {
-            binop!(ctx, I32Mul, I32);
-        }
-        Instruction::I32Eqz => {
-            testop!(ctx, I32Eqz, I32);
-        }
-        Instruction::I32Popcnt => {
-            unop!(ctx, I32Popcnt, I32);
-        }
+
+        Instruction::I32Eqz => testop(ctx, I32, UnaryOp::I32Eqz)?,
+        Instruction::I32Eq => relop(ctx, I32, BinaryOp::I32Eq)?,
+        Instruction::I32Ne => relop(ctx, I32, BinaryOp::I32Ne)?,
+        Instruction::I32LtS => relop(ctx, I32, BinaryOp::I32LtS)?,
+        Instruction::I32LtU => relop(ctx, I32, BinaryOp::I32LtU)?,
+        Instruction::I32GtS => relop(ctx, I32, BinaryOp::I32GtS)?,
+        Instruction::I32GtU => relop(ctx, I32, BinaryOp::I32GtU)?,
+        Instruction::I32LeS => relop(ctx, I32, BinaryOp::I32LeS)?,
+        Instruction::I32LeU => relop(ctx, I32, BinaryOp::I32LeU)?,
+        Instruction::I32GeS => relop(ctx, I32, BinaryOp::I32GeS)?,
+        Instruction::I32GeU => relop(ctx, I32, BinaryOp::I32GeU)?,
+
+        Instruction::I64Eqz => testop(ctx, I64, UnaryOp::I64Eqz)?,
+        Instruction::I64Eq => relop(ctx, I64, BinaryOp::I64Eq)?,
+        Instruction::I64Ne => relop(ctx, I64, BinaryOp::I64Ne)?,
+        Instruction::I64LtS => relop(ctx, I64, BinaryOp::I64LtS)?,
+        Instruction::I64LtU => relop(ctx, I64, BinaryOp::I64LtU)?,
+        Instruction::I64GtS => relop(ctx, I64, BinaryOp::I64GtS)?,
+        Instruction::I64GtU => relop(ctx, I64, BinaryOp::I64GtU)?,
+        Instruction::I64LeS => relop(ctx, I64, BinaryOp::I64LeS)?,
+        Instruction::I64LeU => relop(ctx, I64, BinaryOp::I64LeU)?,
+        Instruction::I64GeS => relop(ctx, I64, BinaryOp::I64GeS)?,
+        Instruction::I64GeU => relop(ctx, I64, BinaryOp::I64GeU)?,
+
+        Instruction::F32Eq => relop(ctx, F32, BinaryOp::F32Eq)?,
+        Instruction::F32Ne => relop(ctx, F32, BinaryOp::F32Ne)?,
+        Instruction::F32Lt => relop(ctx, F32, BinaryOp::F32Lt)?,
+        Instruction::F32Gt => relop(ctx, F32, BinaryOp::F32Gt)?,
+        Instruction::F32Le => relop(ctx, F32, BinaryOp::F32Le)?,
+        Instruction::F32Ge => relop(ctx, F32, BinaryOp::F32Ge)?,
+
+        Instruction::F64Eq => relop(ctx, F64, BinaryOp::F64Eq)?,
+        Instruction::F64Ne => relop(ctx, F64, BinaryOp::F64Ne)?,
+        Instruction::F64Lt => relop(ctx, F64, BinaryOp::F64Lt)?,
+        Instruction::F64Gt => relop(ctx, F64, BinaryOp::F64Gt)?,
+        Instruction::F64Le => relop(ctx, F64, BinaryOp::F64Le)?,
+        Instruction::F64Ge => relop(ctx, F64, BinaryOp::F64Ge)?,
+
+        Instruction::I32Clz => unop(ctx, I32, UnaryOp::I32Clz)?,
+        Instruction::I32Ctz => unop(ctx, I32, UnaryOp::I32Ctz)?,
+        Instruction::I32Popcnt => unop(ctx, I32, UnaryOp::I32Popcnt)?,
+        Instruction::I32Add => binop(ctx, I32, BinaryOp::I32Add)?,
+        Instruction::I32Sub => binop(ctx, I32, BinaryOp::I32Sub)?,
+        Instruction::I32Mul => binop(ctx, I32, BinaryOp::I32Mul)?,
+        Instruction::I32DivS => binop(ctx, I32, BinaryOp::I32DivS)?,
+        Instruction::I32DivU => binop(ctx, I32, BinaryOp::I32DivU)?,
+        Instruction::I32RemS => binop(ctx, I32, BinaryOp::I32RemS)?,
+        Instruction::I32RemU => binop(ctx, I32, BinaryOp::I32RemU)?,
+        Instruction::I32And => binop(ctx, I32, BinaryOp::I32And)?,
+        Instruction::I32Or => binop(ctx, I32, BinaryOp::I32Or)?,
+        Instruction::I32Xor => binop(ctx, I32, BinaryOp::I32Xor)?,
+        Instruction::I32Shl => binop(ctx, I32, BinaryOp::I32Shl)?,
+        Instruction::I32ShrS => binop(ctx, I32, BinaryOp::I32ShrS)?,
+        Instruction::I32ShrU => binop(ctx, I32, BinaryOp::I32ShrU)?,
+        Instruction::I32Rotl => binop(ctx, I32, BinaryOp::I32Rotl)?,
+        Instruction::I32Rotr => binop(ctx, I32, BinaryOp::I32Rotr)?,
+
+        Instruction::I64Clz => unop(ctx, I64, UnaryOp::I64Clz)?,
+        Instruction::I64Ctz => unop(ctx, I64, UnaryOp::I64Ctz)?,
+        Instruction::I64Popcnt => unop(ctx, I64, UnaryOp::I64Popcnt)?,
+        Instruction::I64Add => binop(ctx, I64, BinaryOp::I64Add)?,
+        Instruction::I64Sub => binop(ctx, I64, BinaryOp::I64Sub)?,
+        Instruction::I64Mul => binop(ctx, I64, BinaryOp::I64Mul)?,
+        Instruction::I64DivS => binop(ctx, I64, BinaryOp::I64DivS)?,
+        Instruction::I64DivU => binop(ctx, I64, BinaryOp::I64DivU)?,
+        Instruction::I64RemS => binop(ctx, I64, BinaryOp::I64RemS)?,
+        Instruction::I64RemU => binop(ctx, I64, BinaryOp::I64RemU)?,
+        Instruction::I64And => binop(ctx, I64, BinaryOp::I64And)?,
+        Instruction::I64Or => binop(ctx, I64, BinaryOp::I64Or)?,
+        Instruction::I64Xor => binop(ctx, I64, BinaryOp::I64Xor)?,
+        Instruction::I64Shl => binop(ctx, I64, BinaryOp::I64Shl)?,
+        Instruction::I64ShrS => binop(ctx, I64, BinaryOp::I64ShrS)?,
+        Instruction::I64ShrU => binop(ctx, I64, BinaryOp::I64ShrU)?,
+        Instruction::I64Rotl => binop(ctx, I64, BinaryOp::I64Rotl)?,
+        Instruction::I64Rotr => binop(ctx, I64, BinaryOp::I64Rotr)?,
+
+        Instruction::F32Abs => unop(ctx, F32, UnaryOp::F32Abs)?,
+        Instruction::F32Neg => unop(ctx, F32, UnaryOp::F32Neg)?,
+        Instruction::F32Ceil => unop(ctx, F32, UnaryOp::F32Ceil)?,
+        Instruction::F32Floor => unop(ctx, F32, UnaryOp::F32Floor)?,
+        Instruction::F32Trunc => unop(ctx, F32, UnaryOp::F32Trunc)?,
+        Instruction::F32Nearest => unop(ctx, F32, UnaryOp::F32Nearest)?,
+        Instruction::F32Sqrt => unop(ctx, F32, UnaryOp::F32Sqrt)?,
+        Instruction::F32Add => binop(ctx, F32, BinaryOp::F32Add)?,
+        Instruction::F32Sub => binop(ctx, F32, BinaryOp::F32Sub)?,
+        Instruction::F32Mul => binop(ctx, F32, BinaryOp::F32Mul)?,
+        Instruction::F32Div => binop(ctx, F32, BinaryOp::F32Div)?,
+        Instruction::F32Min => binop(ctx, F32, BinaryOp::F32Min)?,
+        Instruction::F32Max => binop(ctx, F32, BinaryOp::F32Max)?,
+        Instruction::F32Copysign => binop(ctx, F32, BinaryOp::F32Copysign)?,
+
+        Instruction::F64Abs => unop(ctx, F64, UnaryOp::F64Abs)?,
+        Instruction::F64Neg => unop(ctx, F64, UnaryOp::F64Neg)?,
+        Instruction::F64Ceil => unop(ctx, F64, UnaryOp::F64Ceil)?,
+        Instruction::F64Floor => unop(ctx, F64, UnaryOp::F64Floor)?,
+        Instruction::F64Trunc => unop(ctx, F64, UnaryOp::F64Trunc)?,
+        Instruction::F64Nearest => unop(ctx, F64, UnaryOp::F64Nearest)?,
+        Instruction::F64Sqrt => unop(ctx, F64, UnaryOp::F64Sqrt)?,
+        Instruction::F64Add => binop(ctx, F64, BinaryOp::F64Add)?,
+        Instruction::F64Sub => binop(ctx, F64, BinaryOp::F64Sub)?,
+        Instruction::F64Mul => binop(ctx, F64, BinaryOp::F64Mul)?,
+        Instruction::F64Div => binop(ctx, F64, BinaryOp::F64Div)?,
+        Instruction::F64Min => binop(ctx, F64, BinaryOp::F64Min)?,
+        Instruction::F64Max => binop(ctx, F64, BinaryOp::F64Max)?,
+        Instruction::F64Copysign => binop(ctx, F64, BinaryOp::F64Copysign)?,
+
+        Instruction::I32WrapI64 => one_op(ctx, I64, I32, UnaryOp::I32WrapI64)?,
+        Instruction::I32TruncSF32 => one_op(ctx, F32, I32, UnaryOp::I32TruncSF32)?,
+        Instruction::I32TruncUF32 => one_op(ctx, F32, I32, UnaryOp::I32TruncUF32)?,
+        Instruction::I32TruncSF64 => one_op(ctx, F64, I32, UnaryOp::I32TruncSF64)?,
+        Instruction::I32TruncUF64 => one_op(ctx, F64, I32, UnaryOp::I32TruncUF64)?,
+
+        Instruction::I64ExtendSI32 => one_op(ctx, I32, I64, UnaryOp::I64ExtendSI32)?,
+        Instruction::I64ExtendUI32 => one_op(ctx, I32, I64, UnaryOp::I64ExtendUI32)?,
+        Instruction::I64TruncSF32 => one_op(ctx, F32, I64, UnaryOp::I64TruncSF32)?,
+        Instruction::I64TruncUF32 => one_op(ctx, F32, I64, UnaryOp::I64TruncUF32)?,
+        Instruction::I64TruncSF64 => one_op(ctx, F64, I64, UnaryOp::I64TruncSF64)?,
+        Instruction::I64TruncUF64 => one_op(ctx, F64, I64, UnaryOp::I64TruncUF64)?,
+
+        Instruction::F32ConvertSI32 => one_op(ctx, I32, F32, UnaryOp::F32ConvertSI32)?,
+        Instruction::F32ConvertUI32 => one_op(ctx, I32, F32, UnaryOp::F32ConvertUI32)?,
+        Instruction::F32ConvertSI64 => one_op(ctx, I64, F32, UnaryOp::F32ConvertSI64)?,
+        Instruction::F32ConvertUI64 => one_op(ctx, I64, F32, UnaryOp::F32ConvertUI64)?,
+        Instruction::F32DemoteF64 => one_op(ctx, F64, F32, UnaryOp::F32DemoteF64)?,
+
+        Instruction::F64ConvertSI32 => one_op(ctx, I32, F64, UnaryOp::F64ConvertSI32)?,
+        Instruction::F64ConvertUI32 => one_op(ctx, I32, F64, UnaryOp::F64ConvertUI32)?,
+        Instruction::F64ConvertSI64 => one_op(ctx, I64, F64, UnaryOp::F64ConvertSI64)?,
+        Instruction::F64ConvertUI64 => one_op(ctx, I64, F64, UnaryOp::F64ConvertUI64)?,
+        Instruction::F64PromoteF32 => one_op(ctx, F32, F64, UnaryOp::F64PromoteF32)?,
+
+        Instruction::I32ReinterpretF32 => one_op(ctx, F32, I32, UnaryOp::I32ReinterpretF32)?,
+        Instruction::I64ReinterpretF64 => one_op(ctx, F64, I64, UnaryOp::I64ReinterpretF64)?,
+        Instruction::F32ReinterpretI32 => one_op(ctx, I32, F32, UnaryOp::F32ReinterpretI32)?,
+        Instruction::F64ReinterpretI64 => one_op(ctx, I64, F64, UnaryOp::F64ReinterpretI64)?,
+
         Instruction::Drop => {
             let (_, expr) = ctx.pop_operand()?;
             let expr = ctx.func.alloc(Drop { expr });

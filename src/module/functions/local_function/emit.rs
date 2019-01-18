@@ -74,20 +74,155 @@ impl Emit<'_> {
             }
 
             Binop(e) => {
+                use BinaryOp::*;
+
                 self.visit(e.lhs);
                 self.visit(e.rhs);
                 self.emit(match e.op {
-                    BinaryOp::I32Add => elements::Instruction::I32Add,
-                    BinaryOp::I32Sub => elements::Instruction::I32Sub,
-                    BinaryOp::I32Mul => elements::Instruction::I32Mul,
+                    I32Eq => elements::Instruction::I32Eq,
+                    I32Ne => elements::Instruction::I32Ne,
+                    I32LtS => elements::Instruction::I32LtS,
+                    I32LtU => elements::Instruction::I32LtU,
+                    I32GtS => elements::Instruction::I32GtS,
+                    I32GtU => elements::Instruction::I32GtU,
+                    I32LeS => elements::Instruction::I32LeS,
+                    I32LeU => elements::Instruction::I32LeU,
+                    I32GeS => elements::Instruction::I32GeS,
+                    I32GeU => elements::Instruction::I32GeU,
+
+                    I64Eq => elements::Instruction::I64Eq,
+                    I64Ne => elements::Instruction::I64Ne,
+                    I64LtS => elements::Instruction::I64LtS,
+                    I64LtU => elements::Instruction::I64LtU,
+                    I64GtS => elements::Instruction::I64GtS,
+                    I64GtU => elements::Instruction::I64GtU,
+                    I64LeS => elements::Instruction::I64LeS,
+                    I64LeU => elements::Instruction::I64LeU,
+                    I64GeS => elements::Instruction::I64GeS,
+                    I64GeU => elements::Instruction::I64GeU,
+
+                    F32Eq => elements::Instruction::F32Eq,
+                    F32Ne => elements::Instruction::F32Ne,
+                    F32Lt => elements::Instruction::F32Lt,
+                    F32Gt => elements::Instruction::F32Gt,
+                    F32Le => elements::Instruction::F32Le,
+                    F32Ge => elements::Instruction::F32Ge,
+
+                    F64Eq => elements::Instruction::F64Eq,
+                    F64Ne => elements::Instruction::F64Ne,
+                    F64Lt => elements::Instruction::F64Lt,
+                    F64Gt => elements::Instruction::F64Gt,
+                    F64Le => elements::Instruction::F64Le,
+                    F64Ge => elements::Instruction::F64Ge,
+
+                    I32Add => elements::Instruction::I32Add,
+                    I32Sub => elements::Instruction::I32Sub,
+                    I32Mul => elements::Instruction::I32Mul,
+                    I32DivS => elements::Instruction::I32DivS,
+                    I32DivU => elements::Instruction::I32DivU,
+                    I32RemS => elements::Instruction::I32RemS,
+                    I32RemU => elements::Instruction::I32RemU,
+                    I32And => elements::Instruction::I32And,
+                    I32Or => elements::Instruction::I32Or,
+                    I32Xor => elements::Instruction::I32Xor,
+                    I32Shl => elements::Instruction::I32Shl,
+                    I32ShrS => elements::Instruction::I32ShrS,
+                    I32ShrU => elements::Instruction::I32ShrU,
+                    I32Rotl => elements::Instruction::I32Rotl,
+                    I32Rotr => elements::Instruction::I32Rotr,
+
+                    I64Add => elements::Instruction::I64Add,
+                    I64Sub => elements::Instruction::I64Sub,
+                    I64Mul => elements::Instruction::I64Mul,
+                    I64DivS => elements::Instruction::I64DivS,
+                    I64DivU => elements::Instruction::I64DivU,
+                    I64RemS => elements::Instruction::I64RemS,
+                    I64RemU => elements::Instruction::I64RemU,
+                    I64And => elements::Instruction::I64And,
+                    I64Or => elements::Instruction::I64Or,
+                    I64Xor => elements::Instruction::I64Xor,
+                    I64Shl => elements::Instruction::I64Shl,
+                    I64ShrS => elements::Instruction::I64ShrS,
+                    I64ShrU => elements::Instruction::I64ShrU,
+                    I64Rotl => elements::Instruction::I64Rotl,
+                    I64Rotr => elements::Instruction::I64Rotr,
+
+                    F32Add => elements::Instruction::F32Add,
+                    F32Sub => elements::Instruction::F32Sub,
+                    F32Mul => elements::Instruction::F32Mul,
+                    F32Div => elements::Instruction::F32Div,
+                    F32Min => elements::Instruction::F32Min,
+                    F32Max => elements::Instruction::F32Max,
+                    F32Copysign => elements::Instruction::F32Copysign,
+
+                    F64Add => elements::Instruction::F64Add,
+                    F64Sub => elements::Instruction::F64Sub,
+                    F64Mul => elements::Instruction::F64Mul,
+                    F64Div => elements::Instruction::F64Div,
+                    F64Min => elements::Instruction::F64Min,
+                    F64Max => elements::Instruction::F64Max,
+                    F64Copysign => elements::Instruction::F64Copysign,
                 })
             }
 
             Unop(e) => {
+                use UnaryOp::*;
+
                 self.visit(e.expr);
                 self.emit(match e.op {
-                    UnaryOp::I32Eqz => elements::Instruction::I32Eqz,
-                    UnaryOp::I32Popcnt => elements::Instruction::I32Popcnt,
+                    I32Eqz => elements::Instruction::I32Eqz,
+                    I32Clz => elements::Instruction::I32Clz,
+                    I32Ctz => elements::Instruction::I32Ctz,
+                    I32Popcnt => elements::Instruction::I32Popcnt,
+
+                    I64Eqz => elements::Instruction::I64Eqz,
+                    I64Clz => elements::Instruction::I64Clz,
+                    I64Ctz => elements::Instruction::I64Ctz,
+                    I64Popcnt => elements::Instruction::I64Popcnt,
+
+                    F32Abs => elements::Instruction::F32Abs,
+                    F32Neg => elements::Instruction::F32Neg,
+                    F32Ceil => elements::Instruction::F32Ceil,
+                    F32Floor => elements::Instruction::F32Floor,
+                    F32Trunc => elements::Instruction::F32Trunc,
+                    F32Nearest => elements::Instruction::F32Nearest,
+                    F32Sqrt => elements::Instruction::F32Sqrt,
+
+                    F64Abs => elements::Instruction::F64Abs,
+                    F64Neg => elements::Instruction::F64Neg,
+                    F64Ceil => elements::Instruction::F64Ceil,
+                    F64Floor => elements::Instruction::F64Floor,
+                    F64Trunc => elements::Instruction::F64Trunc,
+                    F64Nearest => elements::Instruction::F64Nearest,
+                    F64Sqrt => elements::Instruction::F64Sqrt,
+
+                    I32WrapI64 => elements::Instruction::I32WrapI64,
+                    I32TruncSF32 => elements::Instruction::I32TruncSF32,
+                    I32TruncUF32 => elements::Instruction::I32TruncUF32,
+                    I32TruncSF64 => elements::Instruction::I32TruncSF64,
+                    I32TruncUF64 => elements::Instruction::I32TruncUF64,
+                    I64ExtendSI32 => elements::Instruction::I64ExtendSI32,
+                    I64ExtendUI32 => elements::Instruction::I64ExtendUI32,
+                    I64TruncSF32 => elements::Instruction::I64TruncSF32,
+                    I64TruncUF32 => elements::Instruction::I64TruncUF32,
+                    I64TruncSF64 => elements::Instruction::I64TruncSF64,
+                    I64TruncUF64 => elements::Instruction::I64TruncUF64,
+
+                    F32ConvertSI32 => elements::Instruction::F32ConvertSI32,
+                    F32ConvertUI32 => elements::Instruction::F32ConvertUI32,
+                    F32ConvertSI64 => elements::Instruction::F32ConvertSI64,
+                    F32ConvertUI64 => elements::Instruction::F32ConvertUI64,
+                    F32DemoteF64 => elements::Instruction::F32DemoteF64,
+                    F64ConvertSI32 => elements::Instruction::F64ConvertSI32,
+                    F64ConvertUI32 => elements::Instruction::F64ConvertUI32,
+                    F64ConvertSI64 => elements::Instruction::F64ConvertSI64,
+                    F64ConvertUI64 => elements::Instruction::F64ConvertUI64,
+                    F64PromoteF32 => elements::Instruction::F64PromoteF32,
+
+                    I32ReinterpretF32 => elements::Instruction::I32ReinterpretF32,
+                    I64ReinterpretF64 => elements::Instruction::I64ReinterpretF64,
+                    F32ReinterpretI32 => elements::Instruction::F32ReinterpretI32,
+                    F64ReinterpretI64 => elements::Instruction::F64ReinterpretI64,
                 })
             }
 

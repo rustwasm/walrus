@@ -12,7 +12,6 @@
 ;; NEXT:    (type (;0;) (func (param i32) (result i32)))
 ;; NEXT:    (import "env" "f" (func (;0;) (type 0)))
 ;; NEXT:    (func $g (type 0) (param i32) (result i32)
-;; NEXT:      (local i32)
 ;; NEXT:      local.get 0
 ;; NEXT:      call 0)
 ;; NEXT:    (export "g" (func $g)))

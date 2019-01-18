@@ -19,7 +19,6 @@
 ;; CHECK: (module
 ;; NEXT:    (type (;0;) (func (param i32) (result i32)))
 ;; NEXT:    (func $f (type 0) (param i32) (result i32)
-;; NEXT:      (local i32)
 ;; NEXT:      block  ;; label = @1
 ;; NEXT:        block  ;; label = @2
 ;; NEXT:          block  ;; label = @3

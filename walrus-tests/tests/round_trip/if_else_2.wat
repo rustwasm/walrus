@@ -16,7 +16,6 @@
 ;; CHECK: (module
 ;; NEXT:    (type (;0;) (func (param i32) (result i32)))
 ;; NEXT:    (func $if_else (type 0) (param i32) (result i32)
-;; NEXT:      (local i32)
 ;; NEXT:      local.get 0
 ;; NEXT:      if (result i32)  ;; label = @1
 ;; NEXT:        i32.const 2

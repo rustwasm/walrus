@@ -10,7 +10,6 @@
 ;; CHECK: (module
 ;; NEXT:    (type (;0;) (func (param i32) (result i32)))
 ;; NEXT:    (func $do_select (type 0) (param i32) (result i32)
-;; NEXT:      (local i32)
 ;; NEXT:      i32.const 1
 ;; NEXT:      i32.const 2
 ;; NEXT:      local.get 0

@@ -33,6 +33,8 @@ pub struct LocalFunction {
     /// The arena that contains this function's expressions.
     pub(crate) exprs: Arena<Expr>,
 
+    args: Vec<LocalId>,
+
     /// The entry block for this function. Always `Some` after the constructor
     /// returns.
     entry: Option<BlockId>,
@@ -56,27 +58,28 @@ impl LocalFunction {
     ) -> Result<LocalFunction> {
         let validation = validation.for_function(&module.types.get(ty))?;
 
-        // Locals start with the arguments to the function, nad then afterwards
-        // follows all the declared locals inside the function body.
-        let locals =
-            module
-                .types
-                .get(ty)
-                .params()
-                .iter()
-                .cloned()
-                .chain(body.locals().iter().flat_map(|local| {
-                    let ty = ValType::from(&local.value_type());
-                    iter::repeat(ty).take(local.count() as usize)
-                }));
-        for ty in locals {
-            let local_id = module.locals.add(ty);
+        // First up, implicitly add locals for all function arguments. We also
+        // record these in the function itself for later processing.
+        let mut args = Vec::new();
+        for ty in module.types.get(ty).params() {
+            let local_id = module.locals.add(*ty);
             indices.push_local(id, local_id);
+            args.push(local_id);
+        }
+
+        // Next up, process all function body locals
+        for local in body.locals() {
+            let ty = ValType::from(&local.value_type());
+            for _ in 0..local.count() {
+                let local_id = module.locals.add(ty);
+                indices.push_local(id, local_id);
+            }
         }
 
         let mut func = LocalFunction {
             ty,
             exprs: Arena::new(),
+            args,
             entry: None,
         };
 
@@ -182,6 +185,7 @@ impl LocalFunction {
             seen: HashSet<LocalId>,
             // NB: Use `BTreeMap` to make compilation deterministic
             ty_to_locals: BTreeMap<ValType, Vec<LocalId>>,
+            args: HashSet<LocalId>,
         }
 
         impl<'expr> Visitor<'expr> for LocalsVisitor<'expr> {
@@ -190,10 +194,14 @@ impl LocalFunction {
             }
 
             fn visit_local_id(&mut self, &id: &LocalId) {
-                if self.seen.insert(id) {
-                    let ty = self.locals.get(id).ty();
-                    self.ty_to_locals.entry(ty).or_insert(Vec::new()).push(id);
+                if !self.seen.insert(id) {
+                    return; // already seen? no more work to do
                 }
+                if self.args.contains(&id) {
+                    return; // is this an argument? we'll handle that separately
+                }
+                let ty = self.locals.get(id).ty();
+                self.ty_to_locals.entry(ty).or_insert(Vec::new()).push(id);
             }
         }
 
@@ -202,12 +210,21 @@ impl LocalFunction {
             locals,
             seen: HashSet::new(),
             ty_to_locals: BTreeMap::new(),
+            args: self.args.iter().cloned().collect(),
         };
         self.entry_block().visit(&mut v);
 
-        let mut ret = Vec::with_capacity(5);
+        // First up allocate indices to the arguments of the function. These
+        // arguments get the first few indexes in the local index space, and are
+        // unconditionally used.
         let mut idx = 0;
+        for &arg in self.args.iter() {
+            indices.set_local_index(arg, idx);
+            idx += 1;
+        }
 
+        // Next up assign chunks of locals all at once as we see them.
+        let mut ret = Vec::with_capacity(5);
         for (ty, locals) in v.ty_to_locals {
             let element_ty = match ty {
                 ValType::I32 => elements::ValueType::I32,

@@ -21,7 +21,7 @@
 
 ;; CHECK: (module
 ;; NEXT:    (type (;0;) (func (result i32)))
-;; NEXT:    (func (;0;) (type 0) (result i32)
+;; NEXT:    (func $d (type 0) (result i32)
 ;; NEXT:      i32.const 0
 ;; NEXT:      i32.const 1
 ;; NEXT:      i32.add
@@ -29,20 +29,20 @@
 ;; NEXT:      i32.const 3
 ;; NEXT:      i32.add
 ;; NEXT:      i32.add)
-;; NEXT:    (func (;1;) (type 0) (result i32)
+;; NEXT:    (func $c (type 0) (result i32)
 ;; NEXT:      i32.const 3
 ;; NEXT:      i32.const 4
 ;; NEXT:      i32.const 5
 ;; NEXT:      i32.add
 ;; NEXT:      i32.add)
-;; NEXT:    (func (;2;) (type 0) (result i32)
+;; NEXT:    (func $b (type 0) (result i32)
 ;; NEXT:      i32.const 1
 ;; NEXT:      i32.const 2
 ;; NEXT:      i32.add)
-;; NEXT:    (func (;3;) (type 0) (result i32)
+;; NEXT:    (func $a (type 0) (result i32)
 ;; NEXT:      i32.const 0)
-;; NEXT:    (export "a" (func 3))
-;; NEXT:    (export "b" (func 2))
-;; NEXT:    (export "c" (func 1))
-;; NEXT:    (export "d" (func 0)))
+;; NEXT:    (export "a" (func $a))
+;; NEXT:    (export "b" (func $b))
+;; NEXT:    (export "c" (func $c))
+;; NEXT:    (export "d" (func $d)))
 

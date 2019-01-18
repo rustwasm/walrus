@@ -11,7 +11,7 @@
 
 ;; CHECK: (module
 ;; NEXT:    (type (;0;) (func (result i32)))
-;; NEXT:    (func (;0;) (type 0) (result i32)
+;; NEXT:    (func $f (type 0) (result i32)
 ;; NEXT:      (local i32)
 ;; NEXT:      i32.const 9
 ;; NEXT:      local.set 0
@@ -25,4 +25,4 @@
 ;; NEXT:        local.set 0
 ;; NEXT:      end
 ;; NEXT:      i32.const 10)
-;; NEXT:    (export "count_to_ten" (func 0)))
+;; NEXT:    (export "count_to_ten" (func $f)))

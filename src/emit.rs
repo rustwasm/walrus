@@ -4,6 +4,7 @@
 //! `parity_wasm::elements` types.
 
 use crate::ir::LocalId;
+use crate::module::data::DataId;
 use crate::module::elements::ElementId;
 use crate::module::functions::FunctionId;
 use crate::module::globals::GlobalId;
@@ -44,6 +45,7 @@ pub struct IdsToIndices {
     locals: HashMap<LocalId, u32>,
     memories: HashMap<MemoryId, u32>,
     elements: HashMap<ElementId, u32>,
+    data: HashMap<DataId, u32>,
 }
 
 macro_rules! define_get_push_index {
@@ -77,6 +79,7 @@ define_get_push_index!(get_func_index, push_func, FunctionId, funcs);
 define_get_push_index!(get_global_index, push_global, GlobalId, globals);
 define_get_push_index!(get_memory_index, push_memory, MemoryId, memories);
 define_get_push_index!(get_element_index, push_element, ElementId, elements);
+define_get_push_index!(get_data_index, push_data, DataId, data);
 
 impl IdsToIndices {
     /// Get the index for the given identifier.

@@ -1,61 +1,37 @@
 //! All the locals used by functions in a wasm module.
 
 use crate::ir::{Local, LocalId};
-use crate::module::functions::FunctionId;
 use crate::ty::ValType;
 use id_arena::Arena;
-use std::collections::HashMap;
 
 /// The set of locals in each function in this module.
 #[derive(Debug, Default)]
 pub struct ModuleLocals {
-    locals: Arena<Local>,
-    func_and_index_to_local_id: HashMap<(FunctionId, u32), LocalId>,
+    arena: Arena<Local>,
 }
 
 impl ModuleLocals {
-    /// Construct a new, empty set of locals for a module.
-    pub fn new() -> ModuleLocals {
-        ModuleLocals {
-            locals: Arena::new(),
-            func_and_index_to_local_id: HashMap::new(),
-        }
-    }
-
-    /// Get or create the local for this function at the given index.
-    pub fn local_for_function_and_index(
-        &mut self,
-        func: FunctionId,
-        ty: ValType,
-        index: u32,
-    ) -> LocalId {
-        let key = (func, index);
-        if let Some(id) = self.func_and_index_to_local_id.get(&key) {
-            return *id;
-        }
-
-        let id = self.new_local(ty);
-        self.func_and_index_to_local_id.insert(key, id);
-        id
-    }
-
     /// Construct a new local, that does not originate from any of the input
     /// wasm locals.
-    pub fn new_local(&mut self, ty: ValType) -> LocalId {
-        let id = self.locals.next_id();
-        let id2 = self.locals.alloc(Local::new(id, ty));
+    pub fn add(&mut self, ty: ValType) -> LocalId {
+        let id = self.arena.next_id();
+        let id2 = self.arena.alloc(Local::new(id, ty));
         debug_assert_eq!(id, id2);
         id
     }
 
-    /// Get the set of locals for this module.
-    pub(crate) fn locals(&self) -> &Arena<Local> {
-        &self.locals
+    /// Get the local for an ID
+    pub fn get(&self, id: LocalId) -> &Local {
+        &self.arena[id]
     }
 
     /// Get the set of locals for this module.
-    #[allow(dead_code)]
-    pub(crate) fn locals_mut(&mut self) -> &mut Arena<Local> {
-        &mut self.locals
+    pub fn get_mut(&mut self, id: LocalId) -> &mut Local {
+        &mut self.arena[id]
+    }
+
+    /// Get a shared reference to this module's globals.
+    pub fn iter(&self) -> impl Iterator<Item = &Local> {
+        self.arena.iter().map(|(_, f)| f)
     }
 }

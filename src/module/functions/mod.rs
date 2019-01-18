@@ -34,6 +34,9 @@ pub struct Function {
 
     /// The kind of function this is.
     pub kind: FunctionKind,
+
+    /// An optional name associated with this function
+    pub name: Option<String>,
 }
 
 impl Function {
@@ -41,13 +44,14 @@ impl Function {
         Function {
             id,
             kind: FunctionKind::Uninitialized(ty),
+            name: None,
         }
     }
 
     /// Create a new function that is locally defined within the wasm module.
     pub fn parse_local(
         module: &mut Module,
-        indices: &IndicesToIds,
+        indices: &mut IndicesToIds,
         id: FunctionId,
         ty: TypeId,
         validation: &ValidationContext,
@@ -57,6 +61,7 @@ impl Function {
         Ok(Function {
             id,
             kind: FunctionKind::Local(local),
+            name: None,
         })
     }
 
@@ -162,6 +167,7 @@ impl ModuleFunctions {
         self.arena.alloc(Function {
             id,
             kind: FunctionKind::Import(ImportedFunction { import, ty }),
+            name: None,
         })
     }
 
@@ -171,6 +177,7 @@ impl ModuleFunctions {
         self.arena.alloc(Function {
             id,
             kind: FunctionKind::Local(func),
+            name: None,
         })
     }
 
@@ -193,7 +200,7 @@ impl ModuleFunctions {
 impl Module {
     /// Declare local functions after seeing the `function` section of a wasm
     /// executable.
-    pub fn declare_local_functions(
+    pub(crate) fn declare_local_functions(
         &mut self,
         func_section: &elements::FunctionSection,
         ids: &mut IndicesToIds,
@@ -209,11 +216,11 @@ impl Module {
     }
 
     /// Add the locally defined functions in the wasm module to this instance.
-    pub fn parse_local_functions(
+    pub(crate) fn parse_local_functions(
         &mut self,
         raw_module: &elements::Module,
         code_section: &elements::CodeSection,
-        indices: &IndicesToIds,
+        indices: &mut IndicesToIds,
     ) -> Result<()> {
         let num_imports = self.funcs.arena.len() - code_section.bodies().len();
         let validation = ValidationContext::for_module(raw_module)?;

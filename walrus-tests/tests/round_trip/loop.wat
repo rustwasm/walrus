@@ -7,7 +7,7 @@
 
 ;; CHECK: (module
 ;; NEXT:    (type (;0;) (func))
-;; NEXT:    (func (;0;) (type 0)
+;; NEXT:    (func $f (type 0)
 ;; NEXT:      loop  ;; label = @1
 ;; NEXT:      end)
-;; NEXT:    (export "inf_loop" (func 0)))
+;; NEXT:    (export "inf_loop" (func $f)))

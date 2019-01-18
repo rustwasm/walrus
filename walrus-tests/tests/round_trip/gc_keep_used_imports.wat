@@ -7,5 +7,5 @@
 
 ;; CHECK: (module
 ;; NEXT:    (type (;0;) (func (result i32)))
-;; NEXT:    (import "env" "used" (func (;0;) (type 0)))
-;; NEXT:    (export "used" (func 0)))
+;; NEXT:    (import "env" "used" (func $used (type 0)))
+;; NEXT:    (export "used" (func $used)))

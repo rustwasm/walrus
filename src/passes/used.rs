@@ -1,4 +1,5 @@
 use crate::ir::*;
+use crate::module::data::DataId;
 use crate::module::elements::ElementId;
 use crate::module::exports::{ExportId, ExportItem};
 use crate::module::functions::{FunctionId, FunctionKind, LocalFunction};
@@ -7,7 +8,7 @@ use crate::module::memories::MemoryId;
 use crate::module::tables::{TableId, TableKind};
 use crate::module::Module;
 use crate::ty::TypeId;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 /// Finds the things within a module that are used.
 ///
@@ -26,8 +27,12 @@ pub struct Used {
     pub globals: HashSet<GlobalId>,
     /// The module's used memories.
     pub memories: HashSet<MemoryId>,
-    /// The module's used passive segments.
+    /// The module's used passive element segments.
     pub elements: HashSet<ElementId>,
+    /// The module's used passive data segments.
+    pub data: HashSet<DataId>,
+    /// Locals used within functions
+    pub locals: HashMap<FunctionId, HashSet<LocalId>>,
 }
 
 impl Used {
@@ -55,6 +60,9 @@ impl Used {
                 }
             }
         }
+        if let Some(f) = module.start {
+            stack.push_func(f);
+        }
 
         while stack.functions.len() > 0 || stack.tables.len() > 0 {
             while let Some(f) = stack.functions.pop() {
@@ -66,6 +74,7 @@ impl Used {
                         func.entry_block().visit(&mut UsedVisitor {
                             func,
                             stack: &mut stack,
+                            id: f,
                         });
                     }
                     FunctionKind::Import(_) => {}
@@ -119,6 +128,7 @@ impl UsedStack<'_> {
 struct UsedVisitor<'a, 'b> {
     func: &'a LocalFunction,
     stack: &'a mut UsedStack<'b>,
+    id: FunctionId,
 }
 
 impl<'expr> Visitor<'expr> for UsedVisitor<'expr, '_> {
@@ -144,5 +154,14 @@ impl<'expr> Visitor<'expr> for UsedVisitor<'expr, '_> {
 
     fn visit_type_id(&mut self, &t: &TypeId) {
         self.stack.used.types.insert(t);
+    }
+
+    fn visit_local_id(&mut self, &l: &LocalId) {
+        self.stack
+            .used
+            .locals
+            .entry(self.id)
+            .or_insert(HashSet::new())
+            .insert(l);
     }
 }

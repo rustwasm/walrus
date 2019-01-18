@@ -26,12 +26,14 @@ pub type LocalId = Id<Local>;
 pub struct Local {
     id: LocalId,
     ty: ValType,
+    /// A human-readable name for this local, often useful when debugging
+    pub name: Option<String>,
 }
 
 impl Local {
     /// Construct a new local from the given id and type.
     pub fn new(id: LocalId, ty: ValType) -> Local {
-        Local { id, ty }
+        Local { id, ty, name: None }
     }
 
     /// Get this local's id that is unique across the whole module.

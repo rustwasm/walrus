@@ -11,12 +11,11 @@
 
 ;; CHECK: (module
 ;; NEXT:    (type (;0;) (func (param i32) (result i32)))
-;; NEXT:    (func (;0;) (type 0) (param i32) (result i32)
-;; NEXT:      (local i32)
+;; NEXT:    (func $if_else (type 0) (param i32) (result i32)
 ;; NEXT:      local.get 0
 ;; NEXT:      if (result i32)  ;; label = @1
 ;; NEXT:        i32.const 1
 ;; NEXT:      else
 ;; NEXT:        i32.const 2
 ;; NEXT:      end)
-;; NEXT:    (export "if_else" (func 0)))
+;; NEXT:    (export "if_else" (func $if_else)))

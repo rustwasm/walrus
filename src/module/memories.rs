@@ -1,6 +1,9 @@
 //! Memories used in a wasm module.
 
-use crate::emit::{Emit, EmitContext};
+use crate::const_value::Const;
+use crate::emit::{Emit, EmitContext, IdsToIndices};
+use crate::ir::Value;
+use crate::module::globals::GlobalId;
 use crate::module::imports::ImportId;
 use crate::module::parse::IndicesToIds;
 use crate::module::Module;
@@ -22,6 +25,50 @@ pub struct Memory {
     pub maximum: Option<u32>,
     /// Whether or not this memory is imported, and if so from where
     pub import: Option<ImportId>,
+    /// Data that will be used to initialize this memory chunk, with known
+    /// static offsets
+    pub data: MemoryData,
+}
+
+/// An abstraction for the initialization values of a `Memory`.
+///
+/// This houses all the data sections of a wasm executable that as associated
+/// with this `Memory`.
+#[derive(Debug, Default)]
+pub struct MemoryData {
+    absolute: Vec<(u32, Vec<u8>)>,
+    relative: Vec<(GlobalId, Vec<u8>)>,
+}
+
+impl Memory {
+    /// Return the id of this memory
+    pub fn id(&self) -> MemoryId {
+        self.id
+    }
+
+    pub(crate) fn emit_data<'a>(
+        &'a self,
+        indices: &'a IdsToIndices,
+    ) -> impl Iterator<Item = elements::DataSegment> + 'a {
+        let index = indices.get_memory_index(self.id);
+        let absolute = self.data.absolute.iter().map(move |(pos, data)| {
+            elements::DataSegment::new(
+                index,
+                Some(Const::Value(Value::I32(*pos as i32)).emit_instructions(indices)),
+                data.to_vec(),
+                false,
+            )
+        });
+        let relative = self.data.relative.iter().map(move |(id, data)| {
+            elements::DataSegment::new(
+                index,
+                Some(Const::Global(*id).emit_instructions(indices)),
+                data.to_vec(),
+                false,
+            )
+        });
+        absolute.chain(relative)
+    }
 }
 
 /// The set of memories in this module.
@@ -46,6 +93,7 @@ impl ModuleMemories {
             initial,
             maximum,
             import: Some(import),
+            data: MemoryData::default(),
         });
         debug_assert_eq!(id, id2);
         id
@@ -61,6 +109,7 @@ impl ModuleMemories {
             initial,
             maximum,
             import: None,
+            data: MemoryData::default(),
         });
         debug_assert_eq!(id, id2);
         id
@@ -120,5 +169,17 @@ impl Emit for ModuleMemories {
             let memories = elements::Section::Memory(memories);
             cx.dst.sections_mut().push(memories);
         }
+    }
+}
+
+impl MemoryData {
+    /// Adds a new chunk of data in this `ModuleData` at an absolute address
+    pub fn add_absolute(&mut self, pos: u32, data: Vec<u8>) {
+        self.absolute.push((pos, data));
+    }
+
+    /// Adds a new chunk of data in this `ModuleData` at a relative address
+    pub fn add_relative(&mut self, id: GlobalId, data: Vec<u8>) {
+        self.relative.push((id, data));
     }
 }

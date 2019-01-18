@@ -9,6 +9,7 @@ failure = "0.1.2"
 id-arena = "2.0.1"
 parity-wasm = "0.35.6"
 petgraph = "0.4.13"
+log = "0.4"
 
 [dependencies.walrus-derive]
 path = "./walrus-derive"

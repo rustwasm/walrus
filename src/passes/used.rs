@@ -1,4 +1,5 @@
 use crate::ir::*;
+use crate::module::data::DataId;
 use crate::module::elements::ElementId;
 use crate::module::exports::{ExportId, ExportItem};
 use crate::module::functions::{FunctionId, FunctionKind, LocalFunction};
@@ -26,8 +27,10 @@ pub struct Used {
     pub globals: HashSet<GlobalId>,
     /// The module's used memories.
     pub memories: HashSet<MemoryId>,
-    /// The module's used passive segments.
+    /// The module's used passive element segments.
     pub elements: HashSet<ElementId>,
+    /// The module's used passive data segments.
+    pub data: HashSet<DataId>,
 }
 
 impl Used {

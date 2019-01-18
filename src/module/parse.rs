@@ -1,4 +1,5 @@
 use crate::error::Result;
+use crate::module::data::DataId;
 use crate::module::elements::ElementId;
 use crate::module::functions::FunctionId;
 use crate::module::globals::GlobalId;
@@ -15,6 +16,7 @@ pub struct IndicesToIds {
     globals: Vec<GlobalId>,
     memories: Vec<MemoryId>,
     elements: Vec<ElementId>,
+    data: Vec<DataId>,
 }
 
 macro_rules! define_push_get {
@@ -46,3 +48,4 @@ define_push_get!(push_func, get_func, FunctionId, funcs);
 define_push_get!(push_global, get_global, GlobalId, globals);
 define_push_get!(push_memory, get_memory, MemoryId, memories);
 define_push_get!(push_element, get_element, ElementId, elements);
+define_push_get!(push_data, get_data, DataId, data);

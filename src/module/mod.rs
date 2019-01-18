@@ -1,5 +1,6 @@
 //! A high-level API for manipulating wasm modules.
 
+pub mod data;
 pub mod elements;
 pub mod exports;
 pub mod functions;
@@ -13,9 +14,10 @@ pub mod types;
 
 use crate::emit::{Emit, EmitContext, IdsToIndices};
 use crate::error::Result;
+use crate::module::data::ModuleData;
 use crate::module::elements::ModuleElements;
 use crate::module::exports::ModuleExports;
-use crate::module::functions::{ModuleFunctions, Function, FunctionId};
+use crate::module::functions::{Function, FunctionId, ModuleFunctions};
 use crate::module::globals::ModuleGlobals;
 use crate::module::imports::ModuleImports;
 use crate::module::locals::ModuleLocals;
@@ -39,8 +41,7 @@ pub struct Module {
     pub(crate) locals: ModuleLocals,
     pub(crate) exports: ModuleExports,
     pub(crate) memories: ModuleMemories,
-    // TODO: make this an internal type, not a parity-wasm type
-    pub(crate) data: parity::DataSection,
+    pub(crate) data: ModuleData,
     pub(crate) elements: ModuleElements,
     pub(crate) start: Option<FunctionId>,
 }
@@ -70,7 +71,7 @@ impl Module {
             use parity_wasm::elements::Section;
 
             match section {
-                Section::Data(s) => ret.data = s.clone(),
+                Section::Data(s) => ret.parse_data(s, &mut indices)?,
                 Section::Type(s) => ret.parse_types(s, &mut indices),
                 Section::Import(s) => ret.parse_imports(s, &mut indices)?,
                 Section::Table(s) => ret.parse_tables(s, &mut indices),
@@ -107,10 +108,9 @@ impl Module {
     pub fn emit_wasm(&self) -> Result<Vec<u8>> {
         let roots = self.exports.iter();
         let used = passes::Used::new(self, roots.map(|e| e.id()));
-        let data = parity::Section::Data(self.data.clone());
 
         let indices = &mut IdsToIndices::default();
-        let mut module = parity::Module::new(vec![data]);
+        let mut module = parity::Module::new(Vec::new());
 
         let mut cx = EmitContext {
             module: self,
@@ -130,6 +130,7 @@ impl Module {
             cx.dst.sections_mut().push(parity::Section::Start(idx));
         }
         self.elements.emit(&mut cx);
+        self.data.emit(&mut cx);
 
         module.sections_mut().sort_by_key(|s| match s {
             parity::Section::Type(_) => 1,

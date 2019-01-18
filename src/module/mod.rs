@@ -25,7 +25,7 @@ use crate::module::memories::ModuleMemories;
 use crate::module::tables::ModuleTables;
 use crate::module::types::ModuleTypes;
 use crate::passes;
-use failure::ResultExt;
+use failure::{bail, ResultExt};
 use parity_wasm::elements as parity;
 use std::fs;
 use std::path::Path;
@@ -44,6 +44,13 @@ pub struct Module {
     pub(crate) data: ModuleData,
     pub(crate) elements: ModuleElements,
     pub(crate) start: Option<FunctionId>,
+    custom: Vec<CustomSection>,
+}
+
+#[derive(Debug)]
+struct CustomSection {
+    name: String,
+    value: Vec<u8>,
 }
 
 impl Module {
@@ -83,11 +90,15 @@ impl Module {
                 Section::Element(s) => ret.parse_elements(s, &mut indices)?,
                 Section::Start(idx) => ret.start = Some(indices.get_func(*idx)?),
 
-                // TODO: handle these
-                Section::Unparsed { .. } => {}
-                Section::Custom(_) => {}
+                Section::Unparsed { .. } => bail!("failed to handle unparsed section"),
+                Section::Custom(s) => {
+                    ret.custom.push(CustomSection {
+                        name: s.name().to_string(),
+                        value: s.payload().to_vec(),
+                    })
+                }
                 Section::Name(_) => {}
-                Section::Reloc(_) => {}
+                Section::Reloc(_) => bail!("cannot handle the reloc section"),
             }
         }
 
@@ -131,6 +142,14 @@ impl Module {
         }
         self.elements.emit(&mut cx);
         self.data.emit(&mut cx);
+
+        for section in self.custom.iter() {
+            let section = parity::CustomSection::new(
+                section.name.clone(),
+                section.value.clone(),
+            );
+            module.sections_mut().push(parity::Section::Custom(section));
+        }
 
         module.sections_mut().sort_by_key(|s| match s {
             parity::Section::Type(_) => 1,

@@ -511,12 +511,10 @@ fn validate_instruction<'a>(
             let values = ctx.pop_operands(&expected)?.into_boxed_slice();
             let expr = ctx.func.alloc(Return { values });
             ctx.unreachable(expr);
-            ctx.add_to_current_frame_block(expr);
         }
         Instruction::Unreachable => {
             let expr = ctx.func.alloc(Unreachable {});
             ctx.unreachable(expr);
-            ctx.add_to_current_frame_block(expr);
         }
         Instruction::Block(block_ty) => {
             let validation = ctx.validation.for_block(ValType::from_block_ty(block_ty));
@@ -594,7 +592,6 @@ fn validate_instruction<'a>(
                 args,
             });
             ctx.unreachable(expr);
-            ctx.add_to_current_frame_block(expr);
         }
         Instruction::BrIf(n) => {
             ctx.validation
@@ -670,7 +667,6 @@ fn validate_instruction<'a>(
             });
 
             ctx.unreachable(expr);
-            ctx.add_to_current_frame_block(expr);
         }
 
         Instruction::CurrentMemory(mem) => {

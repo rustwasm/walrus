@@ -150,20 +150,23 @@ impl<'a> FunctionContext<'a> {
     }
 
     pub fn pop_control(&mut self) -> Result<(Box<[ValType]>, Vec<ExprId>)> {
-        let block = self.control(0).block;
-        let (results, _block, exprs) = impl_pop_control(&mut self.controls, &mut self.operands)?;
-        self.func
-            .block_mut(block)
-            .exprs
-            .extend(exprs.iter().cloned());
-        Ok((results, exprs))
+        let (frame, exprs) = impl_pop_control(&mut self.controls, &mut self.operands)?;
+        if frame.unreachable.is_none() {
+            self.func
+                .block_mut(frame.block)
+                .exprs
+                .extend(exprs.iter().cloned());
+        }
+        Ok((frame.end_types, exprs))
     }
 
     pub fn unreachable<E>(&mut self, expr: E)
     where
         E: Into<ExprId>,
     {
-        impl_unreachable(&mut self.operands, &mut self.controls, expr)
+        let expr = expr.into();
+        self.add_to_current_frame_block(expr);
+        impl_unreachable(&mut self.operands, &mut self.controls, expr);
     }
 
     pub fn control(&self, n: usize) -> &ControlFrame {
@@ -183,7 +186,11 @@ impl<'a> FunctionContext<'a> {
     where
         E: Into<ExprId>,
     {
-        let block = self.control(control_frame).block;
+        let ctrl = self.control(control_frame);
+        if ctrl.unreachable.is_some() {
+            return;
+        }
+        let block = ctrl.block;
         self.add_to_block(block, expr);
     }
 
@@ -287,7 +294,7 @@ fn impl_push_control(
 fn impl_pop_control(
     controls: &mut ControlStack,
     operands: &mut OperandStack,
-) -> Result<(Box<[ValType]>, BlockId, Vec<ExprId>)> {
+) -> Result<(ControlFrame, Vec<ExprId>)> {
     let frame = controls.last().ok_or_else(|| {
         ErrorKind::InvalidWasm.context("attempted to pop a frame from an empty control stack")
     })?;
@@ -303,7 +310,7 @@ fn impl_pop_control(
             .into());
     }
     let frame = controls.pop().unwrap();
-    Ok((frame.end_types, frame.block, exprs))
+    Ok((frame, exprs))
 }
 
 fn impl_unreachable<E>(operands: &mut OperandStack, controls: &mut ControlStack, expr: E)

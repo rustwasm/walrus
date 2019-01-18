@@ -6,12 +6,23 @@
 use crate::error::Result;
 use failure::bail;
 use parity_wasm::elements::*;
-use std::collections::HashMap;
 
 /// Representation of the wasm custom section `producers`
 #[derive(Debug, Default)]
 pub struct ModuleProducers {
-    fields: HashMap<String, HashMap<String, String>>,
+    fields: Vec<Field>,
+}
+
+#[derive(Debug)]
+struct Field {
+    name: String,
+    values: Vec<Value>,
+}
+
+#[derive(Debug)]
+struct Value {
+    name: String,
+    version: String,
 }
 
 impl ModuleProducers {
@@ -24,12 +35,13 @@ impl ModuleProducers {
             let name = String::deserialize(&mut data)?;
             let cnt: u32 = VarUint32::deserialize(&mut data)?.into();
 
-            let map = ret.fields.entry(name).or_insert(HashMap::new());
+            let mut values = Vec::with_capacity(cnt as usize);
             for _ in 0..cnt {
                 let name = String::deserialize(&mut data)?;
                 let version = String::deserialize(&mut data)?;
-                map.insert(name, version);
+                values.push(Value { name, version });
             }
+            ret.fields.push(Field { name, values });
         }
         if data.len() != 0 {
             bail!("failed to decode all data in producers section");
@@ -46,23 +58,15 @@ impl ModuleProducers {
             .serialize(&mut dst)
             .unwrap();
 
-        // emit in a deterministic order, so be sure to sort
-        let mut fields = self.fields.iter().collect::<Vec<_>>();
-        fields.sort_by_key(|f| f.0);
-
-        for (field, values) in fields {
-            field.clone().serialize(&mut dst).unwrap();
-            VarUint32::from(values.len() as u32)
+        for field in self.fields.iter() {
+            field.name.clone().serialize(&mut dst).unwrap();
+            VarUint32::from(field.values.len() as u32)
                 .serialize(&mut dst)
                 .unwrap();
 
-            // also be sure to emit the values in a deterministic order
-            let mut values = values.iter().collect::<Vec<_>>();
-            values.sort();
-
-            for (name, version) in values {
-                name.clone().serialize(&mut dst).unwrap();
-                version.clone().serialize(&mut dst).unwrap();
+            for value in field.values.iter() {
+                value.name.clone().serialize(&mut dst).unwrap();
+                value.version.clone().serialize(&mut dst).unwrap();
             }
         }
 
@@ -84,10 +88,28 @@ impl ModuleProducers {
         self.field("sdk", sdk, version);
     }
 
-    fn field(&mut self, field: &str, name: &str, version: &str) {
-        self.fields
-            .entry(field.to_string())
-            .or_insert(HashMap::new())
-            .insert(name.to_string(), version.to_string());
+    fn field(&mut self, field_name: &str, name: &str, version: &str) {
+        let new_value = Value {
+            name: name.to_string(),
+            version: version.to_string(),
+        };
+        for field in self.fields.iter_mut() {
+            if field.name != field_name {
+                continue
+            }
+
+            for value in field.values.iter_mut() {
+                if value.name == name {
+                    *value = new_value;
+                    return;
+                }
+            }
+            field.values.push(new_value);
+            return;
+        }
+        self.fields.push(Field {
+            name: field_name.to_string(),
+            values: vec![new_value],
+        })
     }
 }

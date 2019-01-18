@@ -20,8 +20,8 @@ pub struct Data {
     value: Vec<u8>,
 }
 
-/// All element segments of a wasm module, used to initialize `anyfunc` tables,
-/// used as function pointers.
+/// All passive data sections of a wasm module, used to initialize memories via
+/// various instructions.
 #[derive(Debug, Default)]
 pub struct ModuleData {
     arena: Arena<Data>,

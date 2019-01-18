@@ -4,6 +4,7 @@ use crate::emit::IdsToIndices;
 use crate::error::Result;
 use crate::ir::Value;
 use crate::module::globals::GlobalId;
+use crate::parse::IndicesToIds;
 use failure::bail;
 use parity_wasm::elements::{self, Instruction};
 
@@ -18,7 +19,7 @@ pub enum Const {
 }
 
 impl Const {
-    pub(crate) fn eval(init: &elements::InitExpr) -> Result<Const> {
+    pub(crate) fn eval(init: &elements::InitExpr, ids: &IndicesToIds) -> Result<Const> {
         let instrs = init.code();
         if instrs.len() != 2 {
             bail!("invalid constant expression");
@@ -32,6 +33,7 @@ impl Const {
             Instruction::I64Const(n) => Ok(Const::Value(Value::I64(n))),
             Instruction::F32Const(n) => Ok(Const::Value(Value::F32(f32::from_bits(n)))),
             Instruction::F64Const(n) => Ok(Const::Value(Value::F64(f64::from_bits(n)))),
+            Instruction::GetGlobal(n) => Ok(Const::Global(ids.get_global(n)?)),
             _ => bail!("invalid constant expression"),
         }
     }

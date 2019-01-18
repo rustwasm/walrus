@@ -5,9 +5,9 @@ use crate::emit::{Emit, EmitContext};
 use crate::error::Result;
 use crate::ir::Value;
 use crate::module::functions::FunctionId;
-use crate::module::parse::IndicesToIds;
 use crate::module::tables::TableKind;
 use crate::module::Module;
+use crate::parse::IndicesToIds;
 use crate::ty::ValType;
 use failure::{bail, ResultExt};
 use id_arena::{Arena, Id};
@@ -73,7 +73,7 @@ impl Module {
             let functions = segment.members().iter().map(|func| ids.get_func(*func));
 
             let offset = segment.offset().as_ref().unwrap();
-            let offset = Const::eval(offset).with_context(|_e| format!("in segment {}", i))?;
+            let offset = Const::eval(offset, ids).with_context(|_e| format!("in segment {}", i))?;
             match offset {
                 Const::Value(Value::I32(n)) => {
                     let offset = n as usize;

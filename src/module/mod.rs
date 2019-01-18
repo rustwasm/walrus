@@ -8,7 +8,6 @@ pub mod globals;
 pub mod imports;
 pub mod locals;
 pub mod memories;
-mod parse;
 pub mod producers;
 pub mod tables;
 pub mod types;
@@ -26,6 +25,7 @@ use crate::module::memories::ModuleMemories;
 use crate::module::producers::ModuleProducers;
 use crate::module::tables::ModuleTables;
 use crate::module::types::ModuleTypes;
+use crate::parse::IndicesToIds;
 use crate::passes;
 use failure::{bail, ResultExt};
 use parity_wasm::elements as parity;
@@ -79,7 +79,7 @@ impl Module {
         }
 
         let mut ret = Module::default();
-        let mut indices = parse::IndicesToIds::default();
+        let mut indices = IndicesToIds::default();
 
         for section in module.sections() {
             use parity_wasm::elements::NameSection;

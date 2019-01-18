@@ -1,9 +1,10 @@
+use crate::const_value::Const;
 use crate::ir::*;
 use crate::module::data::DataId;
 use crate::module::elements::ElementId;
 use crate::module::exports::{ExportId, ExportItem};
 use crate::module::functions::{FunctionId, FunctionKind, LocalFunction};
-use crate::module::globals::GlobalId;
+use crate::module::globals::{GlobalId, GlobalKind};
 use crate::module::memories::MemoryId;
 use crate::module::tables::{TableId, TableKind};
 use crate::module::Module;
@@ -46,25 +47,27 @@ impl Used {
             used: &mut used,
             functions: Vec::new(),
             tables: Vec::new(),
+            globals: Vec::new(),
+            memories: Vec::new(),
         };
 
         for r in roots {
             match module.exports.get(r).item {
                 ExportItem::Function(f) => stack.push_func(f),
                 ExportItem::Table(t) => stack.push_table(t),
-                ExportItem::Memory(m) => {
-                    stack.used.memories.insert(m);
-                }
-                ExportItem::Global(g) => {
-                    stack.used.globals.insert(g);
-                }
+                ExportItem::Memory(m) => stack.push_memory(m),
+                ExportItem::Global(g) => stack.push_global(g),
             }
         }
         if let Some(f) = module.start {
             stack.push_func(f);
         }
 
-        while stack.functions.len() > 0 || stack.tables.len() > 0 {
+        while stack.functions.len() > 0
+            || stack.tables.len() > 0
+            || stack.memories.len() > 0
+            || stack.globals.len() > 0
+        {
             while let Some(f) = stack.functions.pop() {
                 let func = module.funcs.get(f);
                 stack.used.types.insert(func.ty());
@@ -91,12 +94,28 @@ impl Used {
                             }
                         }
                         for (global, list) in list.relative_elements.iter() {
-                            stack.used.globals.insert(*global);
+                            stack.push_global(*global);
                             for id in list {
                                 stack.push_func(*id);
                             }
                         }
                     }
+                }
+            }
+
+            while let Some(t) = stack.globals.pop() {
+                match &module.globals.get(t).kind {
+                    GlobalKind::Import(_) => {}
+                    GlobalKind::Local(Const::Global(global)) => {
+                        stack.push_global(*global);
+                    }
+                    GlobalKind::Local(Const::Value(_)) => {}
+                }
+            }
+
+            while let Some(t) = stack.memories.pop() {
+                for global in module.memories.get(t).data.globals() {
+                    stack.push_global(global);
                 }
             }
         }
@@ -109,6 +128,8 @@ struct UsedStack<'a> {
     used: &'a mut Used,
     functions: Vec<FunctionId>,
     tables: Vec<TableId>,
+    memories: Vec<MemoryId>,
+    globals: Vec<GlobalId>,
 }
 
 impl UsedStack<'_> {
@@ -121,6 +142,18 @@ impl UsedStack<'_> {
     fn push_table(&mut self, f: TableId) {
         if self.used.tables.insert(f) {
             self.tables.push(f);
+        }
+    }
+
+    fn push_global(&mut self, f: GlobalId) {
+        if self.used.globals.insert(f) {
+            self.globals.push(f);
+        }
+    }
+
+    fn push_memory(&mut self, f: MemoryId) {
+        if self.used.memories.insert(f) {
+            self.memories.push(f);
         }
     }
 }
@@ -141,11 +174,11 @@ impl<'expr> Visitor<'expr> for UsedVisitor<'expr, '_> {
     }
 
     fn visit_memory_id(&mut self, &m: &MemoryId) {
-        self.stack.used.memories.insert(m);
+        self.stack.push_memory(m);
     }
 
     fn visit_global_id(&mut self, &g: &GlobalId) {
-        self.stack.used.globals.insert(g);
+        self.stack.push_global(g);
     }
 
     fn visit_table_id(&mut self, &t: &TableId) {

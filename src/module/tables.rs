@@ -4,8 +4,8 @@ use crate::emit::{Emit, EmitContext};
 use crate::module::functions::FunctionId;
 use crate::module::globals::GlobalId;
 use crate::module::imports::ImportId;
-use crate::module::parse::IndicesToIds;
 use crate::module::Module;
+use crate::parse::IndicesToIds;
 use id_arena::{Arena, Id};
 use parity_wasm::elements;
 

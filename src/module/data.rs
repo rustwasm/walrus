@@ -4,8 +4,8 @@ use crate::const_value::Const;
 use crate::emit::{Emit, EmitContext};
 use crate::error::Result;
 use crate::ir::Value;
-use crate::module::parse::IndicesToIds;
 use crate::module::Module;
+use crate::parse::IndicesToIds;
 use crate::ty::ValType;
 use failure::{bail, ResultExt};
 use id_arena::{Arena, Id};
@@ -66,7 +66,7 @@ impl Module {
             let memory = self.memories.get_mut(memory);
 
             let offset = segment.offset().as_ref().unwrap();
-            let offset = Const::eval(offset).with_context(|_e| format!("in segment {}", i))?;
+            let offset = Const::eval(offset, ids).with_context(|_e| format!("in segment {}", i))?;
             match offset {
                 Const::Value(Value::I32(n)) => {
                     memory.data.add_absolute(n as u32, value);

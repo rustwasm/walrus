@@ -3,8 +3,8 @@
 use crate::error::{ErrorKind, Result};
 use crate::ir::{Block, BlockId, BlockKind, ExprId};
 use crate::module::functions::{FunctionId, LocalFunction};
-use crate::module::parse::IndicesToIds;
 use crate::module::Module;
+use crate::parse::IndicesToIds;
 use crate::ty::ValType;
 use crate::validation_context::ValidationContext;
 use failure::Fail;

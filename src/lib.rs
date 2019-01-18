@@ -11,6 +11,7 @@ mod emit;
 pub mod error;
 pub mod ir;
 pub mod module;
+mod parse;
 pub mod passes;
 pub mod ty;
 pub mod validation_context;

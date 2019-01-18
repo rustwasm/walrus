@@ -4,8 +4,8 @@ use crate::const_value::Const;
 use crate::emit::{Emit, EmitContext};
 use crate::error::Result;
 use crate::module::imports::ImportId;
-use crate::module::parse::IndicesToIds;
 use crate::module::Module;
+use crate::parse::IndicesToIds;
 use crate::ty::ValType;
 use id_arena::{Arena, Id};
 use parity_wasm::elements;
@@ -104,7 +104,7 @@ impl Module {
             let id = self.globals.add_local(
                 ValType::from(&g.global_type().content_type()),
                 g.global_type().is_mutable(),
-                Const::eval(g.init_expr())?,
+                Const::eval(g.init_expr(), ids)?,
             );
             ids.push_global(id);
         }

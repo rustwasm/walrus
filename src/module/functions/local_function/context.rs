@@ -218,8 +218,6 @@ fn impl_pop_operand(
             if let Some(expr) = controls.last().unwrap().unreachable {
                 return Ok((None, expr));
             }
-        }
-        if operands.len() == height {
             return Err(ErrorKind::InvalidWasm
                 .context("popped operand past control frame height in non-unreachable code")
                 .into());

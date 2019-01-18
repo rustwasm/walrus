@@ -73,32 +73,22 @@ impl Emit<'_> {
                 self.emit(elements::Instruction::CurrentMemory(idx as u8))
             }
 
-            I32Add(e) => {
+            Binop(e) => {
                 self.visit(e.lhs);
                 self.visit(e.rhs);
-                self.emit(elements::Instruction::I32Add)
+                self.emit(match e.op {
+                    BinaryOp::I32Add => elements::Instruction::I32Add,
+                    BinaryOp::I32Sub => elements::Instruction::I32Sub,
+                    BinaryOp::I32Mul => elements::Instruction::I32Mul,
+                })
             }
 
-            I32Sub(e) => {
-                self.visit(e.lhs);
-                self.visit(e.rhs);
-                self.emit(elements::Instruction::I32Sub)
-            }
-
-            I32Mul(e) => {
-                self.visit(e.lhs);
-                self.visit(e.rhs);
-                self.emit(elements::Instruction::I32Mul)
-            }
-
-            I32Eqz(e) => {
+            Unop(e) => {
                 self.visit(e.expr);
-                self.emit(elements::Instruction::I32Eqz)
-            }
-
-            I32Popcnt(e) => {
-                self.visit(e.expr);
-                self.emit(elements::Instruction::I32Popcnt)
+                self.emit(match e.op {
+                    UnaryOp::I32Eqz => elements::Instruction::I32Eqz,
+                    UnaryOp::I32Popcnt => elements::Instruction::I32Popcnt,
+                })
             }
 
             Select(e) => {

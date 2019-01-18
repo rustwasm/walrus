@@ -338,7 +338,7 @@ macro_rules! binop {
     ($ctx:ident, $op:ident, $ty:ident) => {
         let (_, rhs) = $ctx.pop_operand_expected(Some(ValType::$ty))?;
         let (_, lhs) = $ctx.pop_operand_expected(Some(ValType::$ty))?;
-        let expr = $ctx.func.alloc($op { lhs, rhs });
+        let expr = $ctx.func.alloc(Binop { op: BinaryOp::$op, lhs, rhs });
         $ctx.push_operand(Some(ValType::$ty), expr);
     };
 }
@@ -346,7 +346,7 @@ macro_rules! binop {
 macro_rules! unop {
     ($ctx:ident, $op:ident, $ty:ident) => {
         let (_, expr) = $ctx.pop_operand_expected(Some(ValType::$ty))?;
-        let expr = $ctx.func.alloc($op { expr });
+        let expr = $ctx.func.alloc(Unop { op: UnaryOp::$op, expr });
         $ctx.push_operand(Some(ValType::$ty), expr);
     };
 }
@@ -354,7 +354,7 @@ macro_rules! unop {
 macro_rules! testop {
     ($ctx:ident, $op:ident, $ty:ident) => {
         let (_, expr) = $ctx.pop_operand_expected(Some(ValType::$ty))?;
-        let expr = $ctx.func.alloc($op { expr });
+        let expr = $ctx.func.alloc(Unop { op: UnaryOp::$op, expr });
         $ctx.push_operand(Some(ValType::I32), expr);
     };
 }

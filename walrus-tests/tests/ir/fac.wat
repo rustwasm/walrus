@@ -36,18 +36,18 @@
 ;; NEXT:        )
 ;; NEXT:        (loop
 ;; NEXT:          (br.if (;e0;)
-;; NEXT:            (i32.eqz
+;; NEXT:            (I32Eqz
 ;; NEXT:              (local.get 0)
 ;; NEXT:            )
 ;; NEXT:          )
 ;; NEXT:          (local.set 1
-;; NEXT:            (i32.mul
+;; NEXT:            (I32Mul
 ;; NEXT:              (local.get 1)
 ;; NEXT:              (local.get 0)
 ;; NEXT:            )
 ;; NEXT:          )
 ;; NEXT:          (local.set 0
-;; NEXT:            (i32.sub
+;; NEXT:            (I32Sub
 ;; NEXT:              (local.get 0)
 ;; NEXT:              (const 1)
 ;; NEXT:            )

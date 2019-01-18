@@ -7,7 +7,7 @@
 
 ;; CHECK: (func
 ;; NEXT:    (block
-;; NEXT:      (i32.add
+;; NEXT:      (I32Add
 ;; NEXT:        (local.get 0)
 ;; NEXT:        (const 1)
 ;; NEXT:      )

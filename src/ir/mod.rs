@@ -183,39 +183,25 @@ pub enum Expr {
         value: Value,
     },
 
-    /// `i32.add`
-    I32Add {
-        /// The left-hand operand.
+    /// Binary operations, those requiring two operands
+    #[walrus(display_name = display_binop_name, dot_name = dot_binop_name)]
+    Binop {
+        /// The operation being performed
+        #[walrus(skip_visit)]
+        op: BinaryOp,
+        /// The left-hand operand
         lhs: ExprId,
-        /// The right-hand operand.
+        /// The right-hand operand
         rhs: ExprId,
     },
 
-    /// `i32.sub`
-    I32Sub {
-        /// The left-hand operand.
-        lhs: ExprId,
-        /// The right-hand operand.
-        rhs: ExprId,
-    },
-
-    /// `i32.mul`
-    I32Mul {
-        /// The left-hand operand.
-        lhs: ExprId,
-        /// The right-hand operand.
-        rhs: ExprId,
-    },
-
-    /// `i32.eqz`
-    I32Eqz {
-        /// The operand to test if it is equal to zero.
-        expr: ExprId,
-    },
-
-    /// `i32.popcnt`
-    I32Popcnt {
-        /// The operand whose bits should be counted.
+    /// Unary operations, those requiring one operand
+    #[walrus(display_name = display_unop_name, dot_name = dot_unop_name)]
+    Unop {
+        /// The operation being performed
+        #[walrus(skip_visit)]
+        op: UnaryOp,
+        /// The input operand
         expr: ExprId,
     },
 
@@ -328,6 +314,23 @@ impl fmt::Display for Value {
     }
 }
 
+/// Possible binary operations in wasm
+#[allow(missing_docs)]
+#[derive(Copy, Clone, Debug)]
+pub enum BinaryOp {
+    I32Add,
+    I32Sub,
+    I32Mul,
+}
+
+/// Possible unary operations in wasm
+#[allow(missing_docs)]
+#[derive(Copy, Clone, Debug)]
+pub enum UnaryOp {
+    I32Eqz,
+    I32Popcnt,
+}
+
 impl Expr {
     /// Are any instructions that follow this expression's instruction (within
     /// the current block) unreachable?
@@ -348,11 +351,8 @@ impl Expr {
             | Expr::GlobalGet(..)
             | Expr::GlobalSet(..)
             | Expr::Const(..)
-            | Expr::I32Add(..)
-            | Expr::I32Sub(..)
-            | Expr::I32Mul(..)
-            | Expr::I32Eqz(..)
-            | Expr::I32Popcnt(..)
+            | Expr::Binop(..)
+            | Expr::Unop(..)
             | Expr::Select(..)
             | Expr::BrIf(..)
             | Expr::IfElse(..)
@@ -431,4 +431,20 @@ fn display_br_table(e: &BrTable, out: &mut DisplayExpr) {
         ExprId::from(e.default).index(),
         blocks
     ))
+}
+
+fn display_binop_name(e: &Binop, out: &mut DisplayExpr) {
+    out.f.push_str(&format!("{:?}", e.op))
+}
+
+fn dot_binop_name(e: &Binop, out: &mut DotExpr<'_, '_>) {
+    out.out.push_str(&format!("{:?}", e.op))
+}
+
+fn display_unop_name(e: &Unop, out: &mut DisplayExpr) {
+    out.f.push_str(&format!("{:?}", e.op))
+}
+
+fn dot_unop_name(e: &Unop, out: &mut DotExpr<'_, '_>) {
+    out.out.push_str(&format!("{:?}", e.op))
 }

@@ -8,6 +8,11 @@
       drop
     end
     i32.const 2)
+
+  (func (export "foo") (result i32)
+    block (result i32)
+     i32.const 0
+    end)
   (export "f" (func $f)))
 
 ;; CHECK: (module
@@ -20,4 +25,9 @@
 ;; NEXT:        drop
 ;; NEXT:      end
 ;; NEXT:      i32.const 2)
+;; NEXT:    (func (;1;) (type 0) (result i32)
+;; NEXT:      block
+;; NEXT:        i32.const 0
+;; NEXT:      end)
+;; NEXT:    (export "foo" (func 1))
 ;; NEXT:    (export "f" (func $f)))

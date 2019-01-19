@@ -117,15 +117,11 @@ impl<'a> FunctionContext<'a> {
         impl_pop_operand_expected(&mut self.operands, &mut self.controls, expected)
     }
 
-    pub fn push_operands<E>(&mut self, types: &[ValType], exprs: &[E], expr: ExprId)
-    where
-        E: Copy + Into<ExprId>,
-    {
-        assert_eq!(types.len(), exprs.len());
+    pub fn push_operands(&mut self, types: &[ValType], expr: ExprId) {
         if types.is_empty() && self.controls.len() > 0 {
             self.add_to_current_frame_block(expr);
         } else {
-            impl_push_operands(&mut self.operands, types, exprs)
+            impl_push_operands(&mut self.operands, types, expr)
         }
     }
 
@@ -149,7 +145,7 @@ impl<'a> FunctionContext<'a> {
         )
     }
 
-    pub fn pop_control(&mut self) -> Result<(Box<[ValType]>, Vec<ExprId>)> {
+    pub fn pop_control(&mut self) -> Result<(Box<[ValType]>, BlockId)> {
         let (frame, exprs) = impl_pop_control(&mut self.controls, &mut self.operands)?;
         if frame.unreachable.is_none() {
             self.func
@@ -157,7 +153,7 @@ impl<'a> FunctionContext<'a> {
                 .exprs
                 .extend(exprs.iter().cloned());
         }
-        Ok((frame.end_types, exprs))
+        Ok((frame.end_types, frame.block))
     }
 
     pub fn unreachable<E>(&mut self, expr: E)
@@ -247,12 +243,9 @@ fn impl_pop_operand_expected(
     }
 }
 
-fn impl_push_operands<E>(operands: &mut OperandStack, types: &[ValType], exprs: &[E])
-where
-    E: Copy + Into<ExprId>,
-{
-    for (ty, expr) in types.iter().zip(exprs.iter()) {
-        impl_push_operand(operands, Some(*ty), *expr);
+fn impl_push_operands(operands: &mut OperandStack, types: &[ValType], expr: ExprId) {
+    for ty in types {
+        impl_push_operand(operands, Some(*ty), expr);
     }
 }
 

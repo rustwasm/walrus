@@ -4,14 +4,14 @@
 //! eventually this is a full typechecking pass!
 
 use crate::const_value::Const;
-use crate::ir::Value;
-use crate::ty::ValType;
 use crate::error::Result;
+use crate::ir::Value;
 use crate::module::globals::{Global, GlobalKind};
 use crate::module::memories::Memory;
 use crate::module::tables::{Table, TableKind};
 use crate::module::Module;
-use failure::{ResultExt, bail};
+use crate::ty::ValType;
+use failure::{bail, ResultExt};
 
 /// Validate a wasm module, returning an error if it fails to validate.
 pub fn run(module: &Module) -> Result<()> {
@@ -90,7 +90,7 @@ fn validate_value(value: Value, ty: ValType) -> Result<()> {
         (Value::F32(_), ValType::F32) => {}
         (Value::F64(_), ValType::F64) => {}
         (Value::V128(_), ValType::V128) => {}
-        _ => bail!("mismatched types in value")
+        _ => bail!("mismatched types in value"),
     }
     Ok(())
 }

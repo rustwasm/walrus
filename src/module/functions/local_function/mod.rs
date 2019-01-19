@@ -21,7 +21,6 @@ use id_arena::{Arena, Id};
 use parity_wasm::elements::{self, Instruction};
 use std::collections::{BTreeMap, HashSet};
 use std::fmt;
-use std::iter;
 use std::mem;
 
 /// A function defined locally within the wasm module.
@@ -102,7 +101,7 @@ impl LocalFunction {
 
         let entry = ctx.push_control(BlockKind::FunctionEntry, vec![].into_boxed_slice(), result);
         ctx.func.entry = Some(entry);
-        validate_expression(&mut ctx, body.code().elements(), entry.into())?;
+        validate_expression(&mut ctx, body.code().elements())?;
 
         debug_assert_eq!(ctx.operands.len(), result_len);
         debug_assert!(ctx.controls.is_empty());
@@ -348,15 +347,11 @@ fn validate_instruction_sequence<'a>(
     }
 }
 
-fn validate_expression(
-    ctx: &mut FunctionContext,
-    expr: &[Instruction],
-    container: ExprId,
-) -> Result<Vec<ExprId>> {
+fn validate_expression(ctx: &mut FunctionContext, expr: &[Instruction]) -> Result<BlockId> {
     let rest = validate_instruction_sequence(ctx, expr, Instruction::End)?;
-    let exprs = validate_end(ctx, container)?;
+    let block = validate_end(ctx)?;
     if rest.is_empty() {
-        Ok(exprs)
+        Ok(block)
     } else {
         Err(ErrorKind::InvalidWasm
             .context("trailing instructions after final `end`")
@@ -364,10 +359,10 @@ fn validate_expression(
     }
 }
 
-fn validate_end(ctx: &mut FunctionContext, expr: ExprId) -> Result<Vec<ExprId>> {
-    let (results, exprs) = ctx.pop_control()?;
-    ctx.push_operands(&results, &exprs, expr);
-    Ok(exprs)
+fn validate_end(ctx: &mut FunctionContext) -> Result<BlockId> {
+    let (results, block) = ctx.pop_control()?;
+    ctx.push_operands(&results, block.into());
+    Ok(block)
 }
 
 fn validate_instruction<'a>(
@@ -414,8 +409,7 @@ fn validate_instruction<'a>(
             let func = ctx.indices.get_func(*idx).context("invalid call")?;
             let args = ctx.pop_operands(fun_ty.params())?.into_boxed_slice();
             let expr = ctx.func.alloc(Call { func, args });
-            let result_exprs: Vec<_> = iter::repeat(expr).take(fun_ty.results().len()).collect();
-            ctx.push_operands(fun_ty.results(), &result_exprs, expr.into());
+            ctx.push_operands(fun_ty.results(), expr.into());
         }
         Instruction::CallIndirect(type_idx, table_idx) => {
             let type_id = ctx
@@ -435,8 +429,7 @@ fn validate_instruction<'a>(
                 func,
                 args,
             });
-            let result_exprs: Vec<_> = iter::repeat(expr).take(ty.results().len()).collect();
-            ctx.push_operands(ty.results(), &result_exprs, expr.into());
+            ctx.push_operands(ty.results(), expr.into());
         }
         Instruction::GetLocal(n) => {
             let local = ctx.indices.get_local(ctx.func_id, *n)?;
@@ -667,18 +660,18 @@ fn validate_instruction<'a>(
             let validation = ctx.validation.for_block(ValType::from_block_ty(block_ty));
             let mut ctx = ctx.nested(&validation);
             let results = ValType::from_block_ty(block_ty);
-            let block = ctx.push_control(BlockKind::Block, results.clone(), results);
+            ctx.push_control(BlockKind::Block, results.clone(), results);
             let rest = validate_instruction_sequence(&mut ctx, &insts[1..], Instruction::End)?;
-            validate_end(&mut ctx, block.into())?;
+            validate_end(&mut ctx)?;
             return Ok(rest);
         }
         Instruction::Loop(block_ty) => {
             let validation = ctx.validation.for_loop();
             let mut ctx = ctx.nested(&validation);
             let t = ValType::from_block_ty(block_ty);
-            let block = ctx.push_control(BlockKind::Loop, vec![].into_boxed_slice(), t);
+            ctx.push_control(BlockKind::Loop, vec![].into_boxed_slice(), t);
             let rest = validate_instruction_sequence(&mut ctx, &insts[1..], Instruction::End)?;
-            validate_end(&mut ctx, block.into())?;
+            validate_end(&mut ctx)?;
             return Ok(rest);
         }
         Instruction::If(block_ty) => {
@@ -703,8 +696,7 @@ fn validate_instruction<'a>(
                 consequent,
                 alternative,
             });
-            let exprs: Vec<_> = results.iter().map(|_| expr).collect();
-            ctx.push_operands(&results, &exprs, expr.into());
+            ctx.push_operands(&results, expr.into());
 
             return Ok(rest_rest);
         }
@@ -763,8 +755,7 @@ fn validate_instruction<'a>(
                 block: to_block,
                 args,
             });
-            let exprs: Vec<_> = expected.iter().map(|_| expr).collect();
-            ctx.push_operands(&expected, &exprs, expr.into());
+            ctx.push_operands(&expected, expr.into());
         }
         Instruction::BrTable(table) => {
             ctx.validation

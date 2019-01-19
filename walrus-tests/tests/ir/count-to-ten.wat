@@ -16,7 +16,7 @@
 ;; NEXT:        (const 9)
 ;; NEXT:      )
 ;; NEXT:      (loop
-;; NEXT:        (br.if (;e0;)
+;; NEXT:        (br.if (;e3;)
 ;; NEXT:          (I32Eqz
 ;; NEXT:            (local.get 0)
 ;; NEXT:          )

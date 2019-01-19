@@ -307,7 +307,6 @@ impl Emit<'_> {
         self.blocks
             .iter()
             .rev()
-            .skip(1)
             .position(|b| *b == block)
             .expect(
             "attempt to branch to invalid block; bad transformation pass introduced bad branching?",

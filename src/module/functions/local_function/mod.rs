@@ -742,7 +742,7 @@ fn validate_instruction<'a>(
             let expected = ctx.control(n).label_types.clone();
             let args = ctx.pop_operands(&expected)?.into_boxed_slice();
 
-            let to_block = ctx.control(n + 1).block;
+            let to_block = ctx.control(n).block;
             let expr = ctx.func.alloc(Br {
                 block: to_block,
                 args,
@@ -766,7 +766,7 @@ fn validate_instruction<'a>(
             let expected = ctx.control(n).label_types.clone();
             let args = ctx.pop_operands(&expected)?.into_boxed_slice();
 
-            let to_block = ctx.control(n + 1).block;
+            let to_block = ctx.control(n).block;
             let expr = ctx.func.alloc(BrIf {
                 condition,
                 block: to_block,
@@ -786,7 +786,7 @@ fn validate_instruction<'a>(
                     )
                     .into());
             }
-            let default = ctx.control(table.default as usize + 1).block;
+            let default = ctx.control(table.default as usize).block;
 
             let mut blocks = Vec::with_capacity(table.table.len());
             for n in table.table.iter() {
@@ -806,7 +806,7 @@ fn validate_instruction<'a>(
                         )
                         .into());
                 }
-                blocks.push(ctx.control(n + 1).block);
+                blocks.push(ctx.control(n).block);
             }
             let blocks = blocks.into_boxed_slice();
 

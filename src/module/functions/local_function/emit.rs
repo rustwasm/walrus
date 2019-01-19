@@ -73,6 +73,15 @@ impl Emit<'_> {
                 self.emit(elements::Instruction::CurrentMemory(idx as u8))
             }
 
+            MemoryGrow(e) => {
+                self.visit(e.pages);
+                let idx = self.indices.get_memory_index(e.memory);
+                // TODO: should upstream a fix to parity-wasm to accept 32-bit
+                // indices for memories.
+                assert!(idx < 256);
+                self.emit(elements::Instruction::GrowMemory(idx as u8))
+            }
+
             Binop(e) => {
                 use BinaryOp::*;
 

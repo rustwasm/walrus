@@ -293,6 +293,14 @@ pub enum Expr {
         /// The memory we're fetching the current size of.
         memory: MemoryId,
     },
+
+    /// memory.grow
+    MemoryGrow {
+        /// The memory we're growing.
+        memory: MemoryId,
+        /// The number of pages to grow by.
+        pages: ExprId,
+    },
 }
 
 /// Constant values that can show up in WebAssembly
@@ -497,6 +505,7 @@ impl Expr {
             | Expr::BrIf(..)
             | Expr::IfElse(..)
             | Expr::MemorySize(..)
+            | Expr::MemoryGrow(..)
             | Expr::CallIndirect(..)
             | Expr::Drop(..) => false,
         }

@@ -837,6 +837,12 @@ fn validate_instruction<'a>(
             let expr = ctx.func.alloc(MemorySize { memory });
             ctx.push_operand(Some(ValType::I32), expr);
         }
+        Instruction::GrowMemory(mem) => {
+            let (_, pages) = ctx.pop_operand_expected(Some(ValType::I32))?;
+            let memory = ctx.indices.get_memory(*mem as u32)?;
+            let expr = ctx.func.alloc(MemoryGrow { memory, pages });
+            ctx.push_operand(Some(ValType::I32), expr);
+        }
 
         Instruction::Nop => {}
 

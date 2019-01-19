@@ -452,6 +452,13 @@ fn validate_instruction<'a>(
             let expr = ctx.func.alloc(LocalSet { local, value });
             ctx.add_to_current_frame_block(expr);
         }
+        Instruction::TeeLocal(n) => {
+            let local = ctx.indices.get_local(ctx.func_id, *n)?;
+            let ty = ctx.module.locals.get(local).ty();
+            let (_, value) = ctx.pop_operand_expected(Some(ty))?;
+            let expr = ctx.func.alloc(LocalTee { local, value });
+            ctx.push_operand(Some(ty), expr);
+        }
         Instruction::GetGlobal(n) => {
             let global = ctx.indices.get_global(*n).context("invalid global.get")?;
             let ty = ctx.module.globals.get(global).ty;

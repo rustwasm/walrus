@@ -284,6 +284,12 @@ impl Emit<'_> {
                 self.emit(elements::Instruction::SetLocal(idx))
             }
 
+            LocalTee(e) => {
+                self.visit(e.value);
+                let idx = self.indices.get_local_index(e.local);
+                self.emit(elements::Instruction::TeeLocal(idx))
+            }
+
             GlobalGet(e) => {
                 let idx = self.indices.get_global_index(e.global);
                 self.emit(elements::Instruction::GetGlobal(idx))

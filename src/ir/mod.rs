@@ -163,6 +163,14 @@ pub enum Expr {
         value: ExprId,
     },
 
+    /// `local.tee n`
+    LocalTee {
+        /// The local being set.
+        local: LocalId,
+        /// The value to set the local to and return.
+        value: ExprId,
+    },
+
     /// `global.get n`
     GlobalGet {
         /// The global being got.
@@ -479,6 +487,7 @@ impl Expr {
             | Expr::Call(..)
             | Expr::LocalGet(..)
             | Expr::LocalSet(..)
+            | Expr::LocalTee(..)
             | Expr::GlobalGet(..)
             | Expr::GlobalSet(..)
             | Expr::Const(..)

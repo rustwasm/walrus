@@ -99,7 +99,7 @@ impl LocalFunction {
             controls,
         );
 
-        let entry = ctx.push_control(BlockKind::FunctionEntry, vec![].into_boxed_slice(), result);
+        let entry = ctx.push_control(BlockKind::FunctionEntry, result.clone(), result);
         ctx.func.entry = Some(entry);
         validate_expression(&mut ctx, body.code().elements())?;
 

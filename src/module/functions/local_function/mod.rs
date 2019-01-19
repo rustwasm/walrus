@@ -331,16 +331,22 @@ fn validate_instruction_sequence<'a>(
     insts: &'a [Instruction],
     until: Instruction,
 ) -> Result<&'a [Instruction]> {
+    validate_instruction_sequence_until(ctx, insts, |i| *i == until)
+}
+
+fn validate_instruction_sequence_until<'a>(
+    ctx: &mut FunctionContext,
+    insts: &'a [Instruction],
+    mut until: impl FnMut(&Instruction) -> bool,
+) -> Result<&'a [Instruction]> {
     let mut insts = insts;
     loop {
         match insts.first() {
-            None => {
-                return Err(ErrorKind::InvalidWasm
-                    .context(format!("expected `{}`", until))
-                    .into());
-            }
-            Some(inst) if inst == &until => return Ok(&insts[1..]),
-            Some(_) => {
+            None => bail!("unexpected end of instructions"),
+            Some(inst) => {
+                if until(inst) {
+                    return Ok(&insts[1..]);
+                }
                 insts = validate_instruction(ctx, insts)?;
             }
         }
@@ -685,13 +691,23 @@ fn validate_instruction<'a>(
             let ty = ValType::from_block_ty(block_ty);
             let consequent = ctx.push_control(BlockKind::IfElse, ty.clone(), ty.clone());
 
-            let rest = validate_instruction_sequence(&mut ctx, &insts[1..], Instruction::Else)?;
-            let (results, _values) = ctx.pop_control()?;
+            let mut else_found = false;
+            let mut rest = validate_instruction_sequence_until(&mut ctx, &insts[1..], |i| {
+                if *i == Instruction::Else {
+                    else_found = true;
+                    true
+                } else {
+                    *i == Instruction::End
+                }
+            })?;
+            let (results, _block) = ctx.pop_control()?;
 
             let alternative = ctx.push_control(BlockKind::IfElse, results.clone(), results);
 
-            let rest_rest = validate_instruction_sequence(&mut ctx, rest, Instruction::End)?;
-            let (results, _values) = ctx.pop_control()?;
+            if else_found {
+                rest = validate_instruction_sequence(&mut ctx, rest, Instruction::End)?;
+            }
+            let (results, _block) = ctx.pop_control()?;
 
             let expr = ctx.func.alloc(IfElse {
                 condition,
@@ -700,7 +716,7 @@ fn validate_instruction<'a>(
             });
             ctx.push_operands(&results, expr.into());
 
-            return Ok(rest_rest);
+            return Ok(rest);
         }
         Instruction::End => {
             return Err(ErrorKind::InvalidWasm

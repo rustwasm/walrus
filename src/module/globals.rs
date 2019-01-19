@@ -127,12 +127,6 @@ impl Emit for ModuleGlobals {
 
             cx.indices.push_global(id);
 
-            assert!(
-                !global.mutable,
-                "can't emit mutable globals yet; parity-wasm doesn't have a mutable parameter in \
-                 its constructor"
-            );
-
             let init_expr = init.emit_instructions(cx.indices);
 
             let ty = elements::GlobalType::new(global.ty.into(), global.mutable);

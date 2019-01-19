@@ -304,11 +304,7 @@ impl Emit<'_> {
     }
 
     fn branch_target(&self, block: BlockId) -> u32 {
-        self.blocks
-            .iter()
-            .rev()
-            .position(|b| *b == block)
-            .expect(
+        self.blocks.iter().rev().position(|b| *b == block).expect(
             "attempt to branch to invalid block; bad transformation pass introduced bad branching?",
         ) as u32
     }

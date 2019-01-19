@@ -395,21 +395,15 @@ fn validate_instruction<'a>(
         Ok(())
     };
 
-    let binop = |ctx: &mut FunctionContext, ty, op| -> Result<()> {
-        two_ops(ctx, ty, ty, op)
-    };
+    let binop = |ctx: &mut FunctionContext, ty, op| -> Result<()> { two_ops(ctx, ty, ty, op) };
 
-    let unop = |ctx: &mut FunctionContext, ty, op| -> Result<()> {
-        one_op(ctx, ty, ty, op)
-    };
+    let unop = |ctx: &mut FunctionContext, ty, op| -> Result<()> { one_op(ctx, ty, ty, op) };
 
-    let testop = |ctx: &mut FunctionContext, ty, op| -> Result<()> {
-        one_op(ctx, ty, ValType::I32, op)
-    };
+    let testop =
+        |ctx: &mut FunctionContext, ty, op| -> Result<()> { one_op(ctx, ty, ValType::I32, op) };
 
-    let relop = |ctx: &mut FunctionContext, ty, op| -> Result<()> {
-        two_ops(ctx, ty, ValType::I32, op)
-    };
+    let relop =
+        |ctx: &mut FunctionContext, ty, op| -> Result<()> { two_ops(ctx, ty, ValType::I32, op) };
 
     assert!(!insts.is_empty());
     match &insts[0] {

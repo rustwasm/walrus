@@ -831,6 +831,8 @@ fn validate_instruction<'a>(
             ctx.push_operand(Some(ValType::I32), expr);
         }
 
+        Instruction::Nop => {}
+
         op => bail!("Have not implemented support for opcode yet: {:?}", op),
     }
 

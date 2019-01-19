@@ -407,7 +407,8 @@ fn validate_instruction<'a>(
             let ty_id = ctx.module.funcs.get(fun_id).ty();
             let fun_ty = ctx.module.types.get(ty_id).clone();
             let func = ctx.indices.get_func(*idx).context("invalid call")?;
-            let args = ctx.pop_operands(fun_ty.params())?.into_boxed_slice();
+            let mut args = ctx.pop_operands(fun_ty.params())?.into_boxed_slice();
+            args.reverse();
             let expr = ctx.func.alloc(Call { func, args });
             ctx.push_operands(fun_ty.results(), expr.into());
         }
@@ -422,7 +423,8 @@ fn validate_instruction<'a>(
                 .get_table(*table_idx as u32)
                 .context("invalid call_indirect")?;
             let (_, func) = ctx.pop_operand_expected(Some(ValType::I32))?;
-            let args = ctx.pop_operands(ty.params())?.into_boxed_slice();
+            let mut args = ctx.pop_operands(ty.params())?.into_boxed_slice();
+            args.reverse();
             let expr = ctx.func.alloc(CallIndirect {
                 table,
                 ty: type_id,

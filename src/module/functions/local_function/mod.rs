@@ -56,7 +56,7 @@ impl LocalFunction {
         validation: &ValidationContext,
         body: &elements::FuncBody,
     ) -> Result<LocalFunction> {
-        let validation = validation.for_function(&module.types.get(ty))?;
+        let validation = validation.for_function(&module.types.get(ty));
 
         // First up, implicitly add locals for all function arguments. We also
         // record these in the function itself for later processing.
@@ -408,17 +408,14 @@ fn validate_instruction<'a>(
     assert!(!insts.is_empty());
     match &insts[0] {
         Instruction::Call(idx) => {
-            let fun_ty = ctx.validation.funcs.get(*idx as usize).ok_or_else(|| {
-                ErrorKind::InvalidWasm
-                    .context(format!("`call` instruction with invalid index {}", idx))
-            })?;
+            let fun_id = ctx.indices.get_func(*idx).context("invalid call")?;
+            let ty_id = ctx.module.funcs.get(fun_id).ty();
+            let fun_ty = ctx.module.types.get(ty_id).clone();
             let func = ctx.indices.get_func(*idx).context("invalid call")?;
-            let param_tys: Vec<ValType> = fun_ty.params().iter().map(Into::into).collect();
-            let args = ctx.pop_operands(&param_tys)?.into_boxed_slice();
+            let args = ctx.pop_operands(fun_ty.params())?.into_boxed_slice();
             let expr = ctx.func.alloc(Call { func, args });
-            let result_tys: Vec<ValType> = fun_ty.return_type().iter().map(Into::into).collect();
-            let result_exprs: Vec<_> = iter::repeat(expr).take(result_tys.len()).collect();
-            ctx.push_operands(&result_tys, &result_exprs, expr.into());
+            let result_exprs: Vec<_> = iter::repeat(expr).take(fun_ty.results().len()).collect();
+            ctx.push_operands(fun_ty.results(), &result_exprs, expr.into());
         }
         Instruction::CallIndirect(type_idx, table_idx) => {
             let type_id = ctx

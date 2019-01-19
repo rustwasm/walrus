@@ -219,12 +219,11 @@ impl Module {
     /// Add the locally defined functions in the wasm module to this instance.
     pub(crate) fn parse_local_functions(
         &mut self,
-        raw_module: &elements::Module,
         code_section: &elements::CodeSection,
         indices: &mut IndicesToIds,
     ) -> Result<()> {
         let num_imports = self.funcs.arena.len() - code_section.bodies().len();
-        let validation = ValidationContext::for_module(raw_module)?;
+        let validation = ValidationContext::new();
 
         for (i, body) in code_section.bodies().iter().enumerate() {
             let index = (num_imports + i) as u32;

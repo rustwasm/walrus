@@ -227,8 +227,8 @@ impl Emit<'_> {
             }
 
             Select(e) => {
-                self.visit(e.consequent);
                 self.visit(e.alternative);
+                self.visit(e.consequent);
                 self.visit(e.condition);
                 self.emit(elements::Instruction::Select)
             }

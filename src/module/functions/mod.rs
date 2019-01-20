@@ -6,12 +6,13 @@ use crate::dot::Dot;
 use crate::emit::{Emit, EmitContext};
 use crate::error::Result;
 use crate::module::imports::ImportId;
-use crate::module::parse::IndicesToIds;
 use crate::module::Module;
+use crate::parse::IndicesToIds;
 use crate::ty::TypeId;
 use crate::validation_context::ValidationContext;
 use id_arena::{Arena, Id};
 use parity_wasm::elements;
+use std::cmp;
 use std::fmt;
 
 pub use self::local_function::LocalFunction;
@@ -218,12 +219,11 @@ impl Module {
     /// Add the locally defined functions in the wasm module to this instance.
     pub(crate) fn parse_local_functions(
         &mut self,
-        raw_module: &elements::Module,
         code_section: &elements::CodeSection,
         indices: &mut IndicesToIds,
     ) -> Result<()> {
         let num_imports = self.funcs.arena.len() - code_section.bodies().len();
-        let validation = ValidationContext::for_module(raw_module)?;
+        let validation = ValidationContext::new();
 
         for (i, body) in code_section.bodies().iter().enumerate() {
             let index = (num_imports + i) as u32;
@@ -262,15 +262,19 @@ impl Emit for ModuleFunctions {
         // the function as their level of granularity for parallelism. We want
         // larger functions compiled before smaller ones because they will take
         // longer to compile.
-        functions.sort_by_key(|(_, _, size)| *size);
-        functions.reverse();
+        functions.sort_by_key(|(id, _, size)| (cmp::Reverse(*size), *id));
 
         let mut funcs = Vec::with_capacity(functions.len());
         let mut codes = Vec::with_capacity(functions.len());
 
-        for (id, func, _size) in functions {
-            cx.indices.push_func(id);
+        // Assign an index to all local defined functions before we start
+        // translating them. While translating they may refer to future
+        // functions, so we'll need to have an index for it by that point.
+        for (id, _func, _size) in functions.iter() {
+            cx.indices.push_func(*id);
+        }
 
+        for (_id, func, _size) in functions {
             debug_assert!(cx.used.types.contains(&func.ty));
             let ty_idx = cx.indices.get_type_index(func.ty);
             funcs.push(elements::Func::new(ty_idx));

@@ -16,13 +16,13 @@
 ;; NEXT:        (const 9)
 ;; NEXT:      )
 ;; NEXT:      (loop
-;; NEXT:        (br.if (;e0;)
-;; NEXT:          (i32.eqz
+;; NEXT:        (br.if (;e3;)
+;; NEXT:          (I32Eqz
 ;; NEXT:            (local.get 0)
 ;; NEXT:          )
 ;; NEXT:        )
 ;; NEXT:        (local.set 0
-;; NEXT:          (i32.add
+;; NEXT:          (I32Add
 ;; NEXT:            (local.get 0)
 ;; NEXT:            (const 1)
 ;; NEXT:          )

@@ -20,7 +20,7 @@
 ;; NEXT:      (block
 ;; NEXT:        (block
 ;; NEXT:          (block
-;; NEXT:            (br.table (;default:e0  [e2 e1];)
+;; NEXT:            (br.table (;default:e1  [e3 e2];)
 ;; NEXT:              (local.get 0)
 ;; NEXT:            )
 ;; NEXT:          )

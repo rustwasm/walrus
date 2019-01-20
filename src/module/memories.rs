@@ -5,8 +5,8 @@ use crate::emit::{Emit, EmitContext, IdsToIndices};
 use crate::ir::Value;
 use crate::module::globals::GlobalId;
 use crate::module::imports::ImportId;
-use crate::module::parse::IndicesToIds;
 use crate::module::Module;
+use crate::parse::IndicesToIds;
 use id_arena::{Arena, Id};
 use parity_wasm::elements;
 
@@ -181,5 +181,10 @@ impl MemoryData {
     /// Adds a new chunk of data in this `ModuleData` at a relative address
     pub fn add_relative(&mut self, id: GlobalId, data: Vec<u8>) {
         self.relative.push((id, data));
+    }
+
+    /// Returns an iterator of all globals used as relative bases
+    pub fn globals<'a>(&'a self) -> impl Iterator<Item = GlobalId> + 'a {
+        self.relative.iter().map(|p| p.0)
     }
 }

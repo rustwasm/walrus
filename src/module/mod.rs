@@ -8,7 +8,6 @@ pub mod globals;
 pub mod imports;
 pub mod locals;
 pub mod memories;
-mod parse;
 pub mod producers;
 pub mod tables;
 pub mod types;
@@ -26,6 +25,7 @@ use crate::module::memories::ModuleMemories;
 use crate::module::producers::ModuleProducers;
 use crate::module::tables::ModuleTables;
 use crate::module::types::ModuleTypes;
+use crate::parse::IndicesToIds;
 use crate::passes;
 use failure::{bail, ResultExt};
 use parity_wasm::elements as parity;
@@ -79,7 +79,7 @@ impl Module {
         }
 
         let mut ret = Module::default();
-        let mut indices = parse::IndicesToIds::default();
+        let mut indices = IndicesToIds::default();
 
         for section in module.sections() {
             use parity_wasm::elements::NameSection;
@@ -93,7 +93,7 @@ impl Module {
                 Section::Memory(s) => ret.parse_memories(s, &mut indices),
                 Section::Global(s) => ret.parse_globals(s, &mut indices)?,
                 Section::Function(s) => ret.declare_local_functions(s, &mut indices)?,
-                Section::Code(s) => ret.parse_local_functions(&module, s, &mut indices)?,
+                Section::Code(s) => ret.parse_local_functions(s, &mut indices)?,
                 Section::Export(s) => ret.parse_exports(s, &mut indices)?,
                 Section::Element(s) => ret.parse_elements(s, &mut indices)?,
                 Section::Start(idx) => ret.start = Some(indices.get_func(*idx)?),
@@ -150,6 +150,9 @@ impl Module {
 
         ret.producers
             .add_processed_by("walrus", env!("CARGO_PKG_VERSION"));
+
+        // TODO: probably run this in a different location
+        crate::passes::validate::run(&ret)?;
 
         Ok(ret)
     }

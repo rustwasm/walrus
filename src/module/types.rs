@@ -2,8 +2,8 @@
 
 use crate::arena_set::ArenaSet;
 use crate::emit::{Emit, EmitContext};
-use crate::module::parse::IndicesToIds;
 use crate::module::Module;
+use crate::parse::IndicesToIds;
 use crate::ty::{Type, TypeId, ValType};
 use parity_wasm::elements;
 

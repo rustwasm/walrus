@@ -9,7 +9,7 @@
 ;; CHECK: (func
 ;; NEXT:    (block
 ;; NEXT:      (loop
-;; NEXT:        (br (;e0;))
+;; NEXT:        (br (;e1;))
 ;; NEXT:      )
 ;; NEXT:      (const 1)
 ;; NEXT:    )

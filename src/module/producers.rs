@@ -95,7 +95,7 @@ impl ModuleProducers {
         };
         for field in self.fields.iter_mut() {
             if field.name != field_name {
-                continue
+                continue;
             }
 
             for value in field.values.iter_mut() {

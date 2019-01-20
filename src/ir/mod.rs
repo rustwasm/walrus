@@ -163,6 +163,14 @@ pub enum Expr {
         value: ExprId,
     },
 
+    /// `local.tee n`
+    LocalTee {
+        /// The local being set.
+        local: LocalId,
+        /// The value to set the local to and return.
+        value: ExprId,
+    },
+
     /// `global.get n`
     GlobalGet {
         /// The global being got.
@@ -183,39 +191,25 @@ pub enum Expr {
         value: Value,
     },
 
-    /// `i32.add`
-    I32Add {
-        /// The left-hand operand.
+    /// Binary operations, those requiring two operands
+    #[walrus(display_name = display_binop_name, dot_name = dot_binop_name)]
+    Binop {
+        /// The operation being performed
+        #[walrus(skip_visit)]
+        op: BinaryOp,
+        /// The left-hand operand
         lhs: ExprId,
-        /// The right-hand operand.
+        /// The right-hand operand
         rhs: ExprId,
     },
 
-    /// `i32.sub`
-    I32Sub {
-        /// The left-hand operand.
-        lhs: ExprId,
-        /// The right-hand operand.
-        rhs: ExprId,
-    },
-
-    /// `i32.mul`
-    I32Mul {
-        /// The left-hand operand.
-        lhs: ExprId,
-        /// The right-hand operand.
-        rhs: ExprId,
-    },
-
-    /// `i32.eqz`
-    I32Eqz {
-        /// The operand to test if it is equal to zero.
-        expr: ExprId,
-    },
-
-    /// `i32.popcnt`
-    I32Popcnt {
-        /// The operand whose bits should be counted.
+    /// Unary operations, those requiring one operand
+    #[walrus(display_name = display_unop_name, dot_name = dot_unop_name)]
+    Unop {
+        /// The operation being performed
+        #[walrus(skip_visit)]
+        op: UnaryOp,
+        /// The input operand
         expr: ExprId,
     },
 
@@ -299,6 +293,14 @@ pub enum Expr {
         /// The memory we're fetching the current size of.
         memory: MemoryId,
     },
+
+    /// memory.grow
+    MemoryGrow {
+        /// The memory we're growing.
+        memory: MemoryId,
+        /// The number of pages to grow by.
+        pages: ExprId,
+    },
 }
 
 /// Constant values that can show up in WebAssembly
@@ -328,6 +330,154 @@ impl fmt::Display for Value {
     }
 }
 
+/// Possible binary operations in wasm
+#[allow(missing_docs)]
+#[derive(Copy, Clone, Debug)]
+pub enum BinaryOp {
+    I32Eq,
+    I32Ne,
+    I32LtS,
+    I32LtU,
+    I32GtS,
+    I32GtU,
+    I32LeS,
+    I32LeU,
+    I32GeS,
+    I32GeU,
+
+    I64Eq,
+    I64Ne,
+    I64LtS,
+    I64LtU,
+    I64GtS,
+    I64GtU,
+    I64LeS,
+    I64LeU,
+    I64GeS,
+    I64GeU,
+
+    F32Eq,
+    F32Ne,
+    F32Lt,
+    F32Gt,
+    F32Le,
+    F32Ge,
+
+    F64Eq,
+    F64Ne,
+    F64Lt,
+    F64Gt,
+    F64Le,
+    F64Ge,
+
+    I32Add,
+    I32Sub,
+    I32Mul,
+    I32DivS,
+    I32DivU,
+    I32RemS,
+    I32RemU,
+    I32And,
+    I32Or,
+    I32Xor,
+    I32Shl,
+    I32ShrS,
+    I32ShrU,
+    I32Rotl,
+    I32Rotr,
+
+    I64Add,
+    I64Sub,
+    I64Mul,
+    I64DivS,
+    I64DivU,
+    I64RemS,
+    I64RemU,
+    I64And,
+    I64Or,
+    I64Xor,
+    I64Shl,
+    I64ShrS,
+    I64ShrU,
+    I64Rotl,
+    I64Rotr,
+
+    F32Add,
+    F32Sub,
+    F32Mul,
+    F32Div,
+    F32Min,
+    F32Max,
+    F32Copysign,
+
+    F64Add,
+    F64Sub,
+    F64Mul,
+    F64Div,
+    F64Min,
+    F64Max,
+    F64Copysign,
+}
+
+/// Possible unary operations in wasm
+#[allow(missing_docs)]
+#[derive(Copy, Clone, Debug)]
+pub enum UnaryOp {
+    I32Eqz,
+    I32Clz,
+    I32Ctz,
+    I32Popcnt,
+
+    I64Eqz,
+    I64Clz,
+    I64Ctz,
+    I64Popcnt,
+
+    F32Abs,
+    F32Neg,
+    F32Ceil,
+    F32Floor,
+    F32Trunc,
+    F32Nearest,
+    F32Sqrt,
+
+    F64Abs,
+    F64Neg,
+    F64Ceil,
+    F64Floor,
+    F64Trunc,
+    F64Nearest,
+    F64Sqrt,
+
+    I32WrapI64,
+    I32TruncSF32,
+    I32TruncUF32,
+    I32TruncSF64,
+    I32TruncUF64,
+    I64ExtendSI32,
+    I64ExtendUI32,
+    I64TruncSF32,
+    I64TruncUF32,
+    I64TruncSF64,
+    I64TruncUF64,
+
+    F32ConvertSI32,
+    F32ConvertUI32,
+    F32ConvertSI64,
+    F32ConvertUI64,
+    F32DemoteF64,
+    F64ConvertSI32,
+    F64ConvertUI32,
+    F64ConvertSI64,
+    F64ConvertUI64,
+    F64PromoteF32,
+
+    I32ReinterpretF32,
+    I64ReinterpretF64,
+    F32ReinterpretI32,
+    F64ReinterpretI64,
+}
+
 impl Expr {
     /// Are any instructions that follow this expression's instruction (within
     /// the current block) unreachable?
@@ -345,18 +495,17 @@ impl Expr {
             | Expr::Call(..)
             | Expr::LocalGet(..)
             | Expr::LocalSet(..)
+            | Expr::LocalTee(..)
             | Expr::GlobalGet(..)
             | Expr::GlobalSet(..)
             | Expr::Const(..)
-            | Expr::I32Add(..)
-            | Expr::I32Sub(..)
-            | Expr::I32Mul(..)
-            | Expr::I32Eqz(..)
-            | Expr::I32Popcnt(..)
+            | Expr::Binop(..)
+            | Expr::Unop(..)
             | Expr::Select(..)
             | Expr::BrIf(..)
             | Expr::IfElse(..)
             | Expr::MemorySize(..)
+            | Expr::MemoryGrow(..)
             | Expr::CallIndirect(..)
             | Expr::Drop(..) => false,
         }
@@ -431,4 +580,20 @@ fn display_br_table(e: &BrTable, out: &mut DisplayExpr) {
         ExprId::from(e.default).index(),
         blocks
     ))
+}
+
+fn display_binop_name(e: &Binop, out: &mut DisplayExpr) {
+    out.f.push_str(&format!("{:?}", e.op))
+}
+
+fn dot_binop_name(e: &Binop, out: &mut DotExpr<'_, '_>) {
+    out.out.push_str(&format!("{:?}", e.op))
+}
+
+fn display_unop_name(e: &Unop, out: &mut DisplayExpr) {
+    out.f.push_str(&format!("{:?}", e.op))
+}
+
+fn dot_unop_name(e: &Unop, out: &mut DotExpr<'_, '_>) {
+    out.out.push_str(&format!("{:?}", e.op))
 }

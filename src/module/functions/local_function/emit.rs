@@ -309,6 +309,74 @@ impl Emit<'_> {
                 let idx = self.indices.get_global_index(e.global);
                 self.emit(elements::Instruction::SetGlobal(idx))
             }
+
+            Load(e) => {
+                use LoadKind::*;
+                self.visit(e.address);
+                // parity-wasm doesn't have support for multiple memories yet
+                assert_eq!(self.indices.get_memory_index(e.memory), 0);
+                let (align, offset) = (e.arg.align, e.arg.offset);
+                let align = align.trailing_zeros();
+                let arg = elements::MemArg {
+                    align: align as u8,
+                    offset,
+                };
+                self.emit(match e.kind {
+                    I32 => elements::Instruction::I32Load(align, offset),
+                    I64 => elements::Instruction::I64Load(align, offset),
+                    F32 => elements::Instruction::F32Load(align, offset),
+                    F64 => elements::Instruction::F64Load(align, offset),
+                    V128 => elements::Instruction::V128Load(arg),
+                    I32_8 { sign_extend: true } => elements::Instruction::I32Load8S(align, offset),
+                    I32_8 { sign_extend: false } => elements::Instruction::I32Load8U(align, offset),
+                    I32_16 { sign_extend: true } => {
+                        elements::Instruction::I32Load16S(align, offset)
+                    }
+                    I32_16 { sign_extend: false } => {
+                        elements::Instruction::I32Load16U(align, offset)
+                    }
+                    I64_8 { sign_extend: true } => elements::Instruction::I64Load8S(align, offset),
+                    I64_8 { sign_extend: false } => elements::Instruction::I64Load8U(align, offset),
+                    I64_16 { sign_extend: true } => {
+                        elements::Instruction::I64Load16S(align, offset)
+                    }
+                    I64_16 { sign_extend: false } => {
+                        elements::Instruction::I64Load16U(align, offset)
+                    }
+                    I64_32 { sign_extend: true } => {
+                        elements::Instruction::I64Load32S(align, offset)
+                    }
+                    I64_32 { sign_extend: false } => {
+                        elements::Instruction::I64Load32U(align, offset)
+                    }
+                });
+            }
+
+            Store(e) => {
+                use StoreKind::*;
+                self.visit(e.address);
+                self.visit(e.value);
+                // parity-wasm doesn't have support for multiple memories yet
+                assert_eq!(self.indices.get_memory_index(e.memory), 0);
+                let (align, offset) = (e.arg.align, e.arg.offset);
+                let align = align.trailing_zeros();
+                let arg = elements::MemArg {
+                    align: align as u8,
+                    offset,
+                };
+                self.emit(match e.kind {
+                    I32 => elements::Instruction::I32Store(align, offset),
+                    I64 => elements::Instruction::I64Store(align, offset),
+                    F32 => elements::Instruction::F32Store(align, offset),
+                    F64 => elements::Instruction::F64Store(align, offset),
+                    V128 => elements::Instruction::V128Store(arg),
+                    I32_8 => elements::Instruction::I32Store8(align, offset),
+                    I32_16 => elements::Instruction::I32Store16(align, offset),
+                    I64_8 => elements::Instruction::I64Store8(align, offset),
+                    I64_16 => elements::Instruction::I64Store16(align, offset),
+                    I64_32 => elements::Instruction::I64Store32(align, offset),
+                });
+            }
         }
 
         self.id = old;

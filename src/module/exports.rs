@@ -3,20 +3,19 @@
 use super::globals::GlobalId;
 use super::memories::MemoryId;
 use super::tables::TableId;
-use crate::arena_set::ArenaSet;
 use crate::emit::{Emit, EmitContext, IdsToIndices};
 use crate::error::Result;
 use crate::module::functions::FunctionId;
 use crate::module::Module;
 use crate::parse::IndicesToIds;
-use id_arena::Id;
+use id_arena::{Arena, Id};
 use parity_wasm::elements;
 
 /// The id of an export.
 pub type ExportId = Id<Export>;
 
 /// A named item exported from the wasm.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug)]
 pub struct Export {
     id: ExportId,
     /// The name of this export.
@@ -38,7 +37,7 @@ impl Export {
 }
 
 /// An exported item.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, Debug)]
 pub enum ExportItem {
     /// An exported function.
     Function(FunctionId),
@@ -77,7 +76,7 @@ impl ExportItem {
 #[derive(Debug, Default)]
 pub struct ModuleExports {
     /// The arena containing this module's exports.
-    arena: ArenaSet<Export>,
+    arena: Arena<Export>,
 }
 
 impl ModuleExports {
@@ -112,7 +111,7 @@ impl Module {
                 elements::Internal::Global(t) => ExportItem::Global(ids.get_global(t)?),
             };
             let id = self.exports.arena.next_id();
-            self.exports.arena.insert(Export {
+            self.exports.arena.alloc(Export {
                 id,
                 name: exp.field().to_string(),
                 item,

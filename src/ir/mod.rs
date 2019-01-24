@@ -506,6 +506,12 @@ pub enum UnaryOp {
     I64ReinterpretF64,
     F32ReinterpretI32,
     F64ReinterpretI64,
+
+    I32Extend8S,
+    I32Extend16S,
+    I64Extend8S,
+    I64Extend16S,
+    I64Extend32S,
 }
 
 /// The different kinds of load instructions that are part of a `Load` IR node
@@ -528,6 +534,20 @@ pub enum LoadKind {
     I64_32 { sign_extend: bool },
 }
 
+impl LoadKind {
+    /// Returns the number of bytes loaded
+    pub fn width(&self) -> u32 {
+        use LoadKind::*;
+        match self {
+            I32_8 { .. } | I64_8 { .. } => 1,
+            I32_16 { .. } | I64_16 { .. } => 2,
+            I32 | F32 | I64_32 { .. } => 4,
+            I64 | F64 => 8,
+            V128 => 16,
+        }
+    }
+}
+
 /// The different kinds of store instructions that are part of a `Store` IR node
 #[derive(Debug, Copy, Clone)]
 #[allow(missing_docs)]
@@ -542,6 +562,20 @@ pub enum StoreKind {
     I64_8,
     I64_16,
     I64_32,
+}
+
+impl StoreKind {
+    /// Returns the number of bytes stored
+    pub fn width(&self) -> u32 {
+        use StoreKind::*;
+        match self {
+            I32_8 | I64_8 => 1,
+            I32_16 | I64_16 => 2,
+            I32 | F32 | I64_32 => 4,
+            I64 | F64 => 8,
+            V128 => 16,
+        }
+    }
 }
 
 /// Arguments to memory operations, containing a constant offset from a dynamic

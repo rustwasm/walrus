@@ -15,7 +15,6 @@ use crate::module::locals::ModuleLocals;
 use crate::module::Module;
 use crate::parse::IndicesToIds;
 use crate::ty::{TypeId, ValType};
-use crate::validation_context::ValidationContext;
 use failure::{bail, Fail, ResultExt};
 use id_arena::{Arena, Id};
 use parity_wasm::elements;
@@ -53,11 +52,8 @@ impl LocalFunction {
         indices: &mut IndicesToIds,
         id: FunctionId,
         ty: TypeId,
-        validation: &ValidationContext,
         body: wasmparser::FunctionBody,
     ) -> Result<LocalFunction> {
-        let validation = validation.for_function(&module.types.get(ty));
-
         // First up, implicitly add locals for all function arguments. We also
         // record these in the function itself for later processing.
         let mut args = Vec::new();
@@ -108,7 +104,6 @@ impl LocalFunction {
             indices,
             id,
             &mut func,
-            &validation,
             operands,
             controls,
         );
@@ -719,31 +714,24 @@ fn validate_instruction(
         }
         Operator::Block { ty } => {
             let results = ValType::from_block_ty(ty)?;
-            let validation = ctx.validation.for_block(results.clone());
-            let mut ctx = ctx.nested(&validation);
             ctx.push_control(BlockKind::Block, results.clone(), results);
-            validate_instruction_sequence_until_end(&mut ctx, ops)?;
-            validate_end(&mut ctx)?;
+            validate_instruction_sequence_until_end(ctx, ops)?;
+            validate_end(ctx)?;
         }
         Operator::Loop { ty } => {
-            let validation = ctx.validation.for_loop();
-            let mut ctx = ctx.nested(&validation);
             let t = ValType::from_block_ty(ty)?;
             ctx.push_control(BlockKind::Loop, vec![].into_boxed_slice(), t);
-            validate_instruction_sequence_until_end(&mut ctx, ops)?;
-            validate_end(&mut ctx)?;
+            validate_instruction_sequence_until_end(ctx, ops)?;
+            validate_end(ctx)?;
         }
         Operator::If { ty } => {
             let ty = ValType::from_block_ty(ty)?;
-            let validation = ctx.validation.for_if_else(ty.clone());
-            let mut ctx = ctx.nested(&validation);
-
             let (_, condition) = ctx.pop_operand_expected(Some(ValType::I32))?;
 
             let consequent = ctx.push_control(BlockKind::IfElse, ty.clone(), ty.clone());
 
             let mut else_found = false;
-            validate_instruction_sequence_until(&mut ctx, ops, |i| match i {
+            validate_instruction_sequence_until(ctx, ops, |i| match i {
                 Operator::Else => {
                     else_found = true;
                     true
@@ -756,7 +744,7 @@ fn validate_instruction(
             let alternative = ctx.push_control(BlockKind::IfElse, results.clone(), results);
 
             if else_found {
-                validate_instruction_sequence_until_end(&mut ctx, ops)?;
+                validate_instruction_sequence_until_end(ctx, ops)?;
             }
             let (results, _block) = ctx.pop_control()?;
 
@@ -778,10 +766,6 @@ fn validate_instruction(
                 .into());
         }
         Operator::Br { relative_depth } => {
-            ctx.validation
-                .label(relative_depth)
-                .context("`br` to out-of-bounds block")?;
-
             let n = relative_depth as usize;
             let expected = ctx.control(n)?.label_types.clone();
             let args = ctx.pop_operands(&expected)?.into_boxed_slice();
@@ -794,10 +778,6 @@ fn validate_instruction(
             ctx.unreachable(expr);
         }
         Operator::BrIf { relative_depth } => {
-            ctx.validation
-                .label(relative_depth)
-                .context("`br_if` to out-of-bounds block")?;
-
             let n = relative_depth as usize;
             let (_, condition) = ctx.pop_operand_expected(Some(ValType::I32))?;
 
@@ -822,9 +802,6 @@ fn validate_instruction(
                     Some(n) => n,
                     None => bail!("malformed `br_table"),
                 };
-                ctx.validation
-                    .label(n)
-                    .context("`br_table` with out-of-bounds block")?;
                 let control = ctx.control(n as usize)?;
                 match label_types {
                     None => label_types = Some(&control.label_types),

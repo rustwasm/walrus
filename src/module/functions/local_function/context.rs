@@ -6,7 +6,6 @@ use crate::module::functions::{FunctionId, LocalFunction};
 use crate::module::Module;
 use crate::parse::IndicesToIds;
 use crate::ty::ValType;
-use crate::validation_context::ValidationContext;
 use failure::Fail;
 
 #[derive(Debug)]
@@ -55,9 +54,6 @@ pub struct FunctionContext<'a> {
     /// The function being validated/constructed.
     pub func: &'a mut LocalFunction,
 
-    /// The context under which the function is being validated/constructed.
-    pub validation: &'a ValidationContext<'a>,
-
     /// The operands stack.
     pub operands: &'a mut OperandStack,
 
@@ -72,7 +68,6 @@ impl<'a> FunctionContext<'a> {
         indices: &'a IndicesToIds,
         func_id: FunctionId,
         func: &'a mut LocalFunction,
-        validation: &'a ValidationContext<'a>,
         operands: &'a mut OperandStack,
         controls: &'a mut ControlStack,
     ) -> FunctionContext<'a> {
@@ -81,21 +76,8 @@ impl<'a> FunctionContext<'a> {
             indices,
             func_id,
             func,
-            validation,
             operands,
             controls,
-        }
-    }
-
-    pub fn nested<'b>(&'b mut self, validation: &'b ValidationContext<'b>) -> FunctionContext<'b> {
-        FunctionContext {
-            module: self.module,
-            indices: self.indices,
-            func_id: self.func_id,
-            func: self.func,
-            validation,
-            operands: self.operands,
-            controls: self.controls,
         }
     }
 

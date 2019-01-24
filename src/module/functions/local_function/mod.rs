@@ -783,16 +783,10 @@ fn validate_instruction(
                 .context("`br` to out-of-bounds block")?;
 
             let n = relative_depth as usize;
-            if ctx.controls.len() <= n {
-                return Err(ErrorKind::InvalidWasm
-                    .context("attempt to branch to out-of-bounds block")
-                    .into());
-            }
-
-            let expected = ctx.control(n).label_types.clone();
+            let expected = ctx.control(n)?.label_types.clone();
             let args = ctx.pop_operands(&expected)?.into_boxed_slice();
 
-            let to_block = ctx.control(n).block;
+            let to_block = ctx.control(n)?.block;
             let expr = ctx.func.alloc(Br {
                 block: to_block,
                 args,
@@ -805,18 +799,12 @@ fn validate_instruction(
                 .context("`br_if` to out-of-bounds block")?;
 
             let n = relative_depth as usize;
-            if ctx.controls.len() <= n {
-                return Err(ErrorKind::InvalidWasm
-                    .context("attempt to branch to out-of-bounds block")
-                    .into());
-            }
-
             let (_, condition) = ctx.pop_operand_expected(Some(ValType::I32))?;
 
-            let expected = ctx.control(n).label_types.clone();
+            let expected = ctx.control(n)?.label_types.clone();
             let args = ctx.pop_operands(&expected)?.into_boxed_slice();
 
-            let to_block = ctx.control(n).block;
+            let to_block = ctx.control(n)?.block;
             let expr = ctx.func.alloc(BrIf {
                 condition,
                 block: to_block,
@@ -837,13 +825,7 @@ fn validate_instruction(
                 ctx.validation
                     .label(n)
                     .context("`br_table` with out-of-bounds block")?;
-                let n = n as usize;
-                if ctx.controls.len() < n {
-                    return Err(ErrorKind::InvalidWasm
-                        .context("attempt to jump to an out-of-bounds block from a table entry")
-                        .into());
-                }
-                let control = ctx.control(n);
+                let control = ctx.control(n as usize)?;
                 match label_types {
                     None => label_types = Some(&control.label_types),
                     Some(n) => {

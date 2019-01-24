@@ -165,9 +165,12 @@ impl<'a> FunctionContext<'a> {
         impl_unreachable(&mut self.operands, &mut self.controls, expr);
     }
 
-    pub fn control(&self, n: usize) -> &ControlFrame {
+    pub fn control(&self, n: usize) -> Result<&ControlFrame> {
+        if n >= self.controls.len() {
+            failure::bail!("jump to nonexistent control block");
+        }
         let idx = self.controls.len() - n - 1;
-        &self.controls[idx]
+        Ok(&self.controls[idx])
     }
 
     pub fn add_to_block<E>(&mut self, block: BlockId, expr: E)
@@ -182,7 +185,7 @@ impl<'a> FunctionContext<'a> {
     where
         E: Into<ExprId>,
     {
-        let ctrl = self.control(control_frame);
+        let ctrl = self.control(control_frame).unwrap();
         if ctrl.unreachable.is_some() {
             return;
         }

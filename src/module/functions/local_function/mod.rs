@@ -455,7 +455,7 @@ fn validate_instruction(
                 .get_func(function_index)
                 .context("invalid call")?;
             let ty_id = ctx.module.funcs.get(func).ty();
-            let fun_ty = ctx.module.types.get(ty_id).clone();
+            let fun_ty = ctx.module.types.get(ty_id);
             let mut args = ctx.pop_operands(fun_ty.params())?.into_boxed_slice();
             args.reverse();
             let expr = ctx.func.alloc(Call { func, args });
@@ -466,7 +466,7 @@ fn validate_instruction(
                 .indices
                 .get_type(index)
                 .context("invalid call_indirect")?;
-            let ty = ctx.module.types.get(type_id).clone();
+            let ty = ctx.module.types.get(type_id);
             let table = ctx
                 .indices
                 .get_table(table_index)

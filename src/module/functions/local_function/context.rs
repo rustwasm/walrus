@@ -44,7 +44,7 @@ pub type ControlStack = Vec<ControlFrame>;
 #[derive(Debug)]
 pub struct FunctionContext<'a> {
     /// The module that we're adding a function for.
-    pub module: &'a mut Module,
+    pub module: &'a Module,
 
     /// Mapping of indexes back to ids.
     pub indices: &'a IndicesToIds,
@@ -68,7 +68,7 @@ pub struct FunctionContext<'a> {
 impl<'a> FunctionContext<'a> {
     /// Create a new function context.
     pub fn new(
-        module: &'a mut Module,
+        module: &'a Module,
         indices: &'a IndicesToIds,
         func_id: FunctionId,
         func: &'a mut LocalFunction,

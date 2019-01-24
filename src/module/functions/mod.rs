@@ -9,9 +9,11 @@ use crate::module::imports::ImportId;
 use crate::module::Module;
 use crate::parse::IndicesToIds;
 use crate::ty::TypeId;
+use crate::ty::ValType;
 use failure::bail;
 use id_arena::{Arena, Id};
 use parity_wasm::elements;
+use rayon::prelude::*;
 use std::cmp;
 use std::fmt;
 
@@ -179,6 +181,11 @@ impl ModuleFunctions {
     pub fn iter(&self) -> impl Iterator<Item = &Function> {
         self.arena.iter().map(|(_, f)| f)
     }
+
+    /// Get a shared reference to this module's functions.
+    pub fn par_iter(&self) -> impl ParallelIterator<Item = &Function> {
+        self.arena.par_iter().map(|(_, f)| f)
+    }
 }
 
 impl Module {
@@ -212,6 +219,11 @@ impl Module {
         }
         let num_imports = self.funcs.arena.len() - (amt as usize);
 
+        // First up serially create corresponding `LocalId` instances for all
+        // functions as well as extract the operators parser for each function.
+        // This is pretty tough to parallelize, but we can look into it later if
+        // necessary and it's a bottleneck!
+        let mut bodies = Vec::with_capacity(amt as usize);
         for (i, body) in section.into_iter().enumerate() {
             let body = body?;
             let index = (num_imports + i) as u32;
@@ -221,12 +233,60 @@ impl Module {
                 _ => unreachable!(),
             };
 
-            let local = LocalFunction::parse(self, indices, id, ty, body)?;
-            self.funcs.arena[id] = Function {
-                id,
-                kind: FunctionKind::Local(local),
-                name: None,
-            };
+            // First up, implicitly add locals for all function arguments. We also
+            // record these in the function itself for later processing.
+            let mut args = Vec::new();
+            for ty in self.types.get(ty).params() {
+                let local_id = self.locals.add(*ty);
+                indices.push_local(id, local_id);
+                args.push(local_id);
+            }
+
+            // WebAssembly local indices are 32 bits, so it's a validation error to
+            // have more than 2^32 locals. Sure enough there's a spec test for this!
+            let mut total = 0u32;
+            for local in body.get_locals_reader()? {
+                let (count, _) = local?;
+                total = match total.checked_add(count) {
+                    Some(n) => n,
+                    None => bail!("can't have more than 2^32 locals"),
+                };
+            }
+
+            // Now that we know we have a reasonable amount of locals, put them in
+            // our map.
+            for local in body.get_locals_reader()? {
+                let (count, ty) = local?;
+                let ty = ValType::parse(&ty)?;
+                for _ in 0..count {
+                    let local_id = self.locals.add(ty);
+                    indices.push_local(id, local_id);
+                }
+            }
+
+            let body = body.get_operators_reader()?;
+            bodies.push((id, body, args, ty));
+        }
+
+        // Wasm modules can often have a lot of functions and this operation can
+        // take some time, so parse all function bodies in parallel.
+        let results = bodies
+            .into_par_iter()
+            .map(|(id, body, args, ty)| {
+                LocalFunction::parse(self, indices, id, ty, args, body).map(|local| Function {
+                    id,
+                    kind: FunctionKind::Local(local),
+                    name: None,
+                })
+            })
+            .collect::<Vec<_>>();
+
+        // After all the function bodies are collected and finished push them
+        // into our function arena.
+        for func in results {
+            let func = func?;
+            let id = func.id;
+            self.funcs.arena[id] = func;
         }
 
         Ok(())

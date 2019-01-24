@@ -13,6 +13,7 @@ use crate::module::tables::{Table, TableKind};
 use crate::module::Module;
 use crate::ty::ValType;
 use failure::{bail, ResultExt};
+use rayon::prelude::*;
 use std::collections::HashSet;
 
 /// Validate a wasm module, returning an error if it fails to validate.
@@ -48,19 +49,27 @@ pub fn run(module: &Module) -> Result<()> {
 
     // Validate each function in the module, collecting errors and returning
     // them all at once if there are any.
-    let mut errs = Vec::new();
-    for function in module.funcs.iter() {
-        let local = match &function.kind {
-            FunctionKind::Local(local) => local,
-            _ => continue,
-        };
-        let mut cx = Validate {
-            errs: &mut errs,
-            function,
-            local,
-        };
-        local.entry_block().visit(&mut cx);
-    }
+    let errs = module
+        .funcs
+        .par_iter()
+        .map(|function| {
+            let mut errs = Vec::new();
+            let local = match &function.kind {
+                FunctionKind::Local(local) => local,
+                _ => return Vec::new(),
+            };
+            let mut cx = Validate {
+                errs: &mut errs,
+                function,
+                local,
+            };
+            local.entry_block().visit(&mut cx);
+            errs
+        })
+        .reduce(Vec::new, |mut a, b| {
+            a.extend(b);
+            a
+        });
     if errs.len() == 0 {
         return Ok(());
     }

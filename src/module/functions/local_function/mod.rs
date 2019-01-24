@@ -401,6 +401,46 @@ fn validate_instruction<'a>(
     let testop = |ctx, ty, op| one_op(ctx, ty, ValType::I32, op);
     let relop = |ctx, ty, op| two_ops(ctx, ty, ValType::I32, op);
 
+    let memarg = |align, offset| -> Result<MemArg> {
+        if align >= 32 {
+            failure::bail!("invalid alignment")
+        }
+        Ok(MemArg {
+            align: 1 << (align as i32),
+            offset,
+        })
+    };
+
+    let load = |ctx: &mut FunctionContext, align, offset, ty, kind| -> Result<()> {
+        let (_, address) = ctx.pop_operand_expected(Some(ValType::I32))?;
+        let memory = ctx.indices.get_memory(0)?;
+        let arg = memarg(align, offset)?;
+        let expr = ctx.func.alloc(Load {
+            arg,
+            kind,
+            address,
+            memory,
+        });
+        ctx.push_operand(Some(ty), expr);
+        Ok(())
+    };
+
+    let store = |ctx: &mut FunctionContext, align, offset, ty, kind| -> Result<()> {
+        let (_, value) = ctx.pop_operand_expected(Some(ty))?;
+        let (_, address) = ctx.pop_operand_expected(Some(ValType::I32))?;
+        let memory = ctx.indices.get_memory(0)?;
+        let arg = memarg(align, offset)?;
+        let expr = ctx.func.alloc(Store {
+            arg,
+            kind,
+            address,
+            memory,
+            value,
+        });
+        ctx.add_to_current_frame_block(expr);
+        Ok(())
+    };
+
     assert!(!insts.is_empty());
     match &insts[0] {
         Instruction::Call(idx) => {
@@ -840,6 +880,101 @@ fn validate_instruction<'a>(
         }
 
         Instruction::Nop => {}
+
+        Instruction::I32Load(a, o) => load(ctx, *a, *o, ValType::I32, LoadKind::I32)?,
+        Instruction::I64Load(a, o) => load(ctx, *a, *o, ValType::I64, LoadKind::I64)?,
+        Instruction::F32Load(a, o) => load(ctx, *a, *o, ValType::F32, LoadKind::F32)?,
+        Instruction::F64Load(a, o) => load(ctx, *a, *o, ValType::F64, LoadKind::F64)?,
+        Instruction::V128Load(m) => {
+            load(ctx, m.align.into(), m.offset, ValType::V128, LoadKind::V128)?
+        }
+        Instruction::I32Load8S(a, o) => load(
+            ctx,
+            *a,
+            *o,
+            ValType::I32,
+            LoadKind::I32_8 { sign_extend: true },
+        )?,
+        Instruction::I32Load8U(a, o) => load(
+            ctx,
+            *a,
+            *o,
+            ValType::I32,
+            LoadKind::I32_8 { sign_extend: false },
+        )?,
+        Instruction::I32Load16S(a, o) => load(
+            ctx,
+            *a,
+            *o,
+            ValType::I32,
+            LoadKind::I32_16 { sign_extend: true },
+        )?,
+        Instruction::I32Load16U(a, o) => load(
+            ctx,
+            *a,
+            *o,
+            ValType::I32,
+            LoadKind::I32_16 { sign_extend: false },
+        )?,
+        Instruction::I64Load8S(a, o) => load(
+            ctx,
+            *a,
+            *o,
+            ValType::I64,
+            LoadKind::I64_8 { sign_extend: true },
+        )?,
+        Instruction::I64Load8U(a, o) => load(
+            ctx,
+            *a,
+            *o,
+            ValType::I64,
+            LoadKind::I64_8 { sign_extend: false },
+        )?,
+        Instruction::I64Load16S(a, o) => load(
+            ctx,
+            *a,
+            *o,
+            ValType::I64,
+            LoadKind::I64_16 { sign_extend: true },
+        )?,
+        Instruction::I64Load16U(a, o) => load(
+            ctx,
+            *a,
+            *o,
+            ValType::I64,
+            LoadKind::I64_16 { sign_extend: false },
+        )?,
+        Instruction::I64Load32S(a, o) => load(
+            ctx,
+            *a,
+            *o,
+            ValType::I64,
+            LoadKind::I64_32 { sign_extend: true },
+        )?,
+        Instruction::I64Load32U(a, o) => load(
+            ctx,
+            *a,
+            *o,
+            ValType::I64,
+            LoadKind::I64_32 { sign_extend: false },
+        )?,
+
+        Instruction::I32Store(a, o) => store(ctx, *a, *o, ValType::I32, StoreKind::I32)?,
+        Instruction::I64Store(a, o) => store(ctx, *a, *o, ValType::I64, StoreKind::I64)?,
+        Instruction::F32Store(a, o) => store(ctx, *a, *o, ValType::F32, StoreKind::F32)?,
+        Instruction::F64Store(a, o) => store(ctx, *a, *o, ValType::F64, StoreKind::F64)?,
+        Instruction::V128Store(m) => store(
+            ctx,
+            m.align.into(),
+            m.offset,
+            ValType::V128,
+            StoreKind::V128,
+        )?,
+        Instruction::I32Store8(a, o) => store(ctx, *a, *o, ValType::I32, StoreKind::I32_8)?,
+        Instruction::I32Store16(a, o) => store(ctx, *a, *o, ValType::I32, StoreKind::I32_16)?,
+        Instruction::I64Store8(a, o) => store(ctx, *a, *o, ValType::I64, StoreKind::I64_8)?,
+        Instruction::I64Store16(a, o) => store(ctx, *a, *o, ValType::I64, StoreKind::I64_16)?,
+        Instruction::I64Store32(a, o) => store(ctx, *a, *o, ValType::I64, StoreKind::I64_32)?,
 
         op => bail!("Have not implemented support for opcode yet: {:?}", op),
     }

@@ -301,6 +301,36 @@ pub enum Expr {
         /// The number of pages to grow by.
         pages: ExprId,
     },
+
+    /// Loading a value from memory
+    Load {
+        /// The memory we're loading from.
+        memory: MemoryId,
+        /// The kind of memory load this is performing
+        #[walrus(skip_visit)]
+        kind: LoadKind,
+        /// The alignment and offset of this memory load
+        #[walrus(skip_visit)]
+        arg: MemArg,
+        /// The address that we're loading from
+        address: ExprId,
+    },
+
+    /// Storing a value to memory
+    Store {
+        /// The memory we're storing to
+        memory: MemoryId,
+        /// The kind of memory store this is performing
+        #[walrus(skip_visit)]
+        kind: StoreKind,
+        /// The alignment and offset of this memory store
+        #[walrus(skip_visit)]
+        arg: MemArg,
+        /// The address that we're storing to
+        address: ExprId,
+        /// The value that we're storing
+        value: ExprId,
+    },
 }
 
 /// Constant values that can show up in WebAssembly
@@ -478,6 +508,52 @@ pub enum UnaryOp {
     F64ReinterpretI64,
 }
 
+/// The different kinds of load instructions that are part of a `Load` IR node
+#[derive(Debug, Copy, Clone)]
+#[allow(missing_docs)]
+pub enum LoadKind {
+    // TODO: much of this is probably redundant with type information already
+    // ambiently available, we probably want to trim this down to just "value"
+    // and then maybe some sign extensions. We'd then use the type of the node
+    // to figure out what kind of store it actually is.
+    I32,
+    I64,
+    F32,
+    F64,
+    V128,
+    I32_8 { sign_extend: bool },
+    I32_16 { sign_extend: bool },
+    I64_8 { sign_extend: bool },
+    I64_16 { sign_extend: bool },
+    I64_32 { sign_extend: bool },
+}
+
+/// The different kinds of store instructions that are part of a `Store` IR node
+#[derive(Debug, Copy, Clone)]
+#[allow(missing_docs)]
+pub enum StoreKind {
+    I32,
+    I64,
+    F32,
+    F64,
+    V128,
+    I32_8,
+    I32_16,
+    I64_8,
+    I64_16,
+    I64_32,
+}
+
+/// Arguments to memory operations, containing a constant offset from a dynamic
+/// address as well as a predicted alignment.
+#[derive(Debug, Copy, Clone)]
+pub struct MemArg {
+    /// The alignment of the memory operation, must be a power of two
+    pub align: u32,
+    /// The offset of the memory operation, in bytes from the source address
+    pub offset: u32,
+}
+
 impl Expr {
     /// Are any instructions that follow this expression's instruction (within
     /// the current block) unreachable?
@@ -507,6 +583,8 @@ impl Expr {
             | Expr::MemorySize(..)
             | Expr::MemoryGrow(..)
             | Expr::CallIndirect(..)
+            | Expr::Load(..)
+            | Expr::Store(..)
             | Expr::Drop(..) => false,
         }
     }

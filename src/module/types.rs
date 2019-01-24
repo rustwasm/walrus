@@ -2,6 +2,7 @@
 
 use crate::arena_set::ArenaSet;
 use crate::emit::{Emit, EmitContext};
+use crate::error::Result;
 use crate::module::Module;
 use crate::parse::IndicesToIds;
 use crate::ty::{Type, TypeId, ValType};
@@ -32,28 +33,31 @@ impl ModuleTypes {
 
 impl Module {
     /// Construct the set of types within a module.
-    pub(crate) fn parse_types(&mut self, section: &elements::TypeSection, ids: &mut IndicesToIds) {
-        for ty in section.types() {
+    pub(crate) fn parse_types(
+        &mut self,
+        section: wasmparser::TypeSectionReader,
+        ids: &mut IndicesToIds,
+    ) -> Result<()> {
+        for ty in section {
+            let fun_ty = ty?;
             let id = self.types.arena.next_id();
-            let fun_ty = match ty {
-                elements::Type::Function(f) => f,
-            };
             let params = fun_ty
-                .params()
+                .params
                 .iter()
-                .map(ValType::from)
-                .collect::<Vec<_>>()
+                .map(ValType::parse)
+                .collect::<Result<Vec<_>>>()?
                 .into_boxed_slice();
             let results = fun_ty
-                .return_type()
+                .returns
                 .iter()
-                .map(ValType::from)
-                .collect::<Vec<_>>()
+                .map(ValType::parse)
+                .collect::<Result<Vec<_>>>()?
                 .into_boxed_slice();
             let id = self.types.arena.insert(Type::new(id, params, results));
             ids.push_type(id);
-            // self.types.index_to_type_id.insert(i as u32, id);
         }
+
+        Ok(())
     }
 }
 

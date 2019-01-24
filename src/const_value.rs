@@ -19,23 +19,23 @@ pub enum Const {
 }
 
 impl Const {
-    pub(crate) fn eval(init: &elements::InitExpr, ids: &IndicesToIds) -> Result<Const> {
-        let instrs = init.code();
-        if instrs.len() != 2 {
-            bail!("invalid constant expression");
-        }
-        match instrs[1] {
-            Instruction::End => {}
+    pub(crate) fn eval(init: &wasmparser::InitExpr, ids: &IndicesToIds) -> Result<Const> {
+        use wasmparser::Operator::*;
+        let mut reader = init.get_operators_reader();
+        let val = match reader.read()? {
+            I32Const { value } => Const::Value(Value::I32(value)),
+            I64Const { value } => Const::Value(Value::I64(value)),
+            F32Const { value } => Const::Value(Value::F32(f32::from_bits(value.bits()))),
+            F64Const { value } => Const::Value(Value::F64(f64::from_bits(value.bits()))),
+            GetGlobal { global_index } => Const::Global(ids.get_global(global_index)?),
+            _ => bail!("invalid constant expression"),
+        };
+        match reader.read()? {
+            End => {}
             _ => bail!("invalid constant expression"),
         }
-        match instrs[0] {
-            Instruction::I32Const(n) => Ok(Const::Value(Value::I32(n))),
-            Instruction::I64Const(n) => Ok(Const::Value(Value::I64(n))),
-            Instruction::F32Const(n) => Ok(Const::Value(Value::F32(f32::from_bits(n)))),
-            Instruction::F64Const(n) => Ok(Const::Value(Value::F64(f64::from_bits(n)))),
-            Instruction::GetGlobal(n) => Ok(Const::Global(ids.get_global(n)?)),
-            _ => bail!("invalid constant expression"),
-        }
+        reader.ensure_end()?;
+        Ok(val)
     }
 
     pub(crate) fn emit_instructions(&self, indices: &IdsToIndices) -> elements::InitExpr {

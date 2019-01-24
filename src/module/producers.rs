@@ -4,6 +4,7 @@
 //! https://github.com/WebAssembly/tool-conventions/blob/master/ProducersSection.md
 
 use crate::error::Result;
+use crate::module::Module;
 use failure::bail;
 use parity_wasm::elements::*;
 
@@ -26,30 +27,6 @@ struct Value {
 }
 
 impl ModuleProducers {
-    /// Parse a producers section from the custom section payload specified.
-    pub fn parse(mut data: &[u8]) -> Result<ModuleProducers> {
-        let mut ret = ModuleProducers::default();
-        let amt: u32 = VarUint32::deserialize(&mut data)?.into();
-
-        for _ in 0..amt {
-            let name = String::deserialize(&mut data)?;
-            let cnt: u32 = VarUint32::deserialize(&mut data)?.into();
-
-            let mut values = Vec::with_capacity(cnt as usize);
-            for _ in 0..cnt {
-                let name = String::deserialize(&mut data)?;
-                let version = String::deserialize(&mut data)?;
-                values.push(Value { name, version });
-            }
-            ret.fields.push(Field { name, values });
-        }
-        if data.len() != 0 {
-            bail!("failed to decode all data in producers section");
-        }
-
-        Ok(ret)
-    }
-
     /// Serialize this producers section into its binary format
     pub fn emit(&self) -> Vec<u8> {
         // re-serialize these fields back into the custom section
@@ -111,5 +88,31 @@ impl ModuleProducers {
             name: field_name.to_string(),
             values: vec![new_value],
         })
+    }
+}
+
+impl Module {
+    /// Parse a producers section from the custom section payload specified.
+    pub(crate) fn parse_producers_section(
+        &mut self,
+        mut data: wasmparser::BinaryReader,
+    ) -> Result<()> {
+        for _ in 0..data.read_var_u32()? {
+            let name = data.read_string()?.to_string();
+            let cnt = data.read_var_u32()?;
+
+            let mut values = Vec::with_capacity(cnt as usize);
+            for _ in 0..cnt {
+                let name = data.read_string()?.to_string();
+                let version = data.read_string()?.to_string();
+                values.push(Value { name, version });
+            }
+            self.producers.fields.push(Field { name, values });
+        }
+        if !data.eof() {
+            bail!("failed to decode all data in producers section");
+        }
+
+        Ok(())
     }
 }

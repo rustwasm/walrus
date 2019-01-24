@@ -50,30 +50,35 @@ impl Module {
     /// Parses a raw was section into a fully-formed `ModuleElements` instance.
     pub fn parse_elements(
         &mut self,
-        section: &elements::ElementSection,
+        section: wasmparser::ElementSectionReader,
         ids: &mut IndicesToIds,
     ) -> Result<()> {
-        for (i, segment) in section.entries().iter().enumerate() {
-            if segment.passive() {
-                let mut list = Vec::with_capacity(segment.members().len());
-                for &func in segment.members() {
-                    list.push(ids.get_func(func)?);
-                }
-                let id = self.elements.arena.next_id();
-                self.elements.arena.alloc(Element { members: list });
-                ids.push_element(id);
-                continue;
-            }
+        for (i, segment) in section.into_iter().enumerate() {
+            let segment = segment?;
+            // TODO: get support for passive segments in wasmparser
+            // if segment.passive() {
+            //     let mut list = Vec::with_capacity(segment.members().len());
+            //     for &func in segment.members() {
+            //         list.push(ids.get_func(func)?);
+            //     }
+            //     let id = self.elements.arena.next_id();
+            //     self.elements.arena.alloc(Element { members: list });
+            //     ids.push_element(id);
+            //     continue;
+            // }
 
-            let table = ids.get_table(segment.index())?;
+            let table = ids.get_table(segment.table_index)?;
             let table = match &mut self.tables.get_mut(table).kind {
                 TableKind::Function(t) => t,
             };
 
-            let functions = segment.members().iter().map(|func| ids.get_func(*func));
+            let offset = Const::eval(&segment.init_expr, ids)
+                .with_context(|_e| format!("in segment {}", i))?;
+            let functions = segment.items.get_items_reader()?.into_iter().map(|func| {
+                let func = func?;
+                ids.get_func(func)
+            });
 
-            let offset = segment.offset().as_ref().unwrap();
-            let offset = Const::eval(offset, ids).with_context(|_e| format!("in segment {}", i))?;
             match offset {
                 Const::Value(Value::I32(n)) => {
                     let offset = n as usize;

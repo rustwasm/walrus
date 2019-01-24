@@ -46,27 +46,30 @@ impl ModuleData {
 
 impl Module {
     /// Parses a raw wasm section into a fully-formed `ModuleData` instance.
-    pub fn parse_data(
+    pub(crate) fn parse_data(
         &mut self,
-        section: &elements::DataSection,
+        section: wasmparser::DataSectionReader,
         ids: &mut IndicesToIds,
     ) -> Result<()> {
-        for (i, segment) in section.entries().iter().enumerate() {
-            if segment.passive() {
-                let id = self.data.arena.next_id();
-                self.data.arena.alloc(Data {
-                    value: segment.value().to_vec(),
-                });
-                ids.push_data(id);
-                continue;
-            }
+        for (i, segment) in section.into_iter().enumerate() {
+            let segment = segment?;
 
-            let memory = ids.get_memory(segment.index())?;
-            let value = segment.value().to_vec();
+            // TODO: upstream passive support
+            // if segment.passive() {
+            //     let id = self.data.arena.next_id();
+            //     self.data.arena.alloc(Data {
+            //         value: segment.value().to_vec(),
+            //     });
+            //     ids.push_data(id);
+            //     continue;
+            // }
+
+            let memory = ids.get_memory(segment.memory_index)?;
+            let value = segment.data.to_vec();
             let memory = self.memories.get_mut(memory);
 
-            let offset = segment.offset().as_ref().unwrap();
-            let offset = Const::eval(offset, ids).with_context(|_e| format!("in segment {}", i))?;
+            let offset = Const::eval(&segment.init_expr, ids)
+                .with_context(|_e| format!("in segment {}", i))?;
             match offset {
                 Const::Value(Value::I32(n)) => {
                     memory.data.add_absolute(n as u32, value);

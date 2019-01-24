@@ -100,20 +100,23 @@ impl Module {
     /// Construct the export set for a wasm module.
     pub(crate) fn parse_exports(
         &mut self,
-        section: &elements::ExportSection,
+        section: wasmparser::ExportSectionReader,
         ids: &IndicesToIds,
     ) -> Result<()> {
-        for exp in section.entries() {
-            let item = match *exp.internal() {
-                elements::Internal::Function(f) => ExportItem::Function(ids.get_func(f)?),
-                elements::Internal::Table(t) => ExportItem::Table(ids.get_table(t)?),
-                elements::Internal::Memory(t) => ExportItem::Memory(ids.get_memory(t)?),
-                elements::Internal::Global(t) => ExportItem::Global(ids.get_global(t)?),
+        use wasmparser::ExternalKind::*;
+
+        for entry in section {
+            let entry = entry?;
+            let item = match entry.kind {
+                Function => ExportItem::Function(ids.get_func(entry.index)?),
+                Table => ExportItem::Table(ids.get_table(entry.index)?),
+                Memory => ExportItem::Memory(ids.get_memory(entry.index)?),
+                Global => ExportItem::Global(ids.get_global(entry.index)?),
             };
             let id = self.exports.arena.next_id();
             self.exports.arena.alloc(Export {
                 id,
-                name: exp.field().to_string(),
+                name: entry.field.to_string(),
                 item,
             });
         }

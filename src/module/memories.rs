@@ -2,6 +2,7 @@
 
 use crate::const_value::Const;
 use crate::emit::{Emit, EmitContext, IdsToIndices};
+use crate::error::Result;
 use crate::ir::Value;
 use crate::module::globals::GlobalId;
 use crate::module::imports::ImportId;
@@ -135,15 +136,17 @@ impl Module {
     /// Construct a new, empty set of memories for a module.
     pub(crate) fn parse_memories(
         &mut self,
-        section: &elements::MemorySection,
+        section: wasmparser::MemorySectionReader,
         ids: &mut IndicesToIds,
-    ) {
-        for m in section.entries() {
+    ) -> Result<()> {
+        for m in section {
+            let m = m?;
             let id = self
                 .memories
-                .add_local(false, m.limits().initial(), m.limits().maximum());
+                .add_local(m.shared, m.limits.initial, m.limits.maximum);
             ids.push_memory(id);
         }
+        Ok(())
     }
 }
 

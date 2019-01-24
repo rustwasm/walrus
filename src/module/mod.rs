@@ -67,85 +67,108 @@ impl Module {
     }
 
     /// Construct a new module.
-    pub fn from_buffer(mut wasm: &[u8]) -> Result<Module> {
-        use parity_wasm::elements::Deserialize;
-
-        let module = match parity::Module::deserialize(&mut wasm)?.parse_names() {
-            Ok(m) => m,
-            Err((_, m)) => m,
-        };
-        if wasm.len() > 0 {
-            failure::bail!("invalid wasm file");
+    pub fn from_buffer(wasm: &[u8]) -> Result<Module> {
+        let mut parser = wasmparser::ModuleReader::new(wasm)?;
+        if parser.get_version() != 1 {
+            bail!("only support version 1 of wasm");
         }
 
         let mut ret = Module::default();
         let mut indices = IndicesToIds::default();
+        let mut function_section_size = None;
 
-        for section in module.sections() {
-            use parity_wasm::elements::NameSection;
-            use parity_wasm::elements::Section;
-
-            match section {
-                Section::Data(s) => ret.parse_data(s, &mut indices)?,
-                Section::Type(s) => ret.parse_types(s, &mut indices),
-                Section::Import(s) => ret.parse_imports(s, &mut indices)?,
-                Section::Table(s) => ret.parse_tables(s, &mut indices),
-                Section::Memory(s) => ret.parse_memories(s, &mut indices),
-                Section::Global(s) => ret.parse_globals(s, &mut indices)?,
-                Section::Function(s) => ret.declare_local_functions(s, &mut indices)?,
-                Section::Code(s) => ret.parse_local_functions(s, &mut indices)?,
-                Section::Export(s) => ret.parse_exports(s, &mut indices)?,
-                Section::Element(s) => ret.parse_elements(s, &mut indices)?,
-                Section::Start(idx) => ret.start = Some(indices.get_func(*idx)?),
-
-                Section::Unparsed { .. } => bail!("failed to handle unparsed section"),
-                Section::Custom(s) => {
-                    // we attempted to parse the custom name sections above, so
-                    // if it comes out here then it means the section may be
-                    // malformed according to parity-wasm, so skip it.
-                    if s.name() == "name" {
-                        continue;
-                    }
-                    if s.name() == "producers" {
-                        match ModuleProducers::parse(s.payload()) {
-                            Ok(s) => ret.producers = s,
-                            Err(e) => {
-                                log::warn!("failed to parse producers section {}", e);
-                            }
+        while !parser.eof() {
+            let section = parser.read()?;
+            match section.code {
+                wasmparser::SectionCode::Data => {
+                    let reader = section.get_data_section_reader()?;
+                    ret.parse_data(reader, &mut indices)
+                        .context("failed to parse data section")?;
+                }
+                wasmparser::SectionCode::Type => {
+                    let reader = section.get_type_section_reader()?;
+                    ret.parse_types(reader, &mut indices)
+                        .context("failed to parse type section")?;
+                }
+                wasmparser::SectionCode::Import => {
+                    let reader = section.get_import_section_reader()?;
+                    ret.parse_imports(reader, &mut indices)
+                        .context("failed to parse import section")?;
+                }
+                wasmparser::SectionCode::Table => {
+                    let reader = section.get_table_section_reader()?;
+                    ret.parse_tables(reader, &mut indices)
+                        .context("failed to parse table section")?;
+                }
+                wasmparser::SectionCode::Memory => {
+                    let reader = section.get_memory_section_reader()?;
+                    ret.parse_memories(reader, &mut indices)
+                        .context("failed to parse memory section")?;
+                }
+                wasmparser::SectionCode::Global => {
+                    let reader = section.get_global_section_reader()?;
+                    ret.parse_globals(reader, &mut indices)
+                        .context("failed to parse global section")?;
+                }
+                wasmparser::SectionCode::Export => {
+                    let reader = section.get_export_section_reader()?;
+                    ret.parse_exports(reader, &mut indices)
+                        .context("failed to parse export section")?;
+                }
+                wasmparser::SectionCode::Element => {
+                    let reader = section.get_element_section_reader()?;
+                    ret.parse_elements(reader, &mut indices)
+                        .context("failed to parse element section")?;
+                }
+                wasmparser::SectionCode::Start => {
+                    let idx = section.get_start_section_content()?;
+                    ret.start = Some(indices.get_func(idx)?);
+                }
+                wasmparser::SectionCode::Function => {
+                    let reader = section.get_function_section_reader()?;
+                    function_section_size = Some(reader.get_count());
+                    ret.declare_local_functions(reader, &mut indices)
+                        .context("failed to parse function section")?;
+                }
+                wasmparser::SectionCode::Code => {
+                    let function_section_size = match function_section_size.take() {
+                        Some(i) => i,
+                        None => bail!("cannot have a code section without function section"),
+                    };
+                    let reader = section.get_code_section_reader()?;
+                    ret.parse_local_functions(reader, function_section_size, &mut indices)
+                        .context("failed to parse code section")?;
+                }
+                wasmparser::SectionCode::Custom { name, kind: _ } => {
+                    let result = match name {
+                        "producers" => {
+                            let reader = section.get_binary_reader();
+                            ret.parse_producers_section(reader)
                         }
-                        continue;
-                    }
-                    ret.custom.push(CustomSection {
-                        name: s.name().to_string(),
-                        value: s.payload().to_vec(),
-                    });
-                }
-                Section::Name(NameSection::Module(s)) => {
-                    ret.name = Some(s.name().to_string());
-                }
-                Section::Name(NameSection::Function(s)) => {
-                    for (index, name) in s.names() {
-                        let id = indices.get_func(index)?;
-                        ret.funcs.get_mut(id).name = Some(name.clone());
-                    }
-                }
-                Section::Name(NameSection::Local(s)) => {
-                    for (func_index, names) in s.local_names() {
-                        let func_id = indices.get_func(func_index)?;
-                        for (local_index, name) in names {
-                            let id = indices.get_local(func_id, local_index)?;
-                            ret.locals.get_mut(id).name = Some(name.clone());
+                        "name" => section
+                            .get_name_section_reader()
+                            .map_err(failure::Error::from)
+                            .and_then(|r| ret.parse_name_section(r, &indices)),
+                        _ => {
+                            let mut reader = section.get_binary_reader();
+                            let len = reader.bytes_remaining();
+                            let payload = reader.read_bytes(len)?;
+                            ret.custom.push(CustomSection {
+                                name: name.to_string(),
+                                value: payload.to_vec(),
+                            });
+                            continue;
                         }
+                    };
+                    if let Err(e) = result {
+                        log::warn!("failed to parse `{}` custom section {}", name, e);
                     }
                 }
-                Section::Name(NameSection::Unparsed {
-                    name_type,
-                    name_payload: _,
-                }) => {
-                    bail!("unparsed name section of type {}", name_type);
-                }
-                Section::Reloc(_) => bail!("cannot handle the reloc section"),
             }
+        }
+
+        if function_section_size.is_some() {
+            bail!("cannot define a function section without a code section");
         }
 
         ret.producers
@@ -235,6 +258,42 @@ impl Module {
     /// Returns an iterator over all functions in this module
     pub fn functions(&self) -> impl Iterator<Item = &Function> {
         self.funcs.iter()
+    }
+
+    fn parse_name_section(
+        &mut self,
+        names: wasmparser::NameSectionReader,
+        indices: &IndicesToIds,
+    ) -> Result<()> {
+        for name in names {
+            match name? {
+                wasmparser::Name::Module(m) => {
+                    self.name = Some(m.get_name()?.to_string());
+                }
+                wasmparser::Name::Function(f) => {
+                    let mut map = f.get_map()?;
+                    for _ in 0..map.get_count() {
+                        let naming = map.read()?;
+                        let id = indices.get_func(naming.index)?;
+                        self.funcs.get_mut(id).name = Some(naming.name.to_string());
+                    }
+                }
+                wasmparser::Name::Local(l) => {
+                    let mut reader = l.get_function_local_reader()?;
+                    for _ in 0..reader.get_count() {
+                        let name = reader.read()?;
+                        let func_id = indices.get_func(name.func_index)?;
+                        let mut map = name.get_map()?;
+                        for _ in 0..map.get_count() {
+                            let naming = map.read()?;
+                            let id = indices.get_local(func_id, naming.index)?;
+                            self.locals.get_mut(id).name = Some(naming.name.to_string());
+                        }
+                    }
+                }
+            }
+        }
+        Ok(())
     }
 }
 

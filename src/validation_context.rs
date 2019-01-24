@@ -12,7 +12,6 @@ use std::u32;
 #[derive(Debug)]
 pub struct ValidationContext<'a> {
     pub(crate) labels: ChunkList<'a, Box<[ValType]>>,
-    pub(crate) return_: ChunkList<'a, Box<[ValType]>>,
 }
 
 impl<'a> ValidationContext<'a> {
@@ -20,7 +19,6 @@ impl<'a> ValidationContext<'a> {
     pub fn new() -> ValidationContext<'a> {
         ValidationContext {
             labels: ChunkList::new(),
-            return_: ChunkList::new(),
         }
     }
 
@@ -28,7 +26,6 @@ impl<'a> ValidationContext<'a> {
     pub fn nested<'b>(&'b self) -> ValidationContext<'b> {
         ValidationContext {
             labels: ChunkList::with_tail(&self.labels),
-            return_: ChunkList::with_tail(&self.return_),
         }
     }
 
@@ -40,11 +37,9 @@ impl<'a> ValidationContext<'a> {
             .cloned()
             .collect::<Vec<_>>()
             .into_boxed_slice()];
-        let return_ = labels.clone();
 
         ValidationContext {
             labels: ChunkList::with_head(labels),
-            return_: ChunkList::with_head(return_),
         }
     }
 

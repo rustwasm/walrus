@@ -707,13 +707,9 @@ fn validate_instruction(
             ctx.push_operand(t2, expr);
         }
         Operator::Return => {
-            let expected: Vec<_> = ctx
-                .validation
-                .return_
-                .iter()
-                .flat_map(|b| b.iter().cloned())
-                .collect();
-            let values = ctx.pop_operands(&expected)?.into_boxed_slice();
+            let fn_ty = ctx.module.funcs.get(ctx.func_id).ty();
+            let expected = ctx.module.types.get(fn_ty).results();
+            let values = ctx.pop_operands(expected)?.into_boxed_slice();
             let expr = ctx.func.alloc(Return { values });
             ctx.unreachable(expr);
         }

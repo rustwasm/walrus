@@ -7,6 +7,7 @@ mod arena_set;
 pub mod const_value;
 pub mod dot;
 mod emit;
+mod encode;
 pub mod error;
 pub mod ir;
 pub mod module;

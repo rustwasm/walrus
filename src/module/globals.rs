@@ -1,14 +1,13 @@
 //! Globals within a wasm module.
 
 use crate::const_value::Const;
-use crate::emit::{Emit, EmitContext};
+use crate::emit::{Emit, EmitContext, Section};
 use crate::error::Result;
 use crate::module::imports::ImportId;
 use crate::module::Module;
 use crate::parse::IndicesToIds;
 use crate::ty::ValType;
 use id_arena::{Arena, Id};
-use parity_wasm::elements;
 
 /// The id of a global.
 pub type GlobalId = Id<Global>;
@@ -43,6 +42,13 @@ impl Global {
     /// Get this global's id.
     pub fn id(&self) -> GlobalId {
         self.id
+    }
+}
+
+impl Emit for Global {
+    fn emit(&self, cx: &mut EmitContext) {
+        Emit::emit(&self.ty, cx);
+        cx.encoder.byte(self.mutable as u8);
     }
 }
 
@@ -100,6 +106,7 @@ impl Module {
         section: wasmparser::GlobalSectionReader,
         ids: &mut IndicesToIds,
     ) -> Result<()> {
+        log::debug!("parse global section");
         for g in section {
             let g = g?;
             let id = self.globals.add_local(
@@ -115,30 +122,36 @@ impl Module {
 
 impl Emit for ModuleGlobals {
     fn emit(&self, cx: &mut EmitContext) {
-        let mut globals = Vec::with_capacity(cx.used.globals.len());
-
-        for (id, global) in &self.arena {
-            if !cx.used.globals.contains(&id) {
-                continue;
+        log::debug!("emit global section");
+        fn get_local<'a>(cx: &EmitContext, global: &'a Global) -> Option<&'a Const> {
+            // If it's imported we already emitted this in the import section
+            if !cx.used.globals.contains(&global.id) {
+                return None;
             }
-            let init = match &global.kind {
-                GlobalKind::Import(_) => continue, // emitted in import section
-                GlobalKind::Local(init) => init,
-            };
-
-            cx.indices.push_global(id);
-
-            let init_expr = init.emit_instructions(cx.indices);
-
-            let ty = elements::GlobalType::new(global.ty.into(), global.mutable);
-            let global = elements::GlobalEntry::new(ty, init_expr);
-            globals.push(global);
+            match &global.kind {
+                GlobalKind::Import(_) => None,
+                GlobalKind::Local(local) => Some(local),
+            }
         }
 
-        if !globals.is_empty() {
-            let globals = elements::GlobalSection::with_entries(globals);
-            let globals = elements::Section::Global(globals);
-            cx.dst.sections_mut().push(globals);
+        let globals = self
+            .arena
+            .iter()
+            .filter(|(_id, global)| get_local(cx, global).is_some())
+            .count();
+
+        if globals == 0 {
+            return;
+        }
+
+        let mut cx = cx.start_section(Section::Global);
+        cx.encoder.usize(globals);
+        for (id, global) in self.arena.iter() {
+            if let Some(local) = get_local(&cx, global) {
+                cx.indices.push_global(id);
+                global.emit(&mut cx);
+                local.emit(&mut cx);
+            }
         }
     }
 }

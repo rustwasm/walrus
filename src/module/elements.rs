@@ -1,7 +1,7 @@
 //! Table elements within a wasm module.
 
 use crate::const_value::Const;
-use crate::emit::{Emit, EmitContext};
+use crate::emit::{Emit, EmitContext, Section};
 use crate::error::Result;
 use crate::ir::Value;
 use crate::module::functions::FunctionId;
@@ -11,7 +11,6 @@ use crate::parse::IndicesToIds;
 use crate::ty::ValType;
 use failure::{bail, ResultExt};
 use id_arena::{Arena, Id};
-use parity_wasm::elements;
 
 /// A passive element segment identifier
 pub type ElementId = Id<Element>;
@@ -53,6 +52,7 @@ impl Module {
         section: wasmparser::ElementSectionReader,
         ids: &mut IndicesToIds,
     ) -> Result<()> {
+        log::debug!("parse element section");
         for (i, segment) in section.into_iter().enumerate() {
             let segment = segment?;
             // TODO: get support for passive segments in wasmparser
@@ -102,8 +102,7 @@ impl Module {
 
 impl Emit for ModuleElements {
     fn emit(&self, cx: &mut EmitContext) {
-        let mut segments = Vec::new();
-
+        log::debug!("emit element section");
         // Sort table ids for a deterministic emission for now, eventually we
         // may want some sort of sorting heuristic here.
         let mut active = cx
@@ -118,62 +117,91 @@ impl Emit for ModuleElements {
         active.sort_by_key(|pair| pair.0);
 
         // Append segments as we find them for all table initializers. We can
-        // skip initializers for unused tables, and othrewise we just want to
+        // skip initializers for unused tables, and otherwise we just want to
         // create an initializer for each contiguous chunk of function indices.
-        for (table_id, table) in active {
-            let table_index = cx.indices.get_table_index(table_id);
-
-            let mut add = |offset: usize, members: Vec<u32>| {
-                let code = vec![
-                    elements::Instruction::I32Const(offset as i32),
-                    elements::Instruction::End,
-                ];
-                let init = elements::InitExpr::new(code);
-                segments.push(elements::ElementSegment::new(
-                    table_index,
-                    Some(init),
-                    members,
-                    false,
-                ));
-            };
-
+        let mut chunks = Vec::new();
+        for (table_id, table) in active.iter() {
             let mut offset = 0;
-            let mut cur = Vec::new();
+            let mut len = 0;
             for (i, item) in table.elements.iter().enumerate() {
-                match item {
-                    Some(item) => {
-                        if cur.len() == 0 {
-                            offset = i;
-                        }
-                        cur.push(cx.indices.get_func_index(*item));
+                if item.is_some() {
+                    if len == 0 {
+                        offset = i;
                     }
-                    None => {
-                        if cur.len() > 0 {
-                            add(offset, cur);
-                        }
-                        cur = Vec::new();
+                    len += 1;
+                } else {
+                    if len > 0 {
+                        chunks.push((table_id, table, offset, len));
                     }
+                    len = 0;
                 }
             }
 
-            if cur.len() > 0 {
-                add(offset, cur);
+            if len > 0 {
+                chunks.push((table_id, table, offset, len));
             }
+        }
 
+        let passive = self
+            .arena
+            .iter()
+            .filter(|(id, _)| cx.used.elements.contains(id))
+            .count();
+        let relative = active
+            .iter()
+            .map(|(_, table)| table.relative_elements.len())
+            .sum::<usize>();
+        let total = passive + relative + chunks.len();
+
+        if total == 0 {
+            return;
+        }
+        let mut cx = cx.start_section(Section::Element);
+        cx.encoder.usize(total);
+
+        // Emits the leading data for describing a table's index
+        //
+        // Note that much of this is in accordance with the
+        // currently-in-progress bulk-memory proposal for WebAssembly.
+        let active_table_header = |cx: &mut EmitContext, index: u32| {
+            if index == 0 {
+                cx.encoder.byte(0x00);
+            } else {
+                cx.encoder.byte(0x02);
+                cx.encoder.u32(index);
+            }
+        };
+
+        // Emit all contiguous chunks of functions pointers that are located at
+        // constant offsets
+        for (&id, table, offset, len) in chunks {
+            let table_index = cx.indices.get_table_index(id);
+            active_table_header(&mut cx, table_index);
+            Const::Value(Value::I32(offset as i32)).emit(&mut cx);
+            cx.encoder.usize(len);
+            for item in table.elements[offset..][..len].iter() {
+                let index = cx.indices.get_func_index(item.unwrap());
+                cx.encoder.u32(index);
+            }
+        }
+
+        // Emit all chunks of function pointers that are located at relative
+        // global offsets.
+        for (id, table) in active.iter() {
+            let table_index = cx.indices.get_table_index(*id);
             for (global, list) in table.relative_elements.iter() {
-                let init = Const::Global(*global).emit_instructions(cx.indices);
-                let members = list.iter().map(|i| cx.indices.get_func_index(*i)).collect();
-                segments.push(elements::ElementSegment::new(
-                    table_index,
-                    Some(init),
-                    members,
-                    false,
-                ));
+                active_table_header(&mut cx, table_index);
+                Const::Global(*global).emit(&mut cx);
+                cx.encoder.usize(list.len());
+                for func in list {
+                    let index = cx.indices.get_func_index(*func);
+                    cx.encoder.u32(index);
+                }
             }
         }
 
         // After all the active segments are added add passive segments next. We
-        // may want to sort this more intelligently in the future. Othrewise
+        // may want to sort this more intelligently in the future. Otherwise
         // emitting a segment here is in general much simpler than above as we
         // know there are no holes.
         for (id, segment) in self.arena.iter() {
@@ -181,19 +209,13 @@ impl Emit for ModuleElements {
                 continue;
             }
             cx.indices.push_element(id);
-
-            let members = segment
-                .members
-                .iter()
-                .map(|id| cx.indices.get_func_index(*id))
-                .collect();
-            segments.push(elements::ElementSegment::new(0, None, members, true));
-        }
-
-        if segments.len() > 0 {
-            let elements = elements::ElementSection::with_entries(segments);
-            let elements = elements::Section::Element(elements);
-            cx.dst.sections_mut().push(elements);
+            drop((id, segment));
+            // TODO: sync this with the upstream spec
+            panic!(
+                "encoding a passive element segment requires either \
+                 `ref.null` or `ref.func` encodings, which aren't \
+                 currently implemented"
+            );
         }
     }
 }

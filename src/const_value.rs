@@ -1,12 +1,11 @@
 //! Handling wasm constant values
 
-use crate::emit::IdsToIndices;
+use crate::emit::{Emit, EmitContext};
 use crate::error::Result;
 use crate::ir::Value;
 use crate::module::globals::GlobalId;
 use crate::parse::IndicesToIds;
 use failure::bail;
-use parity_wasm::elements::{self, Instruction};
 
 /// A constant which is produced in WebAssembly, typically used in global
 /// initializers or element/data offsets.
@@ -37,18 +36,18 @@ impl Const {
         reader.ensure_end()?;
         Ok(val)
     }
+}
 
-    pub(crate) fn emit_instructions(&self, indices: &IdsToIndices) -> elements::InitExpr {
-        let mut instrs = Vec::with_capacity(2);
-        instrs.push(match *self {
-            Const::Value(Value::I32(n)) => Instruction::I32Const(n),
-            Const::Value(Value::I64(n)) => Instruction::I64Const(n),
-            Const::Value(Value::F32(n)) => Instruction::F32Const(n.to_bits()),
-            Const::Value(Value::F64(n)) => Instruction::F64Const(n.to_bits()),
-            Const::Value(Value::V128(_n)) => unimplemented!(),
-            Const::Global(id) => Instruction::GetGlobal(indices.get_global_index(id)),
-        });
-        instrs.push(Instruction::End);
-        elements::InitExpr::new(instrs)
+impl Emit for Const {
+    fn emit(&self, cx: &mut EmitContext) {
+        match *self {
+            Const::Value(val) => val.emit(&mut cx.encoder),
+            Const::Global(id) => {
+                let idx = cx.indices.get_global_index(id);
+                cx.encoder.byte(0x23); // global.get
+                cx.encoder.u32(idx);
+            }
+        }
+        cx.encoder.byte(0x0b); // end
     }
 }

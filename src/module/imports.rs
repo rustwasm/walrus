@@ -1,7 +1,7 @@
 //! A wasm module's imports.
 
 use crate::arena_set::ArenaSet;
-use crate::emit::{Emit, EmitContext};
+use crate::emit::{Emit, EmitContext, Section};
 use crate::error::Result;
 use crate::module::functions::FunctionId;
 use crate::module::globals::GlobalId;
@@ -11,7 +11,6 @@ use crate::module::Module;
 use crate::parse::IndicesToIds;
 use crate::ty::ValType;
 use id_arena::Id;
-use parity_wasm::elements;
 
 /// The id of an import.
 pub type ImportId = Id<Import>;
@@ -70,6 +69,7 @@ impl Module {
         section: wasmparser::ImportSectionReader,
         ids: &mut IndicesToIds,
     ) -> Result<()> {
+        log::debug!("parse import section");
         for entry in section {
             let entry = entry?;
             let import = self.imports.arena.next_id();
@@ -124,6 +124,7 @@ impl Module {
 
 impl Emit for ModuleImports {
     fn emit(&self, cx: &mut EmitContext) {
+        log::debug!("emit import section");
         let mut imports = Vec::new();
 
         for (_id, import) in self.arena.iter() {
@@ -136,42 +137,42 @@ impl Emit for ModuleImports {
             if !used {
                 continue;
             }
-
-            let external = match import.kind {
-                ImportKind::Function(id) => {
-                    cx.indices.push_func(id);
-                    let ty = cx.module.funcs.get(id).ty();
-                    elements::External::Function(cx.indices.get_type_index(ty))
-                }
-                ImportKind::Global(id) => {
-                    cx.indices.push_global(id);
-                    let global = cx.module.globals.get(id);
-                    let global = elements::GlobalType::new(global.ty.into(), global.mutable);
-                    elements::External::Global(global)
-                }
-                ImportKind::Memory(id) => {
-                    cx.indices.push_memory(id);
-                    let memory = cx.module.memories.get(id);
-                    let memory =
-                        elements::MemoryType::new(memory.initial, memory.maximum, memory.shared);
-                    elements::External::Memory(memory)
-                }
-                ImportKind::Table(id) => {
-                    cx.indices.push_table(id);
-                    let table = cx.module.tables.get(id);
-                    let table = elements::TableType::new(table.initial, table.maximum);
-                    elements::External::Table(table)
-                }
-            };
-            let entry =
-                elements::ImportEntry::new(import.module.clone(), import.name.clone(), external);
-            imports.push(entry);
+            imports.push(import);
+        }
+        if imports.len() == 0 {
+            return;
         }
 
-        if !imports.is_empty() {
-            let imports = elements::ImportSection::with_entries(imports);
-            let imports = elements::Section::Import(imports);
-            cx.dst.sections_mut().push(imports);
+        let mut cx = cx.start_section(Section::Import);
+        cx.encoder.usize(imports.len());
+
+        for import in imports {
+            cx.encoder.str(&import.module);
+            cx.encoder.str(&import.name);
+            match import.kind {
+                ImportKind::Function(id) => {
+                    cx.encoder.byte(0x00);
+                    cx.indices.push_func(id);
+                    let ty = cx.module.funcs.get(id).ty();
+                    let idx = cx.indices.get_type_index(ty);
+                    cx.encoder.u32(idx);
+                }
+                ImportKind::Table(id) => {
+                    cx.encoder.byte(0x01);
+                    cx.indices.push_table(id);
+                    cx.module.tables.get(id).emit(&mut cx);
+                }
+                ImportKind::Memory(id) => {
+                    cx.encoder.byte(0x02);
+                    cx.indices.push_memory(id);
+                    cx.module.memories.get(id).emit(&mut cx);
+                }
+                ImportKind::Global(id) => {
+                    cx.encoder.byte(0x03);
+                    cx.indices.push_global(id);
+                    cx.module.globals.get(id).emit(&mut cx);
+                }
+            }
         }
     }
 }

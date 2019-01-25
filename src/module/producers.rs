@@ -3,10 +3,10 @@
 //! Specified upstream at
 //! https://github.com/WebAssembly/tool-conventions/blob/master/ProducersSection.md
 
+use crate::emit::{Emit, EmitContext};
 use crate::error::Result;
 use crate::module::Module;
 use failure::bail;
-use parity_wasm::elements::*;
 
 /// Representation of the wasm custom section `producers`
 #[derive(Debug, Default)]
@@ -27,29 +27,6 @@ struct Value {
 }
 
 impl ModuleProducers {
-    /// Serialize this producers section into its binary format
-    pub fn emit(&self) -> Vec<u8> {
-        // re-serialize these fields back into the custom section
-        let mut dst = Vec::new();
-        VarUint32::from(self.fields.len() as u32)
-            .serialize(&mut dst)
-            .unwrap();
-
-        for field in self.fields.iter() {
-            field.name.clone().serialize(&mut dst).unwrap();
-            VarUint32::from(field.values.len() as u32)
-                .serialize(&mut dst)
-                .unwrap();
-
-            for value in field.values.iter() {
-                value.name.clone().serialize(&mut dst).unwrap();
-                value.version.clone().serialize(&mut dst).unwrap();
-            }
-        }
-
-        dst
-    }
-
     /// Adds a new `language` (versioned) to the producers section
     pub fn add_language(&mut self, language: &str, version: &str) {
         self.field("language", language, version);
@@ -97,6 +74,7 @@ impl Module {
         &mut self,
         mut data: wasmparser::BinaryReader,
     ) -> Result<()> {
+        log::debug!("parse producers section");
         for _ in 0..data.read_var_u32()? {
             let name = data.read_string()?.to_string();
             let cnt = data.read_var_u32()?;
@@ -114,5 +92,26 @@ impl Module {
         }
 
         Ok(())
+    }
+}
+
+impl Emit for ModuleProducers {
+    fn emit(&self, cx: &mut EmitContext) {
+        log::debug!("emit producers section");
+        cx.custom_section("producers").list(&self.fields);
+    }
+}
+
+impl Emit for Field {
+    fn emit(&self, cx: &mut EmitContext) {
+        cx.encoder.str(&self.name);
+        cx.list(&self.values);
+    }
+}
+
+impl Emit for Value {
+    fn emit(&self, cx: &mut EmitContext) {
+        cx.encoder.str(&self.name);
+        cx.encoder.str(&self.version);
     }
 }

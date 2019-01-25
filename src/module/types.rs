@@ -1,12 +1,11 @@
 //! Types in a wasm module.
 
 use crate::arena_set::ArenaSet;
-use crate::emit::{Emit, EmitContext};
+use crate::emit::{Emit, EmitContext, Section};
 use crate::error::Result;
 use crate::module::Module;
 use crate::parse::IndicesToIds;
 use crate::ty::{Type, TypeId, ValType};
-use parity_wasm::elements;
 
 /// The set of de-duplicated types within a module.
 #[derive(Debug, Default)]
@@ -38,6 +37,7 @@ impl Module {
         section: wasmparser::TypeSectionReader,
         ids: &mut IndicesToIds,
     ) -> Result<()> {
+        log::debug!("parsing type section");
         for ty in section {
             let fun_ty = ty?;
             let id = self.types.arena.next_id();
@@ -63,36 +63,20 @@ impl Module {
 
 impl Emit for ModuleTypes {
     fn emit(&self, cx: &mut EmitContext) {
-        let mut types = Vec::with_capacity(cx.used.types.len());
+        log::debug!("emitting type section");
+        let ntypes = cx.used.types.len();
+        if ntypes == 0 {
+            return;
+        }
+        let mut cx = cx.start_section(Section::Type);
+        cx.encoder.usize(ntypes);
 
         for (id, ty) in self.arena.iter() {
             if !cx.used.types.contains(&id) {
                 continue;
             }
             cx.indices.push_type(id);
-
-            let params: Vec<elements::ValueType> =
-                ty.params().iter().cloned().map(Into::into).collect();
-
-            let ret: Vec<elements::ValueType> =
-                ty.results().iter().cloned().map(Into::into).collect();
-            assert!(
-                ret.len() <= 1,
-                "multiple return values not supported yet; \
-                 write a legalization pass to rewrite them into single value returns \
-                 and store extra return values in globals."
-            );
-            let ret = if ret.is_empty() { None } else { Some(ret[0]) };
-
-            types.push(elements::Type::Function(elements::FunctionType::new(
-                params, ret,
-            )));
-        }
-
-        if !types.is_empty() {
-            let types = elements::TypeSection::with_types(types);
-            let types = elements::Section::Type(types);
-            cx.dst.sections_mut().push(types);
+            ty.emit(&mut cx);
         }
     }
 }

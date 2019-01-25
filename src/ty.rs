@@ -1,8 +1,9 @@
 //! WebAssembly function and value types.
 
+use crate::emit::{Emit, EmitContext};
+use crate::encode::Encoder;
 use crate::error::Result;
 use id_arena::Id;
-use parity_wasm::elements;
 use std::fmt;
 use std::hash;
 
@@ -66,6 +67,14 @@ impl Type {
     }
 }
 
+impl Emit for Type {
+    fn emit(&self, cx: &mut EmitContext) {
+        cx.encoder.byte(0x60);
+        cx.list(self.params.iter());
+        cx.list(self.results.iter());
+    }
+}
+
 /// A value type.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum ValType {
@@ -79,30 +88,6 @@ pub enum ValType {
     F64,
     /// 128-bit vector.
     V128,
-}
-
-impl<'a> From<&'a elements::ValueType> for ValType {
-    fn from(x: &'a elements::ValueType) -> ValType {
-        match x {
-            elements::ValueType::I32 => ValType::I32,
-            elements::ValueType::I64 => ValType::I64,
-            elements::ValueType::F32 => ValType::F32,
-            elements::ValueType::F64 => ValType::F64,
-            elements::ValueType::V128 => ValType::V128,
-        }
-    }
-}
-
-impl From<ValType> for elements::ValueType {
-    fn from(x: ValType) -> elements::ValueType {
-        match x {
-            ValType::I32 => elements::ValueType::I32,
-            ValType::I64 => elements::ValueType::I64,
-            ValType::F32 => elements::ValueType::F32,
-            ValType::F64 => elements::ValueType::F64,
-            ValType::V128 => elements::ValueType::V128,
-        }
-    }
 }
 
 impl ValType {
@@ -124,6 +109,16 @@ impl ValType {
             _ => failure::bail!("not a value type"),
         }
     }
+
+    pub(crate) fn emit(&self, encoder: &mut Encoder) {
+        match self {
+            ValType::I32 => encoder.byte(0x7f),
+            ValType::I64 => encoder.byte(0x7e),
+            ValType::F32 => encoder.byte(0x7d),
+            ValType::F64 => encoder.byte(0x7c),
+            ValType::V128 => encoder.byte(0x7b),
+        }
+    }
 }
 
 impl fmt::Display for ValType {
@@ -139,5 +134,11 @@ impl fmt::Display for ValType {
                 ValType::V128 => "v128",
             }
         )
+    }
+}
+
+impl Emit for ValType {
+    fn emit(&self, cx: &mut EmitContext) {
+        self.emit(&mut cx.encoder);
     }
 }

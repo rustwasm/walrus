@@ -3,16 +3,17 @@
 mod local_function;
 
 use crate::dot::Dot;
-use crate::emit::{Emit, EmitContext};
+use crate::emit::{Emit, EmitContext, Section};
+use crate::encode::Encoder;
 use crate::error::Result;
 use crate::module::imports::ImportId;
 use crate::module::Module;
 use crate::parse::IndicesToIds;
+use crate::passes::Used;
 use crate::ty::TypeId;
 use crate::ty::ValType;
 use failure::bail;
 use id_arena::{Arena, Id};
-use parity_wasm::elements;
 use rayon::prelude::*;
 use std::cmp;
 use std::fmt;
@@ -186,6 +187,34 @@ impl ModuleFunctions {
     pub fn par_iter(&self) -> impl ParallelIterator<Item = &Function> {
         self.arena.par_iter().map(|(_, f)| f)
     }
+
+    pub(crate) fn iter_used<'a>(
+        &'a self,
+        used: &'a Used,
+    ) -> impl Iterator<Item = &'a Function> + 'a {
+        self.iter().filter(move |f| used.funcs.contains(&f.id))
+    }
+
+    pub(crate) fn emit_func_section(&self, cx: &mut EmitContext) {
+        log::debug!("emit function section");
+        let functions = used_local_functions(cx);
+        if functions.len() == 0 {
+            return;
+        }
+        let mut cx = cx.start_section(Section::Function);
+        cx.encoder.usize(functions.len());
+        for (id, function, _size) in functions {
+            let index = cx.indices.get_type_index(function.ty);
+            cx.encoder.u32(index);
+
+            // Assign an index to all local defined functions before we start
+            // translating them. While translating they may refer to future
+            // functions, so we'll need to have an index for it by that point.
+            // We're guaranteed the function section is emitted before the code
+            // section so we should be covered here.
+            cx.indices.push_func(id);
+        }
+    }
 }
 
 impl Module {
@@ -196,6 +225,7 @@ impl Module {
         section: wasmparser::FunctionSectionReader,
         ids: &mut IndicesToIds,
     ) -> Result<()> {
+        log::debug!("parse function section");
         for func in section {
             let ty = ids.get_type(func?)?;
             let id = self.funcs.arena.next_id();
@@ -213,6 +243,7 @@ impl Module {
         function_section_count: u32,
         indices: &mut IndicesToIds,
     ) -> Result<()> {
+        log::debug!("parse code section");
         let amt = section.get_count();
         if amt != function_section_count {
             bail!("code and function sections must have same number of entries")
@@ -293,63 +324,62 @@ impl Module {
     }
 }
 
+fn used_local_functions<'a>(cx: &mut EmitContext<'a>) -> Vec<(FunctionId, &'a LocalFunction, u64)> {
+    // Extract all local functions because imported ones were already
+    // emitted as part of the import sectin. Find the size of each local
+    // function. Sort imported functions in order so that we can get their
+    // index in the function index space.
+    let mut functions = Vec::new();
+    for (id, f) in &cx.module.funcs.arena {
+        if !cx.used.funcs.contains(&id) {
+            continue;
+        }
+        match &f.kind {
+            FunctionKind::Local(l) => functions.push((id, l, l.size())),
+            FunctionKind::Import(_) => {}
+            FunctionKind::Uninitialized(_) => unreachable!(),
+        }
+    }
+
+    // Sort local functions from largest to smallest; we will emit them in
+    // this order. This helps load times, since wasm engines generally use
+    // the function as their level of granularity for parallelism. We want
+    // larger functions compiled before smaller ones because they will take
+    // longer to compile.
+    functions.sort_by_key(|(id, _, size)| (cmp::Reverse(*size), *id));
+
+    functions
+}
+
 impl Emit for ModuleFunctions {
     fn emit(&self, cx: &mut EmitContext) {
-        // Extract all local functions because imported ones were already
-        // emitted as part of the import sectin. Find the size of each local
-        // function. Sort imported functions in order so that we can get their
-        // index in the function index space.
-        let mut functions = Vec::new();
-        for (id, f) in &self.arena {
-            if !cx.used.funcs.contains(&id) {
-                continue;
-            }
-            match &f.kind {
-                FunctionKind::Local(l) => functions.push((id, l, l.size())),
-                FunctionKind::Import(_) => {}
-                FunctionKind::Uninitialized(_) => unreachable!(),
-            }
-        }
-
-        // Sort local functions from largest to smallest; we will emit them in
-        // this order. This helps load times, since wasm engines generally use
-        // the function as their level of granularity for parallelism. We want
-        // larger functions compiled before smaller ones because they will take
-        // longer to compile.
-        functions.sort_by_key(|(id, _, size)| (cmp::Reverse(*size), *id));
-
-        let mut funcs = Vec::with_capacity(functions.len());
-        let mut codes = Vec::with_capacity(functions.len());
-
-        // Assign an index to all local defined functions before we start
-        // translating them. While translating they may refer to future
-        // functions, so we'll need to have an index for it by that point.
-        for (id, _func, _size) in functions.iter() {
-            cx.indices.push_func(*id);
-        }
-
-        for (_id, func, _size) in functions {
-            debug_assert!(cx.used.types.contains(&func.ty));
-            let ty_idx = cx.indices.get_type_index(func.ty);
-            funcs.push(elements::Func::new(ty_idx));
-
-            let locals = func.emit_locals(&cx.module.locals, cx.indices);
-            let instructions = func.emit_instructions(cx.indices);
-            let instructions = elements::Instructions::new(instructions);
-            codes.push(elements::FuncBody::new(locals, instructions));
-        }
-
-        assert_eq!(funcs.len(), codes.len());
-        if codes.is_empty() {
+        log::debug!("emit code section");
+        let functions = used_local_functions(cx);
+        if functions.len() == 0 {
             return;
         }
 
-        let funcs = elements::FunctionSection::with_entries(funcs);
-        let funcs = elements::Section::Function(funcs);
-        cx.dst.sections_mut().push(funcs);
+        let mut cx = cx.start_section(Section::Code);
+        cx.encoder.usize(functions.len());
 
-        let codes = elements::CodeSection::with_bodies(codes);
-        let codes = elements::Section::Code(codes);
-        cx.dst.sections_mut().push(codes);
+        // Functions can typically take awhile to serialize, so serialize
+        // everything in parallel. Afterwards we'll actually place all the
+        // functions together.
+        let bytes = functions
+            .into_par_iter()
+            .map(|(id, func, _size)| {
+                let mut wasm = Vec::new();
+                let mut encoder = Encoder::new(&mut wasm);
+                let local_indices = func.emit_locals(cx.module, &mut encoder);
+                func.emit_instructions(cx.indices, &local_indices, &mut encoder);
+                (wasm, id, local_indices)
+            })
+            .collect::<Vec<_>>();
+
+        cx.indices.locals.reserve(bytes.len());
+        for (wasm, id, local_indices) in bytes {
+            cx.encoder.bytes(&wasm);
+            cx.indices.locals.insert(id, local_indices);
+        }
     }
 }

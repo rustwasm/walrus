@@ -1,6 +1,6 @@
 //! Tables within a wasm module.
 
-use crate::emit::{Emit, EmitContext};
+use crate::emit::{Emit, EmitContext, Section};
 use crate::error::Result;
 use crate::module::functions::FunctionId;
 use crate::module::globals::GlobalId;
@@ -8,7 +8,6 @@ use crate::module::imports::ImportId;
 use crate::module::Module;
 use crate::parse::IndicesToIds;
 use id_arena::{Arena, Id};
-use parity_wasm::elements;
 
 /// The id of a table.
 pub type TableId = Id<Table>;
@@ -52,6 +51,21 @@ impl Table {
     /// Get this table's id.
     pub fn id(&self) -> TableId {
         self.id
+    }
+}
+
+impl Emit for Table {
+    fn emit(&self, cx: &mut EmitContext) {
+        match self.kind {
+            TableKind::Function(_) => {
+                cx.encoder.byte(0x70); // the `anyfunc` type
+            }
+        }
+        cx.encoder.byte(self.maximum.is_some() as u8);
+        cx.encoder.u32(self.initial);
+        if let Some(m) = self.maximum {
+            cx.encoder.u32(m);
+        }
     }
 }
 
@@ -119,6 +133,7 @@ impl Module {
         section: wasmparser::TableSectionReader,
         ids: &mut IndicesToIds,
     ) -> Result<()> {
+        log::debug!("parse table section");
         for t in section {
             let t = t?;
             let id = self.tables.add_local(
@@ -137,25 +152,29 @@ impl Module {
 
 impl Emit for ModuleTables {
     fn emit(&self, cx: &mut EmitContext) {
-        let mut tables = Vec::with_capacity(cx.used.tables.len());
+        log::debug!("emit table section");
+        let emitted = |cx: &EmitContext, table: &Table| {
+            // If it's imported we already emitted this in the import section
+            cx.used.tables.contains(&table.id) && table.import.is_none()
+        };
 
-        for (id, table) in &self.arena {
-            if !cx.used.tables.contains(&id) {
-                continue;
-            }
-            if table.import.is_some() {
-                continue; // already emitted in the imports section
-            }
+        let tables = self
+            .arena
+            .iter()
+            .filter(|(_id, table)| emitted(cx, table))
+            .count();
 
-            cx.indices.push_table(id);
-            let table = elements::TableType::new(table.initial, table.maximum);
-            tables.push(table);
+        if tables == 0 {
+            return;
         }
 
-        if !tables.is_empty() {
-            let tables = elements::TableSection::with_entries(tables);
-            let tables = elements::Section::Table(tables);
-            cx.dst.sections_mut().push(tables);
+        let mut cx = cx.start_section(Section::Table);
+        cx.encoder.usize(tables);
+        for (id, table) in self.arena.iter() {
+            if emitted(&cx, table) {
+                cx.indices.push_table(id);
+                table.emit(&mut cx);
+            }
         }
     }
 }

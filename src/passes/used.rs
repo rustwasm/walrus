@@ -42,6 +42,7 @@ impl Used {
     where
         R: IntoIterator<Item = ExportId>,
     {
+        log::debug!("starting to calculate used set");
         let mut used = Used::default();
         let mut stack = UsedStack {
             used: &mut used,

@@ -18,6 +18,7 @@ use std::collections::HashSet;
 
 /// Validate a wasm module, returning an error if it fails to validate.
 pub fn run(module: &Module) -> Result<()> {
+    log::debug!("validating module");
     // TODO: should a config option be added to lift these restrictions? They're
     // only here for the spec tests...
     if module.tables.iter().count() > 1 {
@@ -85,6 +86,9 @@ pub fn run(module: &Module) -> Result<()> {
 }
 
 fn validate_memory(m: &Memory) -> Result<()> {
+    if m.shared && m.maximum.is_none() {
+        bail!("shared memories must have a maximum size");
+    }
     validate_limits(m.initial, m.maximum, u32::from(u16::max_value()) + 1)
         .context("when validating a memory")?;
     Ok(())

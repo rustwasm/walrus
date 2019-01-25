@@ -81,56 +81,67 @@ impl Module {
             let section = parser.read()?;
             match section.code {
                 wasmparser::SectionCode::Data => {
+                    log::debug!("parsing data section");
                     let reader = section.get_data_section_reader()?;
                     ret.parse_data(reader, &mut indices)
                         .context("failed to parse data section")?;
                 }
                 wasmparser::SectionCode::Type => {
+                    log::debug!("parsing type section");
                     let reader = section.get_type_section_reader()?;
                     ret.parse_types(reader, &mut indices)
                         .context("failed to parse type section")?;
                 }
                 wasmparser::SectionCode::Import => {
+                    log::debug!("parsing import section");
                     let reader = section.get_import_section_reader()?;
                     ret.parse_imports(reader, &mut indices)
                         .context("failed to parse import section")?;
                 }
                 wasmparser::SectionCode::Table => {
+                    log::debug!("parsing table section");
                     let reader = section.get_table_section_reader()?;
                     ret.parse_tables(reader, &mut indices)
                         .context("failed to parse table section")?;
                 }
                 wasmparser::SectionCode::Memory => {
+                    log::debug!("parsing memory section");
                     let reader = section.get_memory_section_reader()?;
                     ret.parse_memories(reader, &mut indices)
                         .context("failed to parse memory section")?;
                 }
                 wasmparser::SectionCode::Global => {
+                    log::debug!("parsing global section");
                     let reader = section.get_global_section_reader()?;
                     ret.parse_globals(reader, &mut indices)
                         .context("failed to parse global section")?;
                 }
                 wasmparser::SectionCode::Export => {
+                    log::debug!("parsing export section");
                     let reader = section.get_export_section_reader()?;
                     ret.parse_exports(reader, &mut indices)
                         .context("failed to parse export section")?;
                 }
                 wasmparser::SectionCode::Element => {
+                    log::debug!("parsing element section");
                     let reader = section.get_element_section_reader()?;
                     ret.parse_elements(reader, &mut indices)
                         .context("failed to parse element section")?;
                 }
                 wasmparser::SectionCode::Start => {
+                    log::debug!("parsing start section");
                     let idx = section.get_start_section_content()?;
                     ret.start = Some(indices.get_func(idx)?);
                 }
                 wasmparser::SectionCode::Function => {
+                    log::debug!("parsing function section");
                     let reader = section.get_function_section_reader()?;
                     function_section_size = Some(reader.get_count());
                     ret.declare_local_functions(reader, &mut indices)
                         .context("failed to parse function section")?;
                 }
                 wasmparser::SectionCode::Code => {
+                    log::debug!("parsing code section");
                     let function_section_size = match function_section_size.take() {
                         Some(i) => i,
                         None => bail!("cannot have a code section without function section"),
@@ -140,6 +151,7 @@ impl Module {
                         .context("failed to parse code section")?;
                 }
                 wasmparser::SectionCode::Custom { name, kind: _ } => {
+                    log::debug!("parsing custom section `{}`", name);
                     let result = match name {
                         "producers" => {
                             let reader = section.get_binary_reader();
@@ -175,8 +187,10 @@ impl Module {
             .add_processed_by("walrus", env!("CARGO_PKG_VERSION"));
 
         // TODO: probably run this in a different location
+        log::debug!("validating module");
         crate::passes::validate::run(&ret)?;
 
+        log::debug!("parse complete");
         Ok(ret)
     }
 

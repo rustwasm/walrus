@@ -48,43 +48,13 @@ impl LocalFunction {
     /// Validates the given function body and constructs the `Expr` IR at the
     /// same time.
     pub fn parse(
-        module: &mut Module,
-        indices: &mut IndicesToIds,
+        module: &Module,
+        indices: &IndicesToIds,
         id: FunctionId,
         ty: TypeId,
-        body: wasmparser::FunctionBody,
+        args: Vec<LocalId>,
+        body: wasmparser::OperatorsReader,
     ) -> Result<LocalFunction> {
-        // First up, implicitly add locals for all function arguments. We also
-        // record these in the function itself for later processing.
-        let mut args = Vec::new();
-        for ty in module.types.get(ty).params() {
-            let local_id = module.locals.add(*ty);
-            indices.push_local(id, local_id);
-            args.push(local_id);
-        }
-
-        // WebAssembly local indices are 32 bits, so it's a validation error to
-        // have more than 2^32 locals. Sure enough there's a spec test for this!
-        let mut total = 0u32;
-        for local in body.get_locals_reader()? {
-            let (count, _) = local?;
-            total = match total.checked_add(count) {
-                Some(n) => n,
-                None => bail!("can't have more than 2^32 locals"),
-            };
-        }
-
-        // Now that we know we have a reasonable amount of locals, put them in
-        // our map.
-        for local in body.get_locals_reader()? {
-            let (count, ty) = local?;
-            let ty = ValType::parse(&ty)?;
-            for _ in 0..count {
-                let local_id = module.locals.add(ty);
-                indices.push_local(id, local_id);
-            }
-        }
-
         let mut func = LocalFunction {
             ty,
             exprs: Arena::new(),
@@ -99,18 +69,11 @@ impl LocalFunction {
         let operands = &mut context::OperandStack::new();
         let controls = &mut context::ControlStack::new();
 
-        let mut ctx = FunctionContext::new(
-            module,
-            indices,
-            id,
-            &mut func,
-            operands,
-            controls,
-        );
+        let mut ctx = FunctionContext::new(module, indices, id, &mut func, operands, controls);
 
         let entry = ctx.push_control(BlockKind::FunctionEntry, result.clone(), result);
         ctx.func.entry = Some(entry);
-        validate_expression(&mut ctx, body.get_operators_reader()?)?;
+        validate_expression(&mut ctx, body)?;
 
         debug_assert_eq!(ctx.operands.len(), result_len);
         debug_assert!(ctx.controls.is_empty());

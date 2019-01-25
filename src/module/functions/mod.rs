@@ -9,7 +9,6 @@ use crate::module::imports::ImportId;
 use crate::module::Module;
 use crate::parse::IndicesToIds;
 use crate::ty::TypeId;
-use crate::validation_context::ValidationContext;
 use failure::bail;
 use id_arena::{Arena, Id};
 use parity_wasm::elements;
@@ -212,7 +211,6 @@ impl Module {
             bail!("code and function sections must have same number of entries")
         }
         let num_imports = self.funcs.arena.len() - (amt as usize);
-        let validation = ValidationContext::new();
 
         for (i, body) in section.into_iter().enumerate() {
             let body = body?;
@@ -223,7 +221,7 @@ impl Module {
                 _ => unreachable!(),
             };
 
-            let local = LocalFunction::parse(self, indices, id, ty, &validation, body)?;
+            let local = LocalFunction::parse(self, indices, id, ty, body)?;
             self.funcs.arena[id] = Function {
                 id,
                 kind: FunctionKind::Local(local),

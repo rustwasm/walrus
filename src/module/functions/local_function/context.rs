@@ -6,7 +6,6 @@ use crate::module::functions::{FunctionId, LocalFunction};
 use crate::module::Module;
 use crate::parse::IndicesToIds;
 use crate::ty::ValType;
-use crate::validation_context::ValidationContext;
 use failure::Fail;
 
 #[derive(Debug)]
@@ -44,7 +43,7 @@ pub type ControlStack = Vec<ControlFrame>;
 #[derive(Debug)]
 pub struct FunctionContext<'a> {
     /// The module that we're adding a function for.
-    pub module: &'a mut Module,
+    pub module: &'a Module,
 
     /// Mapping of indexes back to ids.
     pub indices: &'a IndicesToIds,
@@ -54,9 +53,6 @@ pub struct FunctionContext<'a> {
 
     /// The function being validated/constructed.
     pub func: &'a mut LocalFunction,
-
-    /// The context under which the function is being validated/constructed.
-    pub validation: &'a ValidationContext<'a>,
 
     /// The operands stack.
     pub operands: &'a mut OperandStack,
@@ -68,11 +64,10 @@ pub struct FunctionContext<'a> {
 impl<'a> FunctionContext<'a> {
     /// Create a new function context.
     pub fn new(
-        module: &'a mut Module,
+        module: &'a Module,
         indices: &'a IndicesToIds,
         func_id: FunctionId,
         func: &'a mut LocalFunction,
-        validation: &'a ValidationContext<'a>,
         operands: &'a mut OperandStack,
         controls: &'a mut ControlStack,
     ) -> FunctionContext<'a> {
@@ -81,21 +76,8 @@ impl<'a> FunctionContext<'a> {
             indices,
             func_id,
             func,
-            validation,
             operands,
             controls,
-        }
-    }
-
-    pub fn nested<'b>(&'b mut self, validation: &'b ValidationContext<'b>) -> FunctionContext<'b> {
-        FunctionContext {
-            module: self.module,
-            indices: self.indices,
-            func_id: self.func_id,
-            func: self.func,
-            validation,
-            operands: self.operands,
-            controls: self.controls,
         }
     }
 
@@ -165,9 +147,12 @@ impl<'a> FunctionContext<'a> {
         impl_unreachable(&mut self.operands, &mut self.controls, expr);
     }
 
-    pub fn control(&self, n: usize) -> &ControlFrame {
+    pub fn control(&self, n: usize) -> Result<&ControlFrame> {
+        if n >= self.controls.len() {
+            failure::bail!("jump to nonexistent control block");
+        }
         let idx = self.controls.len() - n - 1;
-        &self.controls[idx]
+        Ok(&self.controls[idx])
     }
 
     pub fn add_to_block<E>(&mut self, block: BlockId, expr: E)
@@ -182,7 +167,7 @@ impl<'a> FunctionContext<'a> {
     where
         E: Into<ExprId>,
     {
-        let ctrl = self.control(control_frame);
+        let ctrl = self.control(control_frame).unwrap();
         if ctrl.unreachable.is_some() {
             return;
         }

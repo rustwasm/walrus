@@ -3,17 +3,17 @@
 //! raw wasm structure's index spaces.
 
 use crate::encode::{Encoder, MAX_U32_LENGTH};
-use crate::ir::LocalId;
-use crate::module::data::DataId;
-use crate::module::elements::ElementId;
-use crate::module::functions::FunctionId;
-use crate::module::globals::GlobalId;
-use crate::module::memories::MemoryId;
-use crate::module::tables::TableId;
+use crate::ir::Local;
+use crate::map::IdHashMap;
+use crate::module::data::{Data, DataId};
+use crate::module::elements::{Element, ElementId};
+use crate::module::functions::{Function, FunctionId};
+use crate::module::globals::{Global, GlobalId};
+use crate::module::memories::{Memory, MemoryId};
+use crate::module::tables::{Table, TableId};
 use crate::module::Module;
 use crate::passes::Used;
-use crate::ty::TypeId;
-use std::collections::HashMap;
+use crate::ty::{Type, TypeId};
 use std::ops::{Deref, DerefMut};
 
 pub struct EmitContext<'a> {
@@ -49,14 +49,14 @@ impl<'a, T: ?Sized + Emit> Emit for &'a T {
 /// since the identifier `A` doesn't exist at the raw wasm level.
 #[derive(Debug, Default)]
 pub struct IdsToIndices {
-    tables: HashMap<TableId, u32>,
-    types: HashMap<TypeId, u32>,
-    funcs: HashMap<FunctionId, u32>,
-    globals: HashMap<GlobalId, u32>,
-    memories: HashMap<MemoryId, u32>,
-    elements: HashMap<ElementId, u32>,
-    data: HashMap<DataId, u32>,
-    pub locals: HashMap<FunctionId, HashMap<LocalId, u32>>,
+    tables: IdHashMap<Table, u32>,
+    types: IdHashMap<Type, u32>,
+    funcs: IdHashMap<Function, u32>,
+    globals: IdHashMap<Global, u32>,
+    memories: IdHashMap<Memory, u32>,
+    elements: IdHashMap<Element, u32>,
+    data: IdHashMap<Data, u32>,
+    pub locals: IdHashMap<Function, IdHashMap<Local, u32>>,
 }
 
 macro_rules! define_get_push_index {

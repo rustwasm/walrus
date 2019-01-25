@@ -370,7 +370,7 @@ impl Emit for ModuleFunctions {
             .map(|(id, func, _size)| {
                 let mut wasm = Vec::new();
                 let mut encoder = Encoder::new(&mut wasm);
-                let local_indices = func.emit_locals(cx.module, &mut encoder);
+                let local_indices = func.emit_locals(id, cx.module, cx.used, &mut encoder);
                 func.emit_instructions(cx.indices, &local_indices, &mut encoder);
                 (wasm, id, local_indices)
             })

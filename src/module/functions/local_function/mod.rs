@@ -12,11 +12,11 @@ use crate::encode::Encoder;
 use crate::error::{ErrorKind, Result};
 use crate::ir::matcher::{ConstMatcher, Matcher};
 use crate::ir::*;
-use crate::module::locals::ModuleLocals;
 use crate::module::Module;
 use crate::parse::IndicesToIds;
 use crate::ty::{TypeId, ValType};
 use failure::{bail, Fail, ResultExt};
+use crate::passes::Used;
 use id_arena::{Arena, Id};
 use std::collections::{BTreeMap, HashSet, HashMap};
 use std::fmt;
@@ -145,44 +145,31 @@ impl LocalFunction {
     }
 
     /// Emit this function's compact locals declarations.
-    pub(crate) fn emit_locals(&self, module: &Module, encoder: &mut Encoder) -> HashMap<LocalId, u32> {
-        struct LocalsVisitor<'a> {
-            func: &'a LocalFunction,
-            locals: &'a ModuleLocals,
-            seen: HashSet<LocalId>,
-            // NB: Use `BTreeMap` to make compilation deterministic
-            ty_to_locals: BTreeMap<ValType, Vec<LocalId>>,
-            args: HashSet<LocalId>,
+    pub(crate) fn emit_locals(&self, id: FunctionId, module: &Module, used: &Used, encoder: &mut Encoder) -> HashMap<LocalId, u32> {
+        let mut used_locals = Vec::new();
+        if let Some(locals) = used.locals.get(&id) {
+            used_locals = locals.iter().cloned().collect();
+            // Sort to ensure we assign local indexes deterministically, and
+            // everything is distinct so we can use a faster unstable sort.
+            used_locals.sort_unstable();
         }
 
-        impl<'expr> Visitor<'expr> for LocalsVisitor<'expr> {
-            fn local_function(&self) -> &'expr LocalFunction {
-                self.func
-            }
+        // NB: Use `BTreeMap` to make compilation deterministic by emitting
+        // types in the same order
+        let mut ty_to_locals = BTreeMap::new();
+        let args = self.args.iter().cloned().collect::<HashSet<_>>();
 
-            fn visit_local_id(&mut self, &id: &LocalId) {
-                if !self.seen.insert(id) {
-                    return; // already seen? no more work to do
-                }
-                if self.args.contains(&id) {
-                    return; // is this an argument? we'll handle that separately
-                }
-                let ty = self.locals.get(id).ty();
-                self.ty_to_locals.entry(ty).or_insert(Vec::new()).push(id);
+        // Partition all locals by their type as we'll create at most one entry
+        // for each type. Skip all arguments to the function because they're
+        // handled separately.
+        for local in used_locals.iter() {
+            if !args.contains(local) {
+                let ty = module.locals.get(*local).ty();
+                ty_to_locals.entry(ty).or_insert_with(Vec::new).push(*local);
             }
         }
 
-        // Collect all used locals along with their types
-        let mut v = LocalsVisitor {
-            func: self,
-            locals: &module.locals,
-            seen: HashSet::new(),
-            ty_to_locals: BTreeMap::new(),
-            args: self.args.iter().cloned().collect(),
-        };
-        self.entry_block().visit(&mut v);
-
-        let mut local_map = HashMap::with_capacity(v.seen.len());
+        let mut local_map = HashMap::with_capacity(used_locals.len());
 
         // Allocate an index to all the function arguments, as these are all
         // unconditionally used and are implicit locals in wasm.
@@ -193,7 +180,7 @@ impl LocalFunction {
         }
 
         // Assign an index to all remaining locals
-        for (_, locals) in v.ty_to_locals.iter() {
+        for (_, locals) in ty_to_locals.iter() {
             for l in locals {
                 local_map.insert(*l, idx);
                 idx += 1;
@@ -201,8 +188,8 @@ impl LocalFunction {
         }
 
         // Use our type map to emit a compact representation of all locals now
-        encoder.usize(v.ty_to_locals.len());
-        for (ty, locals) in v.ty_to_locals.iter() {
+        encoder.usize(ty_to_locals.len());
+        for (ty, locals) in ty_to_locals.iter() {
             encoder.usize(locals.len());
             ty.emit(encoder);
         }

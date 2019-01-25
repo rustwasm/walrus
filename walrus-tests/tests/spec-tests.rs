@@ -80,8 +80,15 @@ fn run(wast: &Path) -> Result<(), failure::Error> {
             _ => {
                 let wasm = walrus::module::Module::from_file(&path)
                     .context(format!("error parsing wasm (line {})", line))?;
-                wasm.emit_wasm_file(&path)
+                let wasm1 = wasm.emit_wasm()
                     .context(format!("error emitting wasm (line {})", line))?;
+                fs::write(&path, &wasm1)?;
+                let wasm2 = walrus::module::Module::from_buffer(&wasm1)
+                    .and_then(|m| m.emit_wasm())
+                    .context(format!("error re-parsing wasm (line {})", line))?;
+                if wasm1 != wasm2 {
+                    panic!("wasm module at line {} isn't deterministic", line);
+                }
                 new_commands.push(command);
                 continue;
             }

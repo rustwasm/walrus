@@ -1,5 +1,6 @@
 //! WebAssembly function and value types.
 
+use crate::error::Result;
 use id_arena::Id;
 use parity_wasm::elements;
 use std::fmt;
@@ -106,12 +107,22 @@ impl From<ValType> for elements::ValueType {
 
 impl ValType {
     /// Construct a vector of `ValType`s from a parity-wasm `BlockType`.
-    pub fn from_block_ty(block_ty: &elements::BlockType) -> Box<[ValType]> {
+    pub fn from_block_ty(block_ty: wasmparser::Type) -> Result<Box<[ValType]>> {
         let v = match block_ty {
-            elements::BlockType::Value(ty) => vec![ty.into()],
-            elements::BlockType::NoResult => vec![],
+            wasmparser::Type::EmptyBlockType => Vec::new(),
+            _ => vec![ValType::parse(&block_ty)?],
         };
-        v.into_boxed_slice()
+        Ok(v.into_boxed_slice())
+    }
+
+    pub(crate) fn parse(input: &wasmparser::Type) -> Result<ValType> {
+        match input {
+            wasmparser::Type::I32 => Ok(ValType::I32),
+            wasmparser::Type::I64 => Ok(ValType::I64),
+            wasmparser::Type::F32 => Ok(ValType::F32),
+            wasmparser::Type::F64 => Ok(ValType::F64),
+            _ => failure::bail!("not a value type"),
+        }
     }
 }
 

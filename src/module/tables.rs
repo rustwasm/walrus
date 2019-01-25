@@ -1,6 +1,7 @@
 //! Tables within a wasm module.
 
 use crate::emit::{Emit, EmitContext};
+use crate::error::Result;
 use crate::module::functions::FunctionId;
 use crate::module::globals::GlobalId;
 use crate::module::imports::ImportId;
@@ -115,21 +116,22 @@ impl Module {
     /// Construct a new, empty set of tables for a module.
     pub(crate) fn parse_tables(
         &mut self,
-        section: &elements::TableSection,
+        section: wasmparser::TableSectionReader,
         ids: &mut IndicesToIds,
-    ) {
-        for t in section.entries() {
+    ) -> Result<()> {
+        for t in section {
+            let t = t?;
             let id = self.tables.add_local(
-                t.limits().initial(),
-                t.limits().maximum(),
-                match t.elem_type() {
-                    elements::TableElementType::AnyFunc => {
-                        TableKind::Function(FunctionTable::default())
-                    }
+                t.limits.initial,
+                t.limits.maximum,
+                match t.element_type {
+                    wasmparser::Type::AnyFunc => TableKind::Function(FunctionTable::default()),
+                    _ => failure::bail!("invalid table type"),
                 },
             );
             ids.push_table(id);
         }
+        Ok(())
     }
 }
 

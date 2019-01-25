@@ -97,14 +97,15 @@ impl Module {
     /// Construct a new, empty set of globals for a module.
     pub(crate) fn parse_globals(
         &mut self,
-        section: &elements::GlobalSection,
+        section: wasmparser::GlobalSectionReader,
         ids: &mut IndicesToIds,
     ) -> Result<()> {
-        for g in section.entries() {
+        for g in section {
+            let g = g?;
             let id = self.globals.add_local(
-                ValType::from(&g.global_type().content_type()),
-                g.global_type().is_mutable(),
-                Const::eval(g.init_expr(), ids)?,
+                ValType::parse(&g.ty.content_type)?,
+                g.ty.mutable,
+                Const::eval(&g.init_expr, ids)?,
             );
             ids.push_global(id);
         }

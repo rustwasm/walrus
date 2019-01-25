@@ -67,47 +67,44 @@ impl Module {
     /// Construct the import set for a wasm module.
     pub(crate) fn parse_imports(
         &mut self,
-        section: &elements::ImportSection,
+        section: wasmparser::ImportSectionReader,
         ids: &mut IndicesToIds,
     ) -> Result<()> {
-        for exp in section.entries() {
+        for entry in section {
+            let entry = entry?;
             let import = self.imports.arena.next_id();
-            let kind = match *exp.external() {
-                elements::External::Function(idx) => {
+            let kind = match entry.ty {
+                wasmparser::ImportSectionEntryType::Function(idx) => {
                     let ty = ids.get_type(idx)?;
                     let id = self.funcs.add_import(ty, import);
                     ids.push_func(id);
                     ImportKind::Function(id)
                 }
-                elements::External::Table(t) => {
-                    let kind = match t.elem_type() {
-                        elements::TableElementType::AnyFunc => {
-                            TableKind::Function(FunctionTable::default())
-                        }
+                wasmparser::ImportSectionEntryType::Table(t) => {
+                    let kind = match t.element_type {
+                        wasmparser::Type::AnyFunc => TableKind::Function(FunctionTable::default()),
+                        _ => failure::bail!("invalid table type"),
                     };
-                    let id = self.tables.add_import(
-                        t.limits().initial(),
-                        t.limits().maximum(),
-                        kind,
-                        import,
-                    );
+                    let id =
+                        self.tables
+                            .add_import(t.limits.initial, t.limits.maximum, kind, import);
                     ids.push_table(id);
                     ImportKind::Table(id)
                 }
-                elements::External::Memory(m) => {
+                wasmparser::ImportSectionEntryType::Memory(m) => {
                     let id = self.memories.add_import(
-                        m.limits().shared(),
-                        m.limits().initial(),
-                        m.limits().maximum(),
+                        m.shared,
+                        m.limits.initial,
+                        m.limits.maximum,
                         import,
                     );
                     ids.push_memory(id);
                     ImportKind::Memory(id)
                 }
-                elements::External::Global(g) => {
+                wasmparser::ImportSectionEntryType::Global(g) => {
                     let id = self.globals.add_import(
-                        ValType::from(&g.content_type()),
-                        g.is_mutable(),
+                        ValType::parse(&g.content_type)?,
+                        g.mutable,
                         import,
                     );
                     ids.push_global(id);
@@ -115,8 +112,8 @@ impl Module {
                 }
             };
             self.imports.arena.insert(Import {
-                module: exp.module().to_string(),
-                name: exp.field().to_string(),
+                module: entry.module.to_string(),
+                name: entry.field.to_string(),
                 kind,
             });
         }

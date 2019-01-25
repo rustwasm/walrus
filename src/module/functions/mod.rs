@@ -10,6 +10,7 @@ use crate::module::Module;
 use crate::parse::IndicesToIds;
 use crate::ty::TypeId;
 use crate::validation_context::ValidationContext;
+use failure::bail;
 use id_arena::{Arena, Id};
 use parity_wasm::elements;
 use std::cmp;
@@ -47,23 +48,6 @@ impl Function {
             kind: FunctionKind::Uninitialized(ty),
             name: None,
         }
-    }
-
-    /// Create a new function that is locally defined within the wasm module.
-    pub fn parse_local(
-        module: &mut Module,
-        indices: &mut IndicesToIds,
-        id: FunctionId,
-        ty: TypeId,
-        validation: &ValidationContext,
-        body: &elements::FuncBody,
-    ) -> Result<Function> {
-        let local = LocalFunction::parse(module, indices, id, ty, validation, body)?;
-        Ok(Function {
-            id,
-            kind: FunctionKind::Local(local),
-            name: None,
-        })
     }
 
     /// Get this function's identifier.
@@ -203,11 +187,11 @@ impl Module {
     /// executable.
     pub(crate) fn declare_local_functions(
         &mut self,
-        func_section: &elements::FunctionSection,
+        section: wasmparser::FunctionSectionReader,
         ids: &mut IndicesToIds,
     ) -> Result<()> {
-        for func in func_section.entries() {
-            let ty = ids.get_type(func.type_ref())?;
+        for func in section {
+            let ty = ids.get_type(func?)?;
             let id = self.funcs.arena.next_id();
             self.funcs.arena.alloc(Function::new_uninitialized(id, ty));
             ids.push_func(id);
@@ -219,20 +203,32 @@ impl Module {
     /// Add the locally defined functions in the wasm module to this instance.
     pub(crate) fn parse_local_functions(
         &mut self,
-        code_section: &elements::CodeSection,
+        section: wasmparser::CodeSectionReader,
+        function_section_count: u32,
         indices: &mut IndicesToIds,
     ) -> Result<()> {
-        let num_imports = self.funcs.arena.len() - code_section.bodies().len();
+        let amt = section.get_count();
+        if amt != function_section_count {
+            bail!("code and function sections must have same number of entries")
+        }
+        let num_imports = self.funcs.arena.len() - (amt as usize);
         let validation = ValidationContext::new();
 
-        for (i, body) in code_section.bodies().iter().enumerate() {
+        for (i, body) in section.into_iter().enumerate() {
+            let body = body?;
             let index = (num_imports + i) as u32;
             let id = indices.get_func(index)?;
             let ty = match self.funcs.arena[id].kind {
                 FunctionKind::Uninitialized(ty) => ty,
                 _ => unreachable!(),
             };
-            self.funcs.arena[id] = Function::parse_local(self, indices, id, ty, &validation, body)?;
+
+            let local = LocalFunction::parse(self, indices, id, ty, &validation, body)?;
+            self.funcs.arena[id] = Function {
+                id,
+                kind: FunctionKind::Local(local),
+                name: None,
+            };
         }
 
         Ok(())

@@ -18,10 +18,11 @@ use crate::ty::{TypeId, ValType};
 use crate::validation_context::ValidationContext;
 use failure::{bail, Fail, ResultExt};
 use id_arena::{Arena, Id};
-use parity_wasm::elements::{self, Instruction};
+use parity_wasm::elements;
 use std::collections::{BTreeMap, HashSet};
 use std::fmt;
 use std::mem;
+use wasmparser::{Operator, OperatorsReader};
 
 /// A function defined locally within the wasm module.
 #[derive(Debug)]
@@ -53,7 +54,7 @@ impl LocalFunction {
         id: FunctionId,
         ty: TypeId,
         validation: &ValidationContext,
-        body: &elements::FuncBody,
+        body: wasmparser::FunctionBody,
     ) -> Result<LocalFunction> {
         let validation = validation.for_function(&module.types.get(ty));
 
@@ -66,10 +67,23 @@ impl LocalFunction {
             args.push(local_id);
         }
 
-        // Next up, process all function body locals
-        for local in body.locals() {
-            let ty = ValType::from(&local.value_type());
-            for _ in 0..local.count() {
+        // WebAssembly local indices are 32 bits, so it's a validation error to
+        // have more than 2^32 locals. Sure enough there's a spec test for this!
+        let mut total = 0u32;
+        for local in body.get_locals_reader()? {
+            let (count, _) = local?;
+            total = match total.checked_add(count) {
+                Some(n) => n,
+                None => bail!("can't have more than 2^32 locals"),
+            };
+        }
+
+        // Now that we know we have a reasonable amount of locals, put them in
+        // our map.
+        for local in body.get_locals_reader()? {
+            let (count, ty) = local?;
+            let ty = ValType::parse(&ty)?;
+            for _ in 0..count {
                 let local_id = module.locals.add(ty);
                 indices.push_local(id, local_id);
             }
@@ -101,7 +115,7 @@ impl LocalFunction {
 
         let entry = ctx.push_control(BlockKind::FunctionEntry, result.clone(), result);
         ctx.func.entry = Some(entry);
-        validate_expression(&mut ctx, body.code().elements())?;
+        validate_expression(&mut ctx, body.get_operators_reader()?)?;
 
         debug_assert_eq!(ctx.operands.len(), result_len);
         debug_assert!(ctx.controls.is_empty());
@@ -326,43 +340,35 @@ impl DotExpr<'_, '_> {
     }
 }
 
-fn validate_instruction_sequence<'a>(
+fn validate_instruction_sequence_until_end(
     ctx: &mut FunctionContext,
-    insts: &'a [Instruction],
-    until: Instruction,
-) -> Result<&'a [Instruction]> {
-    validate_instruction_sequence_until(ctx, insts, |i| *i == until)
+    ops: &mut OperatorsReader,
+) -> Result<()> {
+    validate_instruction_sequence_until(ctx, ops, |i| match i {
+        Operator::End => true,
+        _ => false,
+    })
 }
 
-fn validate_instruction_sequence_until<'a>(
+fn validate_instruction_sequence_until(
     ctx: &mut FunctionContext,
-    insts: &'a [Instruction],
-    mut until: impl FnMut(&Instruction) -> bool,
-) -> Result<&'a [Instruction]> {
-    let mut insts = insts;
+    ops: &mut OperatorsReader,
+    mut until: impl FnMut(&Operator) -> bool,
+) -> Result<()> {
     loop {
-        match insts.first() {
-            None => bail!("unexpected end of instructions"),
-            Some(inst) => {
-                if until(inst) {
-                    return Ok(&insts[1..]);
-                }
-                insts = validate_instruction(ctx, insts)?;
-            }
+        let inst = ops.read()?;
+        if until(&inst) {
+            return Ok(());
         }
+        validate_instruction(ctx, inst, ops)?;
     }
 }
 
-fn validate_expression(ctx: &mut FunctionContext, expr: &[Instruction]) -> Result<BlockId> {
-    let rest = validate_instruction_sequence(ctx, expr, Instruction::End)?;
+fn validate_expression(ctx: &mut FunctionContext, mut ops: OperatorsReader) -> Result<BlockId> {
+    validate_instruction_sequence_until_end(ctx, &mut ops)?;
     let block = validate_end(ctx)?;
-    if rest.is_empty() {
-        Ok(block)
-    } else {
-        Err(ErrorKind::InvalidWasm
-            .context("trailing instructions after final `end`")
-            .into())
-    }
+    ops.ensure_end()?;
+    Ok(block)
 }
 
 fn validate_end(ctx: &mut FunctionContext) -> Result<BlockId> {
@@ -371,10 +377,11 @@ fn validate_end(ctx: &mut FunctionContext) -> Result<BlockId> {
     Ok(block)
 }
 
-fn validate_instruction<'a>(
+fn validate_instruction(
     ctx: &mut FunctionContext,
-    insts: &'a [Instruction],
-) -> Result<&'a [Instruction]> {
+    inst: Operator,
+    ops: &mut OperatorsReader,
+) -> Result<()> {
     use ValType::*;
 
     let const_ = |ctx: &mut FunctionContext, ty, value| {
@@ -401,20 +408,20 @@ fn validate_instruction<'a>(
     let testop = |ctx, ty, op| one_op(ctx, ty, ValType::I32, op);
     let relop = |ctx, ty, op| two_ops(ctx, ty, ValType::I32, op);
 
-    let memarg = |align, offset| -> Result<MemArg> {
-        if align >= 32 {
+    let memarg = |arg: wasmparser::MemoryImmediate| -> Result<MemArg> {
+        if arg.flags >= 32 {
             failure::bail!("invalid alignment");
         }
         Ok(MemArg {
-            align: 1 << (align as i32),
-            offset,
+            align: 1 << (arg.flags as i32),
+            offset: arg.offset,
         })
     };
 
-    let load = |ctx: &mut FunctionContext, align, offset, ty, kind| -> Result<()> {
+    let load = |ctx: &mut FunctionContext, arg, ty, kind| -> Result<()> {
         let (_, address) = ctx.pop_operand_expected(Some(ValType::I32))?;
         let memory = ctx.indices.get_memory(0)?;
-        let arg = memarg(align, offset)?;
+        let arg = memarg(arg)?;
         let expr = ctx.func.alloc(Load {
             arg,
             kind,
@@ -425,11 +432,11 @@ fn validate_instruction<'a>(
         Ok(())
     };
 
-    let store = |ctx: &mut FunctionContext, align, offset, ty, kind| -> Result<()> {
+    let store = |ctx: &mut FunctionContext, arg, ty, kind| -> Result<()> {
         let (_, value) = ctx.pop_operand_expected(Some(ty))?;
         let (_, address) = ctx.pop_operand_expected(Some(ValType::I32))?;
         let memory = ctx.indices.get_memory(0)?;
-        let arg = memarg(align, offset)?;
+        let arg = memarg(arg)?;
         let expr = ctx.func.alloc(Store {
             arg,
             kind,
@@ -441,27 +448,28 @@ fn validate_instruction<'a>(
         Ok(())
     };
 
-    assert!(!insts.is_empty());
-    match &insts[0] {
-        Instruction::Call(idx) => {
-            let fun_id = ctx.indices.get_func(*idx).context("invalid call")?;
-            let ty_id = ctx.module.funcs.get(fun_id).ty();
+    match inst {
+        Operator::Call { function_index } => {
+            let func = ctx
+                .indices
+                .get_func(function_index)
+                .context("invalid call")?;
+            let ty_id = ctx.module.funcs.get(func).ty();
             let fun_ty = ctx.module.types.get(ty_id).clone();
-            let func = ctx.indices.get_func(*idx).context("invalid call")?;
             let mut args = ctx.pop_operands(fun_ty.params())?.into_boxed_slice();
             args.reverse();
             let expr = ctx.func.alloc(Call { func, args });
             ctx.push_operands(fun_ty.results(), expr.into());
         }
-        Instruction::CallIndirect(type_idx, table_idx) => {
+        Operator::CallIndirect { index, table_index } => {
             let type_id = ctx
                 .indices
-                .get_type(*type_idx)
+                .get_type(index)
                 .context("invalid call_indirect")?;
             let ty = ctx.module.types.get(type_id).clone();
             let table = ctx
                 .indices
-                .get_table(*table_idx as u32)
+                .get_table(table_index)
                 .context("invalid call_indirect")?;
             let (_, func) = ctx.pop_operand_expected(Some(ValType::I32))?;
             let mut args = ctx.pop_operands(ty.params())?.into_boxed_slice();
@@ -474,219 +482,220 @@ fn validate_instruction<'a>(
             });
             ctx.push_operands(ty.results(), expr.into());
         }
-        Instruction::GetLocal(n) => {
-            let local = ctx.indices.get_local(ctx.func_id, *n)?;
+        Operator::GetLocal { local_index } => {
+            let local = ctx.indices.get_local(ctx.func_id, local_index)?;
             let ty = ctx.module.locals.get(local).ty();
             let expr = ctx.func.alloc(LocalGet { local });
             ctx.push_operand(Some(ty), expr);
         }
-        Instruction::SetLocal(n) => {
-            let local = ctx.indices.get_local(ctx.func_id, *n)?;
+        Operator::SetLocal { local_index } => {
+            let local = ctx.indices.get_local(ctx.func_id, local_index)?;
             let ty = ctx.module.locals.get(local).ty();
             let (_, value) = ctx.pop_operand_expected(Some(ty))?;
             let expr = ctx.func.alloc(LocalSet { local, value });
             ctx.add_to_current_frame_block(expr);
         }
-        Instruction::TeeLocal(n) => {
-            let local = ctx.indices.get_local(ctx.func_id, *n)?;
+        Operator::TeeLocal { local_index } => {
+            let local = ctx.indices.get_local(ctx.func_id, local_index)?;
             let ty = ctx.module.locals.get(local).ty();
             let (_, value) = ctx.pop_operand_expected(Some(ty))?;
             let expr = ctx.func.alloc(LocalTee { local, value });
             ctx.push_operand(Some(ty), expr);
         }
-        Instruction::GetGlobal(n) => {
-            let global = ctx.indices.get_global(*n).context("invalid global.get")?;
+        Operator::GetGlobal { global_index } => {
+            let global = ctx
+                .indices
+                .get_global(global_index)
+                .context("invalid global.get")?;
             let ty = ctx.module.globals.get(global).ty;
             let expr = ctx.func.alloc(GlobalGet { global });
             ctx.push_operand(Some(ty), expr);
         }
-        Instruction::SetGlobal(n) => {
-            let global = ctx.indices.get_global(*n).context("invalid global.set")?;
+        Operator::SetGlobal { global_index } => {
+            let global = ctx
+                .indices
+                .get_global(global_index)
+                .context("invalid global.set")?;
             let ty = ctx.module.globals.get(global).ty;
             let (_, value) = ctx.pop_operand_expected(Some(ty))?;
             let expr = ctx.func.alloc(GlobalSet { global, value });
             ctx.add_to_current_frame_block(expr);
         }
-        Instruction::I32Const(n) => {
-            const_(ctx, I32, Value::I32(*n));
+        Operator::I32Const { value } => const_(ctx, I32, Value::I32(value)),
+        Operator::I64Const { value } => const_(ctx, I64, Value::I64(value)),
+        Operator::F32Const { value } => {
+            const_(ctx, F32, Value::F32(f32::from_bits(value.bits())));
         }
-        Instruction::I64Const(n) => {
-            const_(ctx, I64, Value::I64(*n));
+        Operator::F64Const { value } => {
+            const_(ctx, F64, Value::F64(f64::from_bits(value.bits())));
         }
-        Instruction::F32Const(n) => {
-            const_(ctx, F32, Value::F32(f32::from_bits(*n)));
-        }
-        Instruction::F64Const(n) => {
-            const_(ctx, F64, Value::F64(f64::from_bits(*n)));
-        }
-        Instruction::V128Const(n) => {
-            let val = ((n[0] as u128) << 0)
-                | ((n[1] as u128) << 8)
-                | ((n[2] as u128) << 16)
-                | ((n[3] as u128) << 24)
-                | ((n[4] as u128) << 32)
-                | ((n[5] as u128) << 40)
-                | ((n[6] as u128) << 48)
-                | ((n[7] as u128) << 56)
-                | ((n[8] as u128) << 64)
-                | ((n[9] as u128) << 72)
-                | ((n[10] as u128) << 80)
-                | ((n[11] as u128) << 88)
-                | ((n[12] as u128) << 96)
-                | ((n[13] as u128) << 104)
-                | ((n[14] as u128) << 112)
-                | ((n[15] as u128) << 120);
-            const_(ctx, V128, Value::V128(val));
-        }
+        // Operator::V128Const(n) => {
+        //     let val = ((n[0] as u128) << 0)
+        //         | ((n[1] as u128) << 8)
+        //         | ((n[2] as u128) << 16)
+        //         | ((n[3] as u128) << 24)
+        //         | ((n[4] as u128) << 32)
+        //         | ((n[5] as u128) << 40)
+        //         | ((n[6] as u128) << 48)
+        //         | ((n[7] as u128) << 56)
+        //         | ((n[8] as u128) << 64)
+        //         | ((n[9] as u128) << 72)
+        //         | ((n[10] as u128) << 80)
+        //         | ((n[11] as u128) << 88)
+        //         | ((n[12] as u128) << 96)
+        //         | ((n[13] as u128) << 104)
+        //         | ((n[14] as u128) << 112)
+        //         | ((n[15] as u128) << 120);
+        //     const_(ctx, V128, Value::V128(val));
+        // }
+        Operator::I32Eqz => testop(ctx, I32, UnaryOp::I32Eqz)?,
+        Operator::I32Eq => relop(ctx, I32, BinaryOp::I32Eq)?,
+        Operator::I32Ne => relop(ctx, I32, BinaryOp::I32Ne)?,
+        Operator::I32LtS => relop(ctx, I32, BinaryOp::I32LtS)?,
+        Operator::I32LtU => relop(ctx, I32, BinaryOp::I32LtU)?,
+        Operator::I32GtS => relop(ctx, I32, BinaryOp::I32GtS)?,
+        Operator::I32GtU => relop(ctx, I32, BinaryOp::I32GtU)?,
+        Operator::I32LeS => relop(ctx, I32, BinaryOp::I32LeS)?,
+        Operator::I32LeU => relop(ctx, I32, BinaryOp::I32LeU)?,
+        Operator::I32GeS => relop(ctx, I32, BinaryOp::I32GeS)?,
+        Operator::I32GeU => relop(ctx, I32, BinaryOp::I32GeU)?,
 
-        Instruction::I32Eqz => testop(ctx, I32, UnaryOp::I32Eqz)?,
-        Instruction::I32Eq => relop(ctx, I32, BinaryOp::I32Eq)?,
-        Instruction::I32Ne => relop(ctx, I32, BinaryOp::I32Ne)?,
-        Instruction::I32LtS => relop(ctx, I32, BinaryOp::I32LtS)?,
-        Instruction::I32LtU => relop(ctx, I32, BinaryOp::I32LtU)?,
-        Instruction::I32GtS => relop(ctx, I32, BinaryOp::I32GtS)?,
-        Instruction::I32GtU => relop(ctx, I32, BinaryOp::I32GtU)?,
-        Instruction::I32LeS => relop(ctx, I32, BinaryOp::I32LeS)?,
-        Instruction::I32LeU => relop(ctx, I32, BinaryOp::I32LeU)?,
-        Instruction::I32GeS => relop(ctx, I32, BinaryOp::I32GeS)?,
-        Instruction::I32GeU => relop(ctx, I32, BinaryOp::I32GeU)?,
+        Operator::I64Eqz => testop(ctx, I64, UnaryOp::I64Eqz)?,
+        Operator::I64Eq => relop(ctx, I64, BinaryOp::I64Eq)?,
+        Operator::I64Ne => relop(ctx, I64, BinaryOp::I64Ne)?,
+        Operator::I64LtS => relop(ctx, I64, BinaryOp::I64LtS)?,
+        Operator::I64LtU => relop(ctx, I64, BinaryOp::I64LtU)?,
+        Operator::I64GtS => relop(ctx, I64, BinaryOp::I64GtS)?,
+        Operator::I64GtU => relop(ctx, I64, BinaryOp::I64GtU)?,
+        Operator::I64LeS => relop(ctx, I64, BinaryOp::I64LeS)?,
+        Operator::I64LeU => relop(ctx, I64, BinaryOp::I64LeU)?,
+        Operator::I64GeS => relop(ctx, I64, BinaryOp::I64GeS)?,
+        Operator::I64GeU => relop(ctx, I64, BinaryOp::I64GeU)?,
 
-        Instruction::I64Eqz => testop(ctx, I64, UnaryOp::I64Eqz)?,
-        Instruction::I64Eq => relop(ctx, I64, BinaryOp::I64Eq)?,
-        Instruction::I64Ne => relop(ctx, I64, BinaryOp::I64Ne)?,
-        Instruction::I64LtS => relop(ctx, I64, BinaryOp::I64LtS)?,
-        Instruction::I64LtU => relop(ctx, I64, BinaryOp::I64LtU)?,
-        Instruction::I64GtS => relop(ctx, I64, BinaryOp::I64GtS)?,
-        Instruction::I64GtU => relop(ctx, I64, BinaryOp::I64GtU)?,
-        Instruction::I64LeS => relop(ctx, I64, BinaryOp::I64LeS)?,
-        Instruction::I64LeU => relop(ctx, I64, BinaryOp::I64LeU)?,
-        Instruction::I64GeS => relop(ctx, I64, BinaryOp::I64GeS)?,
-        Instruction::I64GeU => relop(ctx, I64, BinaryOp::I64GeU)?,
+        Operator::F32Eq => relop(ctx, F32, BinaryOp::F32Eq)?,
+        Operator::F32Ne => relop(ctx, F32, BinaryOp::F32Ne)?,
+        Operator::F32Lt => relop(ctx, F32, BinaryOp::F32Lt)?,
+        Operator::F32Gt => relop(ctx, F32, BinaryOp::F32Gt)?,
+        Operator::F32Le => relop(ctx, F32, BinaryOp::F32Le)?,
+        Operator::F32Ge => relop(ctx, F32, BinaryOp::F32Ge)?,
 
-        Instruction::F32Eq => relop(ctx, F32, BinaryOp::F32Eq)?,
-        Instruction::F32Ne => relop(ctx, F32, BinaryOp::F32Ne)?,
-        Instruction::F32Lt => relop(ctx, F32, BinaryOp::F32Lt)?,
-        Instruction::F32Gt => relop(ctx, F32, BinaryOp::F32Gt)?,
-        Instruction::F32Le => relop(ctx, F32, BinaryOp::F32Le)?,
-        Instruction::F32Ge => relop(ctx, F32, BinaryOp::F32Ge)?,
+        Operator::F64Eq => relop(ctx, F64, BinaryOp::F64Eq)?,
+        Operator::F64Ne => relop(ctx, F64, BinaryOp::F64Ne)?,
+        Operator::F64Lt => relop(ctx, F64, BinaryOp::F64Lt)?,
+        Operator::F64Gt => relop(ctx, F64, BinaryOp::F64Gt)?,
+        Operator::F64Le => relop(ctx, F64, BinaryOp::F64Le)?,
+        Operator::F64Ge => relop(ctx, F64, BinaryOp::F64Ge)?,
 
-        Instruction::F64Eq => relop(ctx, F64, BinaryOp::F64Eq)?,
-        Instruction::F64Ne => relop(ctx, F64, BinaryOp::F64Ne)?,
-        Instruction::F64Lt => relop(ctx, F64, BinaryOp::F64Lt)?,
-        Instruction::F64Gt => relop(ctx, F64, BinaryOp::F64Gt)?,
-        Instruction::F64Le => relop(ctx, F64, BinaryOp::F64Le)?,
-        Instruction::F64Ge => relop(ctx, F64, BinaryOp::F64Ge)?,
+        Operator::I32Clz => unop(ctx, I32, UnaryOp::I32Clz)?,
+        Operator::I32Ctz => unop(ctx, I32, UnaryOp::I32Ctz)?,
+        Operator::I32Popcnt => unop(ctx, I32, UnaryOp::I32Popcnt)?,
+        Operator::I32Add => binop(ctx, I32, BinaryOp::I32Add)?,
+        Operator::I32Sub => binop(ctx, I32, BinaryOp::I32Sub)?,
+        Operator::I32Mul => binop(ctx, I32, BinaryOp::I32Mul)?,
+        Operator::I32DivS => binop(ctx, I32, BinaryOp::I32DivS)?,
+        Operator::I32DivU => binop(ctx, I32, BinaryOp::I32DivU)?,
+        Operator::I32RemS => binop(ctx, I32, BinaryOp::I32RemS)?,
+        Operator::I32RemU => binop(ctx, I32, BinaryOp::I32RemU)?,
+        Operator::I32And => binop(ctx, I32, BinaryOp::I32And)?,
+        Operator::I32Or => binop(ctx, I32, BinaryOp::I32Or)?,
+        Operator::I32Xor => binop(ctx, I32, BinaryOp::I32Xor)?,
+        Operator::I32Shl => binop(ctx, I32, BinaryOp::I32Shl)?,
+        Operator::I32ShrS => binop(ctx, I32, BinaryOp::I32ShrS)?,
+        Operator::I32ShrU => binop(ctx, I32, BinaryOp::I32ShrU)?,
+        Operator::I32Rotl => binop(ctx, I32, BinaryOp::I32Rotl)?,
+        Operator::I32Rotr => binop(ctx, I32, BinaryOp::I32Rotr)?,
 
-        Instruction::I32Clz => unop(ctx, I32, UnaryOp::I32Clz)?,
-        Instruction::I32Ctz => unop(ctx, I32, UnaryOp::I32Ctz)?,
-        Instruction::I32Popcnt => unop(ctx, I32, UnaryOp::I32Popcnt)?,
-        Instruction::I32Add => binop(ctx, I32, BinaryOp::I32Add)?,
-        Instruction::I32Sub => binop(ctx, I32, BinaryOp::I32Sub)?,
-        Instruction::I32Mul => binop(ctx, I32, BinaryOp::I32Mul)?,
-        Instruction::I32DivS => binop(ctx, I32, BinaryOp::I32DivS)?,
-        Instruction::I32DivU => binop(ctx, I32, BinaryOp::I32DivU)?,
-        Instruction::I32RemS => binop(ctx, I32, BinaryOp::I32RemS)?,
-        Instruction::I32RemU => binop(ctx, I32, BinaryOp::I32RemU)?,
-        Instruction::I32And => binop(ctx, I32, BinaryOp::I32And)?,
-        Instruction::I32Or => binop(ctx, I32, BinaryOp::I32Or)?,
-        Instruction::I32Xor => binop(ctx, I32, BinaryOp::I32Xor)?,
-        Instruction::I32Shl => binop(ctx, I32, BinaryOp::I32Shl)?,
-        Instruction::I32ShrS => binop(ctx, I32, BinaryOp::I32ShrS)?,
-        Instruction::I32ShrU => binop(ctx, I32, BinaryOp::I32ShrU)?,
-        Instruction::I32Rotl => binop(ctx, I32, BinaryOp::I32Rotl)?,
-        Instruction::I32Rotr => binop(ctx, I32, BinaryOp::I32Rotr)?,
+        Operator::I64Clz => unop(ctx, I64, UnaryOp::I64Clz)?,
+        Operator::I64Ctz => unop(ctx, I64, UnaryOp::I64Ctz)?,
+        Operator::I64Popcnt => unop(ctx, I64, UnaryOp::I64Popcnt)?,
+        Operator::I64Add => binop(ctx, I64, BinaryOp::I64Add)?,
+        Operator::I64Sub => binop(ctx, I64, BinaryOp::I64Sub)?,
+        Operator::I64Mul => binop(ctx, I64, BinaryOp::I64Mul)?,
+        Operator::I64DivS => binop(ctx, I64, BinaryOp::I64DivS)?,
+        Operator::I64DivU => binop(ctx, I64, BinaryOp::I64DivU)?,
+        Operator::I64RemS => binop(ctx, I64, BinaryOp::I64RemS)?,
+        Operator::I64RemU => binop(ctx, I64, BinaryOp::I64RemU)?,
+        Operator::I64And => binop(ctx, I64, BinaryOp::I64And)?,
+        Operator::I64Or => binop(ctx, I64, BinaryOp::I64Or)?,
+        Operator::I64Xor => binop(ctx, I64, BinaryOp::I64Xor)?,
+        Operator::I64Shl => binop(ctx, I64, BinaryOp::I64Shl)?,
+        Operator::I64ShrS => binop(ctx, I64, BinaryOp::I64ShrS)?,
+        Operator::I64ShrU => binop(ctx, I64, BinaryOp::I64ShrU)?,
+        Operator::I64Rotl => binop(ctx, I64, BinaryOp::I64Rotl)?,
+        Operator::I64Rotr => binop(ctx, I64, BinaryOp::I64Rotr)?,
 
-        Instruction::I64Clz => unop(ctx, I64, UnaryOp::I64Clz)?,
-        Instruction::I64Ctz => unop(ctx, I64, UnaryOp::I64Ctz)?,
-        Instruction::I64Popcnt => unop(ctx, I64, UnaryOp::I64Popcnt)?,
-        Instruction::I64Add => binop(ctx, I64, BinaryOp::I64Add)?,
-        Instruction::I64Sub => binop(ctx, I64, BinaryOp::I64Sub)?,
-        Instruction::I64Mul => binop(ctx, I64, BinaryOp::I64Mul)?,
-        Instruction::I64DivS => binop(ctx, I64, BinaryOp::I64DivS)?,
-        Instruction::I64DivU => binop(ctx, I64, BinaryOp::I64DivU)?,
-        Instruction::I64RemS => binop(ctx, I64, BinaryOp::I64RemS)?,
-        Instruction::I64RemU => binop(ctx, I64, BinaryOp::I64RemU)?,
-        Instruction::I64And => binop(ctx, I64, BinaryOp::I64And)?,
-        Instruction::I64Or => binop(ctx, I64, BinaryOp::I64Or)?,
-        Instruction::I64Xor => binop(ctx, I64, BinaryOp::I64Xor)?,
-        Instruction::I64Shl => binop(ctx, I64, BinaryOp::I64Shl)?,
-        Instruction::I64ShrS => binop(ctx, I64, BinaryOp::I64ShrS)?,
-        Instruction::I64ShrU => binop(ctx, I64, BinaryOp::I64ShrU)?,
-        Instruction::I64Rotl => binop(ctx, I64, BinaryOp::I64Rotl)?,
-        Instruction::I64Rotr => binop(ctx, I64, BinaryOp::I64Rotr)?,
+        Operator::F32Abs => unop(ctx, F32, UnaryOp::F32Abs)?,
+        Operator::F32Neg => unop(ctx, F32, UnaryOp::F32Neg)?,
+        Operator::F32Ceil => unop(ctx, F32, UnaryOp::F32Ceil)?,
+        Operator::F32Floor => unop(ctx, F32, UnaryOp::F32Floor)?,
+        Operator::F32Trunc => unop(ctx, F32, UnaryOp::F32Trunc)?,
+        Operator::F32Nearest => unop(ctx, F32, UnaryOp::F32Nearest)?,
+        Operator::F32Sqrt => unop(ctx, F32, UnaryOp::F32Sqrt)?,
+        Operator::F32Add => binop(ctx, F32, BinaryOp::F32Add)?,
+        Operator::F32Sub => binop(ctx, F32, BinaryOp::F32Sub)?,
+        Operator::F32Mul => binop(ctx, F32, BinaryOp::F32Mul)?,
+        Operator::F32Div => binop(ctx, F32, BinaryOp::F32Div)?,
+        Operator::F32Min => binop(ctx, F32, BinaryOp::F32Min)?,
+        Operator::F32Max => binop(ctx, F32, BinaryOp::F32Max)?,
+        Operator::F32Copysign => binop(ctx, F32, BinaryOp::F32Copysign)?,
 
-        Instruction::F32Abs => unop(ctx, F32, UnaryOp::F32Abs)?,
-        Instruction::F32Neg => unop(ctx, F32, UnaryOp::F32Neg)?,
-        Instruction::F32Ceil => unop(ctx, F32, UnaryOp::F32Ceil)?,
-        Instruction::F32Floor => unop(ctx, F32, UnaryOp::F32Floor)?,
-        Instruction::F32Trunc => unop(ctx, F32, UnaryOp::F32Trunc)?,
-        Instruction::F32Nearest => unop(ctx, F32, UnaryOp::F32Nearest)?,
-        Instruction::F32Sqrt => unop(ctx, F32, UnaryOp::F32Sqrt)?,
-        Instruction::F32Add => binop(ctx, F32, BinaryOp::F32Add)?,
-        Instruction::F32Sub => binop(ctx, F32, BinaryOp::F32Sub)?,
-        Instruction::F32Mul => binop(ctx, F32, BinaryOp::F32Mul)?,
-        Instruction::F32Div => binop(ctx, F32, BinaryOp::F32Div)?,
-        Instruction::F32Min => binop(ctx, F32, BinaryOp::F32Min)?,
-        Instruction::F32Max => binop(ctx, F32, BinaryOp::F32Max)?,
-        Instruction::F32Copysign => binop(ctx, F32, BinaryOp::F32Copysign)?,
+        Operator::F64Abs => unop(ctx, F64, UnaryOp::F64Abs)?,
+        Operator::F64Neg => unop(ctx, F64, UnaryOp::F64Neg)?,
+        Operator::F64Ceil => unop(ctx, F64, UnaryOp::F64Ceil)?,
+        Operator::F64Floor => unop(ctx, F64, UnaryOp::F64Floor)?,
+        Operator::F64Trunc => unop(ctx, F64, UnaryOp::F64Trunc)?,
+        Operator::F64Nearest => unop(ctx, F64, UnaryOp::F64Nearest)?,
+        Operator::F64Sqrt => unop(ctx, F64, UnaryOp::F64Sqrt)?,
+        Operator::F64Add => binop(ctx, F64, BinaryOp::F64Add)?,
+        Operator::F64Sub => binop(ctx, F64, BinaryOp::F64Sub)?,
+        Operator::F64Mul => binop(ctx, F64, BinaryOp::F64Mul)?,
+        Operator::F64Div => binop(ctx, F64, BinaryOp::F64Div)?,
+        Operator::F64Min => binop(ctx, F64, BinaryOp::F64Min)?,
+        Operator::F64Max => binop(ctx, F64, BinaryOp::F64Max)?,
+        Operator::F64Copysign => binop(ctx, F64, BinaryOp::F64Copysign)?,
 
-        Instruction::F64Abs => unop(ctx, F64, UnaryOp::F64Abs)?,
-        Instruction::F64Neg => unop(ctx, F64, UnaryOp::F64Neg)?,
-        Instruction::F64Ceil => unop(ctx, F64, UnaryOp::F64Ceil)?,
-        Instruction::F64Floor => unop(ctx, F64, UnaryOp::F64Floor)?,
-        Instruction::F64Trunc => unop(ctx, F64, UnaryOp::F64Trunc)?,
-        Instruction::F64Nearest => unop(ctx, F64, UnaryOp::F64Nearest)?,
-        Instruction::F64Sqrt => unop(ctx, F64, UnaryOp::F64Sqrt)?,
-        Instruction::F64Add => binop(ctx, F64, BinaryOp::F64Add)?,
-        Instruction::F64Sub => binop(ctx, F64, BinaryOp::F64Sub)?,
-        Instruction::F64Mul => binop(ctx, F64, BinaryOp::F64Mul)?,
-        Instruction::F64Div => binop(ctx, F64, BinaryOp::F64Div)?,
-        Instruction::F64Min => binop(ctx, F64, BinaryOp::F64Min)?,
-        Instruction::F64Max => binop(ctx, F64, BinaryOp::F64Max)?,
-        Instruction::F64Copysign => binop(ctx, F64, BinaryOp::F64Copysign)?,
+        Operator::I32WrapI64 => one_op(ctx, I64, I32, UnaryOp::I32WrapI64)?,
+        Operator::I32TruncSF32 => one_op(ctx, F32, I32, UnaryOp::I32TruncSF32)?,
+        Operator::I32TruncUF32 => one_op(ctx, F32, I32, UnaryOp::I32TruncUF32)?,
+        Operator::I32TruncSF64 => one_op(ctx, F64, I32, UnaryOp::I32TruncSF64)?,
+        Operator::I32TruncUF64 => one_op(ctx, F64, I32, UnaryOp::I32TruncUF64)?,
 
-        Instruction::I32WrapI64 => one_op(ctx, I64, I32, UnaryOp::I32WrapI64)?,
-        Instruction::I32TruncSF32 => one_op(ctx, F32, I32, UnaryOp::I32TruncSF32)?,
-        Instruction::I32TruncUF32 => one_op(ctx, F32, I32, UnaryOp::I32TruncUF32)?,
-        Instruction::I32TruncSF64 => one_op(ctx, F64, I32, UnaryOp::I32TruncSF64)?,
-        Instruction::I32TruncUF64 => one_op(ctx, F64, I32, UnaryOp::I32TruncUF64)?,
+        Operator::I64ExtendSI32 => one_op(ctx, I32, I64, UnaryOp::I64ExtendSI32)?,
+        Operator::I64ExtendUI32 => one_op(ctx, I32, I64, UnaryOp::I64ExtendUI32)?,
+        Operator::I64TruncSF32 => one_op(ctx, F32, I64, UnaryOp::I64TruncSF32)?,
+        Operator::I64TruncUF32 => one_op(ctx, F32, I64, UnaryOp::I64TruncUF32)?,
+        Operator::I64TruncSF64 => one_op(ctx, F64, I64, UnaryOp::I64TruncSF64)?,
+        Operator::I64TruncUF64 => one_op(ctx, F64, I64, UnaryOp::I64TruncUF64)?,
 
-        Instruction::I64ExtendSI32 => one_op(ctx, I32, I64, UnaryOp::I64ExtendSI32)?,
-        Instruction::I64ExtendUI32 => one_op(ctx, I32, I64, UnaryOp::I64ExtendUI32)?,
-        Instruction::I64TruncSF32 => one_op(ctx, F32, I64, UnaryOp::I64TruncSF32)?,
-        Instruction::I64TruncUF32 => one_op(ctx, F32, I64, UnaryOp::I64TruncUF32)?,
-        Instruction::I64TruncSF64 => one_op(ctx, F64, I64, UnaryOp::I64TruncSF64)?,
-        Instruction::I64TruncUF64 => one_op(ctx, F64, I64, UnaryOp::I64TruncUF64)?,
+        Operator::F32ConvertSI32 => one_op(ctx, I32, F32, UnaryOp::F32ConvertSI32)?,
+        Operator::F32ConvertUI32 => one_op(ctx, I32, F32, UnaryOp::F32ConvertUI32)?,
+        Operator::F32ConvertSI64 => one_op(ctx, I64, F32, UnaryOp::F32ConvertSI64)?,
+        Operator::F32ConvertUI64 => one_op(ctx, I64, F32, UnaryOp::F32ConvertUI64)?,
+        Operator::F32DemoteF64 => one_op(ctx, F64, F32, UnaryOp::F32DemoteF64)?,
 
-        Instruction::F32ConvertSI32 => one_op(ctx, I32, F32, UnaryOp::F32ConvertSI32)?,
-        Instruction::F32ConvertUI32 => one_op(ctx, I32, F32, UnaryOp::F32ConvertUI32)?,
-        Instruction::F32ConvertSI64 => one_op(ctx, I64, F32, UnaryOp::F32ConvertSI64)?,
-        Instruction::F32ConvertUI64 => one_op(ctx, I64, F32, UnaryOp::F32ConvertUI64)?,
-        Instruction::F32DemoteF64 => one_op(ctx, F64, F32, UnaryOp::F32DemoteF64)?,
+        Operator::F64ConvertSI32 => one_op(ctx, I32, F64, UnaryOp::F64ConvertSI32)?,
+        Operator::F64ConvertUI32 => one_op(ctx, I32, F64, UnaryOp::F64ConvertUI32)?,
+        Operator::F64ConvertSI64 => one_op(ctx, I64, F64, UnaryOp::F64ConvertSI64)?,
+        Operator::F64ConvertUI64 => one_op(ctx, I64, F64, UnaryOp::F64ConvertUI64)?,
+        Operator::F64PromoteF32 => one_op(ctx, F32, F64, UnaryOp::F64PromoteF32)?,
 
-        Instruction::F64ConvertSI32 => one_op(ctx, I32, F64, UnaryOp::F64ConvertSI32)?,
-        Instruction::F64ConvertUI32 => one_op(ctx, I32, F64, UnaryOp::F64ConvertUI32)?,
-        Instruction::F64ConvertSI64 => one_op(ctx, I64, F64, UnaryOp::F64ConvertSI64)?,
-        Instruction::F64ConvertUI64 => one_op(ctx, I64, F64, UnaryOp::F64ConvertUI64)?,
-        Instruction::F64PromoteF32 => one_op(ctx, F32, F64, UnaryOp::F64PromoteF32)?,
+        Operator::I32ReinterpretF32 => one_op(ctx, F32, I32, UnaryOp::I32ReinterpretF32)?,
+        Operator::I64ReinterpretF64 => one_op(ctx, F64, I64, UnaryOp::I64ReinterpretF64)?,
+        Operator::F32ReinterpretI32 => one_op(ctx, I32, F32, UnaryOp::F32ReinterpretI32)?,
+        Operator::F64ReinterpretI64 => one_op(ctx, I64, F64, UnaryOp::F64ReinterpretI64)?,
 
-        Instruction::I32ReinterpretF32 => one_op(ctx, F32, I32, UnaryOp::I32ReinterpretF32)?,
-        Instruction::I64ReinterpretF64 => one_op(ctx, F64, I64, UnaryOp::I64ReinterpretF64)?,
-        Instruction::F32ReinterpretI32 => one_op(ctx, I32, F32, UnaryOp::F32ReinterpretI32)?,
-        Instruction::F64ReinterpretI64 => one_op(ctx, I64, F64, UnaryOp::F64ReinterpretI64)?,
+        Operator::I32Extend8S => one_op(ctx, I32, I32, UnaryOp::I32Extend8S)?,
+        Operator::I32Extend16S => one_op(ctx, I32, I32, UnaryOp::I32Extend16S)?,
+        Operator::I64Extend8S => one_op(ctx, I64, I64, UnaryOp::I64Extend8S)?,
+        Operator::I64Extend16S => one_op(ctx, I64, I64, UnaryOp::I64Extend16S)?,
+        Operator::I64Extend32S => one_op(ctx, I64, I64, UnaryOp::I64Extend32S)?,
 
-        Instruction::I32Extend8S => one_op(ctx, I32, I32, UnaryOp::I32Extend8S)?,
-        Instruction::I32Extend16S => one_op(ctx, I32, I32, UnaryOp::I32Extend16S)?,
-        Instruction::I64Extend8S => one_op(ctx, I64, I64, UnaryOp::I64Extend8S)?,
-        Instruction::I64Extend16S => one_op(ctx, I64, I64, UnaryOp::I64Extend16S)?,
-        Instruction::I64Extend32S => one_op(ctx, I64, I64, UnaryOp::I64Extend32S)?,
-
-        Instruction::Drop => {
+        Operator::Drop => {
             let (_, expr) = ctx.pop_operand()?;
             let expr = ctx.func.alloc(Drop { expr });
             ctx.add_to_current_frame_block(expr);
         }
-        Instruction::Select => {
+        Operator::Select => {
             let (_, condition) = ctx.pop_operand_expected(Some(ValType::I32))?;
             let (t1, consequent) = ctx.pop_operand()?;
             let (t2, alternative) = ctx.pop_operand_expected(t1)?;
@@ -697,7 +706,7 @@ fn validate_instruction<'a>(
             });
             ctx.push_operand(t2, expr);
         }
-        Instruction::Return => {
+        Operator::Return => {
             let expected: Vec<_> = ctx
                 .validation
                 .return_
@@ -708,52 +717,50 @@ fn validate_instruction<'a>(
             let expr = ctx.func.alloc(Return { values });
             ctx.unreachable(expr);
         }
-        Instruction::Unreachable => {
+        Operator::Unreachable => {
             let expr = ctx.func.alloc(Unreachable {});
             ctx.unreachable(expr);
         }
-        Instruction::Block(block_ty) => {
-            let validation = ctx.validation.for_block(ValType::from_block_ty(block_ty));
+        Operator::Block { ty } => {
+            let results = ValType::from_block_ty(ty)?;
+            let validation = ctx.validation.for_block(results.clone());
             let mut ctx = ctx.nested(&validation);
-            let results = ValType::from_block_ty(block_ty);
             ctx.push_control(BlockKind::Block, results.clone(), results);
-            let rest = validate_instruction_sequence(&mut ctx, &insts[1..], Instruction::End)?;
+            validate_instruction_sequence_until_end(&mut ctx, ops)?;
             validate_end(&mut ctx)?;
-            return Ok(rest);
         }
-        Instruction::Loop(block_ty) => {
+        Operator::Loop { ty } => {
             let validation = ctx.validation.for_loop();
             let mut ctx = ctx.nested(&validation);
-            let t = ValType::from_block_ty(block_ty);
+            let t = ValType::from_block_ty(ty)?;
             ctx.push_control(BlockKind::Loop, vec![].into_boxed_slice(), t);
-            let rest = validate_instruction_sequence(&mut ctx, &insts[1..], Instruction::End)?;
+            validate_instruction_sequence_until_end(&mut ctx, ops)?;
             validate_end(&mut ctx)?;
-            return Ok(rest);
         }
-        Instruction::If(block_ty) => {
-            let validation = ctx.validation.for_if_else(ValType::from_block_ty(block_ty));
+        Operator::If { ty } => {
+            let ty = ValType::from_block_ty(ty)?;
+            let validation = ctx.validation.for_if_else(ty.clone());
             let mut ctx = ctx.nested(&validation);
 
             let (_, condition) = ctx.pop_operand_expected(Some(ValType::I32))?;
 
-            let ty = ValType::from_block_ty(block_ty);
             let consequent = ctx.push_control(BlockKind::IfElse, ty.clone(), ty.clone());
 
             let mut else_found = false;
-            let mut rest = validate_instruction_sequence_until(&mut ctx, &insts[1..], |i| {
-                if *i == Instruction::Else {
+            validate_instruction_sequence_until(&mut ctx, ops, |i| match i {
+                Operator::Else => {
                     else_found = true;
                     true
-                } else {
-                    *i == Instruction::End
                 }
+                Operator::End => true,
+                _ => false,
             })?;
             let (results, _block) = ctx.pop_control()?;
 
             let alternative = ctx.push_control(BlockKind::IfElse, results.clone(), results);
 
             if else_found {
-                rest = validate_instruction_sequence(&mut ctx, rest, Instruction::End)?;
+                validate_instruction_sequence_until_end(&mut ctx, ops)?;
             }
             let (results, _block) = ctx.pop_control()?;
 
@@ -763,25 +770,23 @@ fn validate_instruction<'a>(
                 alternative,
             });
             ctx.push_operands(&results, expr.into());
-
-            return Ok(rest);
         }
-        Instruction::End => {
+        Operator::End => {
             return Err(ErrorKind::InvalidWasm
                 .context("unexpected `end` instruction")
                 .into());
         }
-        Instruction::Else => {
+        Operator::Else => {
             return Err(ErrorKind::InvalidWasm
                 .context("`else` without a leading `if`")
                 .into());
         }
-        Instruction::Br(n) => {
+        Operator::Br { relative_depth } => {
             ctx.validation
-                .label(*n)
+                .label(relative_depth)
                 .context("`br` to out-of-bounds block")?;
 
-            let n = *n as usize;
+            let n = relative_depth as usize;
             if ctx.controls.len() <= n {
                 return Err(ErrorKind::InvalidWasm
                     .context("attempt to branch to out-of-bounds block")
@@ -798,12 +803,12 @@ fn validate_instruction<'a>(
             });
             ctx.unreachable(expr);
         }
-        Instruction::BrIf(n) => {
+        Operator::BrIf { relative_depth } => {
             ctx.validation
-                .label(*n)
+                .label(relative_depth)
                 .context("`br_if` to out-of-bounds block")?;
 
-            let n = *n as usize;
+            let n = relative_depth as usize;
             if ctx.controls.len() <= n {
                 return Err(ErrorKind::InvalidWasm
                     .context("attempt to branch to out-of-bounds block")
@@ -823,44 +828,47 @@ fn validate_instruction<'a>(
             });
             ctx.push_operands(&expected, expr.into());
         }
-        Instruction::BrTable(table) => {
-            ctx.validation
-                .label(table.default)
-                .context("`br_table` with out-of-bounds default block")?;
-            if ctx.controls.len() < table.default as usize {
-                return Err(ErrorKind::InvalidWasm
-                    .context(
-                        "attempt to jump to an out-of-bounds block from the default table entry",
-                    )
-                    .into());
-            }
-            let default = ctx.control(table.default as usize).block;
-
-            let mut blocks = Vec::with_capacity(table.table.len());
-            for n in table.table.iter() {
+        Operator::BrTable { table } => {
+            let len = table.len();
+            let mut blocks = Vec::with_capacity(len);
+            let mut label_types = None;
+            let mut iter = table.into_iter();
+            let mut next = || {
+                let n = match iter.next() {
+                    Some(n) => n,
+                    None => bail!("malformed `br_table"),
+                };
                 ctx.validation
-                    .label(*n)
+                    .label(n)
                     .context("`br_table` with out-of-bounds block")?;
-                let n = *n as usize;
+                let n = n as usize;
                 if ctx.controls.len() < n {
                     return Err(ErrorKind::InvalidWasm
                         .context("attempt to jump to an out-of-bounds block from a table entry")
                         .into());
                 }
-                if ctx.control(n).label_types != ctx.control(table.default as usize).label_types {
-                    return Err(ErrorKind::InvalidWasm
-                        .context(
-                            "attempt to jump to block non-matching label types from a table entry",
-                        )
-                        .into());
+                let control = ctx.control(n);
+                match label_types {
+                    None => label_types = Some(&control.label_types),
+                    Some(n) => {
+                        if n != &control.label_types {
+                            bail!("br_table jump with non-uniform label types")
+                        }
+                    }
                 }
-                blocks.push(ctx.control(n).block);
+                Ok(control.block)
+            };
+            for _ in 0..len {
+                blocks.push(next()?);
             }
+            let default = next()?;
+            if iter.next().is_some() {
+                bail!("malformed `br_table`");
+            }
+
             let blocks = blocks.into_boxed_slice();
-
+            let expected = label_types.unwrap().clone();
             let (_, which) = ctx.pop_operand_expected(Some(ValType::I32))?;
-
-            let expected = ctx.control(table.default as usize).label_types.clone();
 
             let args = ctx.pop_operands(&expected)?.into_boxed_slice();
             let expr = ctx.func.alloc(BrTable {
@@ -873,117 +881,112 @@ fn validate_instruction<'a>(
             ctx.unreachable(expr);
         }
 
-        Instruction::CurrentMemory(mem) => {
-            let memory = ctx.indices.get_memory(*mem as u32)?;
+        Operator::MemorySize { reserved } => {
+            if reserved != 0 {
+                bail!("reserved byte isn't zero");
+            }
+            let memory = ctx.indices.get_memory(0)?;
             let expr = ctx.func.alloc(MemorySize { memory });
             ctx.push_operand(Some(ValType::I32), expr);
         }
-        Instruction::GrowMemory(mem) => {
+        Operator::MemoryGrow { reserved } => {
+            if reserved != 0 {
+                bail!("reserved byte isn't zero");
+            }
             let (_, pages) = ctx.pop_operand_expected(Some(ValType::I32))?;
-            let memory = ctx.indices.get_memory(*mem as u32)?;
+            let memory = ctx.indices.get_memory(0)?;
             let expr = ctx.func.alloc(MemoryGrow { memory, pages });
             ctx.push_operand(Some(ValType::I32), expr);
         }
 
-        Instruction::Nop => {}
+        Operator::Nop => {}
 
-        Instruction::I32Load(a, o) => load(ctx, *a, *o, ValType::I32, LoadKind::I32)?,
-        Instruction::I64Load(a, o) => load(ctx, *a, *o, ValType::I64, LoadKind::I64)?,
-        Instruction::F32Load(a, o) => load(ctx, *a, *o, ValType::F32, LoadKind::F32)?,
-        Instruction::F64Load(a, o) => load(ctx, *a, *o, ValType::F64, LoadKind::F64)?,
-        Instruction::V128Load(m) => {
-            load(ctx, m.align.into(), m.offset, ValType::V128, LoadKind::V128)?
-        }
-        Instruction::I32Load8S(a, o) => load(
+        Operator::I32Load { memarg } => load(ctx, memarg, ValType::I32, LoadKind::I32)?,
+        Operator::I64Load { memarg } => load(ctx, memarg, ValType::I64, LoadKind::I64)?,
+        Operator::F32Load { memarg } => load(ctx, memarg, ValType::F32, LoadKind::F32)?,
+        Operator::F64Load { memarg } => load(ctx, memarg, ValType::F64, LoadKind::F64)?,
+        // Operator::V128Load(m) => {
+        //     load(ctx, m.align.into(), m.offset, ValType::V128, LoadKind::V128)?
+        // }
+        Operator::I32Load8S { memarg } => load(
             ctx,
-            *a,
-            *o,
+            memarg,
             ValType::I32,
             LoadKind::I32_8 { sign_extend: true },
         )?,
-        Instruction::I32Load8U(a, o) => load(
+        Operator::I32Load8U { memarg } => load(
             ctx,
-            *a,
-            *o,
+            memarg,
             ValType::I32,
             LoadKind::I32_8 { sign_extend: false },
         )?,
-        Instruction::I32Load16S(a, o) => load(
+        Operator::I32Load16S { memarg } => load(
             ctx,
-            *a,
-            *o,
+            memarg,
             ValType::I32,
             LoadKind::I32_16 { sign_extend: true },
         )?,
-        Instruction::I32Load16U(a, o) => load(
+        Operator::I32Load16U { memarg } => load(
             ctx,
-            *a,
-            *o,
+            memarg,
             ValType::I32,
             LoadKind::I32_16 { sign_extend: false },
         )?,
-        Instruction::I64Load8S(a, o) => load(
+        Operator::I64Load8S { memarg } => load(
             ctx,
-            *a,
-            *o,
+            memarg,
             ValType::I64,
             LoadKind::I64_8 { sign_extend: true },
         )?,
-        Instruction::I64Load8U(a, o) => load(
+        Operator::I64Load8U { memarg } => load(
             ctx,
-            *a,
-            *o,
+            memarg,
             ValType::I64,
             LoadKind::I64_8 { sign_extend: false },
         )?,
-        Instruction::I64Load16S(a, o) => load(
+        Operator::I64Load16S { memarg } => load(
             ctx,
-            *a,
-            *o,
+            memarg,
             ValType::I64,
             LoadKind::I64_16 { sign_extend: true },
         )?,
-        Instruction::I64Load16U(a, o) => load(
+        Operator::I64Load16U { memarg } => load(
             ctx,
-            *a,
-            *o,
+            memarg,
             ValType::I64,
             LoadKind::I64_16 { sign_extend: false },
         )?,
-        Instruction::I64Load32S(a, o) => load(
+        Operator::I64Load32S { memarg } => load(
             ctx,
-            *a,
-            *o,
+            memarg,
             ValType::I64,
             LoadKind::I64_32 { sign_extend: true },
         )?,
-        Instruction::I64Load32U(a, o) => load(
+        Operator::I64Load32U { memarg } => load(
             ctx,
-            *a,
-            *o,
+            memarg,
             ValType::I64,
             LoadKind::I64_32 { sign_extend: false },
         )?,
 
-        Instruction::I32Store(a, o) => store(ctx, *a, *o, ValType::I32, StoreKind::I32)?,
-        Instruction::I64Store(a, o) => store(ctx, *a, *o, ValType::I64, StoreKind::I64)?,
-        Instruction::F32Store(a, o) => store(ctx, *a, *o, ValType::F32, StoreKind::F32)?,
-        Instruction::F64Store(a, o) => store(ctx, *a, *o, ValType::F64, StoreKind::F64)?,
-        Instruction::V128Store(m) => store(
-            ctx,
-            m.align.into(),
-            m.offset,
-            ValType::V128,
-            StoreKind::V128,
-        )?,
-        Instruction::I32Store8(a, o) => store(ctx, *a, *o, ValType::I32, StoreKind::I32_8)?,
-        Instruction::I32Store16(a, o) => store(ctx, *a, *o, ValType::I32, StoreKind::I32_16)?,
-        Instruction::I64Store8(a, o) => store(ctx, *a, *o, ValType::I64, StoreKind::I64_8)?,
-        Instruction::I64Store16(a, o) => store(ctx, *a, *o, ValType::I64, StoreKind::I64_16)?,
-        Instruction::I64Store32(a, o) => store(ctx, *a, *o, ValType::I64, StoreKind::I64_32)?,
+        Operator::I32Store { memarg } => store(ctx, memarg, ValType::I32, StoreKind::I32)?,
+        Operator::I64Store { memarg } => store(ctx, memarg, ValType::I64, StoreKind::I64)?,
+        Operator::F32Store { memarg } => store(ctx, memarg, ValType::F32, StoreKind::F32)?,
+        Operator::F64Store { memarg } => store(ctx, memarg, ValType::F64, StoreKind::F64)?,
+        // Operator::V128Store(m) => store(
+        //     ctx,
+        //     m.align.into(),
+        //     m.offset,
+        //     ValType::V128,
+        //     StoreKind::V128,
+        // )?,
+        Operator::I32Store8 { memarg } => store(ctx, memarg, ValType::I32, StoreKind::I32_8)?,
+        Operator::I32Store16 { memarg } => store(ctx, memarg, ValType::I32, StoreKind::I32_16)?,
+        Operator::I64Store8 { memarg } => store(ctx, memarg, ValType::I64, StoreKind::I64_8)?,
+        Operator::I64Store16 { memarg } => store(ctx, memarg, ValType::I64, StoreKind::I64_16)?,
+        Operator::I64Store32 { memarg } => store(ctx, memarg, ValType::I64, StoreKind::I64_32)?,
 
         op => bail!("Have not implemented support for opcode yet: {:?}", op),
     }
-
-    Ok(&insts[1..])
+    Ok(())
 }

@@ -10,7 +10,7 @@ id-arena = { version = "2.1.0", features = ['rayon'] }
 parity-wasm = "0.35.6"
 petgraph = "0.4.13"
 log = "0.4"
-wasmparser = "0.24"
+wasmparser = "0.26"
 rayon = "1.0.3"
 
 [dependencies.walrus-derive]

@@ -142,7 +142,7 @@ impl Module {
                 wasmparser::SectionCode::Custom { name, kind: _ } => {
                     let result = match name {
                         "producers" => {
-                            let reader = section.get_binary_reader();
+                            let reader = section.get_producers_section_reader()?;
                             ret.parse_producers_section(reader)
                         }
                         "name" => section

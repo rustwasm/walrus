@@ -6,7 +6,6 @@
 use crate::emit::{Emit, EmitContext};
 use crate::error::Result;
 use crate::module::Module;
-use failure::bail;
 
 /// Representation of the wasm custom section `producers`
 #[derive(Debug, Default)]
@@ -72,23 +71,22 @@ impl Module {
     /// Parse a producers section from the custom section payload specified.
     pub(crate) fn parse_producers_section(
         &mut self,
-        mut data: wasmparser::BinaryReader,
+        data: wasmparser::ProducersSectionReader,
     ) -> Result<()> {
         log::debug!("parse producers section");
-        for _ in 0..data.read_var_u32()? {
-            let name = data.read_string()?.to_string();
-            let cnt = data.read_var_u32()?;
 
-            let mut values = Vec::with_capacity(cnt as usize);
-            for _ in 0..cnt {
-                let name = data.read_string()?.to_string();
-                let version = data.read_string()?.to_string();
-                values.push(Value { name, version });
+        for field in data {
+            let field = field?;
+            let mut values = Vec::new();
+            for value in field.get_producer_field_values_reader()? {
+                let value = value?;
+                values.push(Value {
+                    name: value.name.to_string(),
+                    version: value.version.to_string(),
+                });
             }
+            let name = field.name.to_string();
             self.producers.fields.push(Field { name, values });
-        }
-        if !data.eof() {
-            bail!("failed to decode all data in producers section");
         }
 
         Ok(())

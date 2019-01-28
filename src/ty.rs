@@ -106,6 +106,7 @@ impl ValType {
             wasmparser::Type::I64 => Ok(ValType::I64),
             wasmparser::Type::F32 => Ok(ValType::F32),
             wasmparser::Type::F64 => Ok(ValType::F64),
+            wasmparser::Type::V128 => Ok(ValType::V128),
             _ => failure::bail!("not a value type"),
         }
     }

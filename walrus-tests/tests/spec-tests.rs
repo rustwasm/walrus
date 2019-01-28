@@ -80,7 +80,8 @@ fn run(wast: &Path) -> Result<(), failure::Error> {
             _ => {
                 let wasm = walrus::module::Module::from_file(&path)
                     .context(format!("error parsing wasm (line {})", line))?;
-                let wasm1 = wasm.emit_wasm()
+                let wasm1 = wasm
+                    .emit_wasm()
                     .context(format!("error emitting wasm (line {})", line))?;
                 fs::write(&path, &wasm1)?;
                 let wasm2 = walrus::module::Module::from_buffer(&wasm1)

@@ -6,4 +6,3 @@ fn main() {
     let m = walrus::module::Module::from_file(&a).unwrap();
     m.emit_wasm().unwrap();
 }
-

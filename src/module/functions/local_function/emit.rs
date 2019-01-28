@@ -1,11 +1,16 @@
 use crate::emit::IdsToIndices;
 use crate::encode::Encoder;
-use std::collections::HashMap;
 use crate::ir::*;
 use crate::module::functions::LocalFunction;
 use crate::ty::ValType;
+use std::collections::HashMap;
 
-pub(crate) fn run(func: &LocalFunction, indices: &IdsToIndices, local_indices: &HashMap<LocalId, u32>, encoder: &mut Encoder) {
+pub(crate) fn run(
+    func: &LocalFunction,
+    indices: &IdsToIndices,
+    local_indices: &HashMap<LocalId, u32>,
+    encoder: &mut Encoder,
+) {
     let mut v = Emit {
         func,
         indices,
@@ -393,7 +398,7 @@ impl Emit<'_, '_> {
                 self.block_type(&e.results);
             }
             BlockKind::Loop => {
-                self.encoder.byte(0x03);  // loop
+                self.encoder.byte(0x03); // loop
                 self.block_type(&e.results);
             }
             BlockKind::FunctionEntry | BlockKind::IfElse => {}

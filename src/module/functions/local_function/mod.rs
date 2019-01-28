@@ -14,11 +14,11 @@ use crate::ir::matcher::{ConstMatcher, Matcher};
 use crate::ir::*;
 use crate::module::Module;
 use crate::parse::IndicesToIds;
+use crate::passes::Used;
 use crate::ty::{TypeId, ValType};
 use failure::{bail, Fail, ResultExt};
-use crate::passes::Used;
 use id_arena::{Arena, Id};
-use std::collections::{BTreeMap, HashSet, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fmt;
 use std::mem;
 use wasmparser::{Operator, OperatorsReader};
@@ -145,7 +145,13 @@ impl LocalFunction {
     }
 
     /// Emit this function's compact locals declarations.
-    pub(crate) fn emit_locals(&self, id: FunctionId, module: &Module, used: &Used, encoder: &mut Encoder) -> HashMap<LocalId, u32> {
+    pub(crate) fn emit_locals(
+        &self,
+        id: FunctionId,
+        module: &Module,
+        used: &Used,
+        encoder: &mut Encoder,
+    ) -> HashMap<LocalId, u32> {
         let mut used_locals = Vec::new();
         if let Some(locals) = used.locals.get(&id) {
             used_locals = locals.iter().cloned().collect();
@@ -198,7 +204,12 @@ impl LocalFunction {
     }
 
     /// Emit this function's instruction sequence.
-    pub(crate) fn emit_instructions(&self, indices: &IdsToIndices, local_indices: &HashMap<LocalId, u32>, dst: &mut Encoder) {
+    pub(crate) fn emit_instructions(
+        &self,
+        indices: &IdsToIndices,
+        local_indices: &HashMap<LocalId, u32>,
+        dst: &mut Encoder,
+    ) {
         emit::run(self, indices, local_indices, dst)
     }
 }

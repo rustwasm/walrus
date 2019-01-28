@@ -481,25 +481,26 @@ fn validate_instruction(
         Operator::F64Const { value } => {
             const_(ctx, F64, Value::F64(f64::from_bits(value.bits())));
         }
-        // Operator::V128Const(n) => {
-        //     let val = ((n[0] as u128) << 0)
-        //         | ((n[1] as u128) << 8)
-        //         | ((n[2] as u128) << 16)
-        //         | ((n[3] as u128) << 24)
-        //         | ((n[4] as u128) << 32)
-        //         | ((n[5] as u128) << 40)
-        //         | ((n[6] as u128) << 48)
-        //         | ((n[7] as u128) << 56)
-        //         | ((n[8] as u128) << 64)
-        //         | ((n[9] as u128) << 72)
-        //         | ((n[10] as u128) << 80)
-        //         | ((n[11] as u128) << 88)
-        //         | ((n[12] as u128) << 96)
-        //         | ((n[13] as u128) << 104)
-        //         | ((n[14] as u128) << 112)
-        //         | ((n[15] as u128) << 120);
-        //     const_(ctx, V128, Value::V128(val));
-        // }
+        Operator::V128Const { value } => {
+            let n = value.bytes();
+            let val = ((n[0] as u128) << 0)
+                | ((n[1] as u128) << 8)
+                | ((n[2] as u128) << 16)
+                | ((n[3] as u128) << 24)
+                | ((n[4] as u128) << 32)
+                | ((n[5] as u128) << 40)
+                | ((n[6] as u128) << 48)
+                | ((n[7] as u128) << 56)
+                | ((n[8] as u128) << 64)
+                | ((n[9] as u128) << 72)
+                | ((n[10] as u128) << 80)
+                | ((n[11] as u128) << 88)
+                | ((n[12] as u128) << 96)
+                | ((n[13] as u128) << 104)
+                | ((n[14] as u128) << 112)
+                | ((n[15] as u128) << 120);
+            const_(ctx, V128, Value::V128(val));
+        }
         Operator::I32Eqz => testop(ctx, I32, UnaryOp::I32Eqz)?,
         Operator::I32Eq => relop(ctx, I32, BinaryOp::I32Eq)?,
         Operator::I32Ne => relop(ctx, I32, BinaryOp::I32Ne)?,
@@ -817,9 +818,7 @@ fn validate_instruction(
         Operator::I64Load { memarg } => load(ctx, memarg, ValType::I64, LoadKind::I64)?,
         Operator::F32Load { memarg } => load(ctx, memarg, ValType::F32, LoadKind::F32)?,
         Operator::F64Load { memarg } => load(ctx, memarg, ValType::F64, LoadKind::F64)?,
-        // Operator::V128Load(m) => {
-        //     load(ctx, m.align.into(), m.offset, ValType::V128, LoadKind::V128)?
-        // }
+        Operator::V128Load { memarg } => load(ctx, memarg, ValType::V128, LoadKind::V128)?,
         Operator::I32Load8S { memarg } => load(
             ctx,
             memarg,
@@ -885,13 +884,7 @@ fn validate_instruction(
         Operator::I64Store { memarg } => store(ctx, memarg, ValType::I64, StoreKind::I64)?,
         Operator::F32Store { memarg } => store(ctx, memarg, ValType::F32, StoreKind::F32)?,
         Operator::F64Store { memarg } => store(ctx, memarg, ValType::F64, StoreKind::F64)?,
-        // Operator::V128Store(m) => store(
-        //     ctx,
-        //     m.align.into(),
-        //     m.offset,
-        //     ValType::V128,
-        //     StoreKind::V128,
-        // )?,
+        Operator::V128Store { memarg } => store(ctx, memarg, ValType::V128, StoreKind::V128)?,
         Operator::I32Store8 { memarg } => store(ctx, memarg, ValType::I32, StoreKind::I32_8)?,
         Operator::I32Store16 { memarg } => store(ctx, memarg, ValType::I32, StoreKind::I32_16)?,
         Operator::I64Store8 { memarg } => store(ctx, memarg, ValType::I64, StoreKind::I64_8)?,

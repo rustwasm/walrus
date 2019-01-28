@@ -28,30 +28,16 @@ impl<'data> Encoder<'data> {
         self.u32(amt as u32)
     }
 
-    pub fn u32(&mut self, mut amt: u32) {
-        while amt >= (1 << 7) {
-            self.byte((amt as u8) & 0x7f | 0x80);
-            amt >>= 7;
-        }
-        self.byte(amt as u8);
+    pub fn u32(&mut self, amt: u32) {
+        leb128::write::unsigned(&mut self.dst, amt.into()).unwrap();
     }
 
     pub fn i32(&mut self, val: i32) {
-        self.i64(val as i64);
+        leb128::write::signed(&mut self.dst, val.into()).unwrap();
     }
 
-    pub fn i64(&mut self, mut val: i64) {
-        let mut done = false;
-        while !done {
-            let mut byte = (val as i8) & 0x7f;
-            val >>= 7;
-            if (val == 0 && (byte & 0x40 == 0)) || (val == -1 && (byte & 0x40 != 0)) {
-                done = true;
-            } else {
-                byte |= 0x80u8 as i8;
-            }
-            self.byte(byte as u8);
-        }
+    pub fn i64(&mut self, val: i64) {
+        leb128::write::signed(&mut self.dst, val).unwrap();
     }
 
     pub fn f32(&mut self, val: f32) {
@@ -92,6 +78,8 @@ impl<'data> Encoder<'data> {
         self.dst.len()
     }
 
+    // TODO: don't write this code here, use upstream once
+    // gimli-rs/leb128#6 is implemented
     pub fn u32_at(&mut self, pos: usize, mut amt: u32) {
         for i in 0..MAX_U32_LENGTH {
             let flag = if i == MAX_U32_LENGTH - 1 { 0 } else { 0x80 };

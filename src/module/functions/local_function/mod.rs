@@ -8,17 +8,17 @@ use self::context::FunctionContext;
 use super::FunctionId;
 use crate::dot::Dot;
 use crate::emit::IdsToIndices;
+use crate::encode::Encoder;
 use crate::error::{ErrorKind, Result};
 use crate::ir::matcher::{ConstMatcher, Matcher};
 use crate::ir::*;
-use crate::module::locals::ModuleLocals;
 use crate::module::Module;
 use crate::parse::IndicesToIds;
 use crate::ty::{TypeId, ValType};
 use failure::{bail, Fail, ResultExt};
+use crate::passes::Used;
 use id_arena::{Arena, Id};
-use parity_wasm::elements;
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, HashSet, HashMap};
 use std::fmt;
 use std::mem;
 use wasmparser::{Operator, OperatorsReader};
@@ -145,78 +145,61 @@ impl LocalFunction {
     }
 
     /// Emit this function's compact locals declarations.
-    pub(crate) fn emit_locals(
-        &self,
-        locals: &ModuleLocals,
-        indices: &mut IdsToIndices,
-    ) -> Vec<elements::Local> {
-        struct LocalsVisitor<'a> {
-            func: &'a LocalFunction,
-            locals: &'a ModuleLocals,
-            seen: HashSet<LocalId>,
-            // NB: Use `BTreeMap` to make compilation deterministic
-            ty_to_locals: BTreeMap<ValType, Vec<LocalId>>,
-            args: HashSet<LocalId>,
+    pub(crate) fn emit_locals(&self, id: FunctionId, module: &Module, used: &Used, encoder: &mut Encoder) -> HashMap<LocalId, u32> {
+        let mut used_locals = Vec::new();
+        if let Some(locals) = used.locals.get(&id) {
+            used_locals = locals.iter().cloned().collect();
+            // Sort to ensure we assign local indexes deterministically, and
+            // everything is distinct so we can use a faster unstable sort.
+            used_locals.sort_unstable();
         }
 
-        impl<'expr> Visitor<'expr> for LocalsVisitor<'expr> {
-            fn local_function(&self) -> &'expr LocalFunction {
-                self.func
-            }
+        // NB: Use `BTreeMap` to make compilation deterministic by emitting
+        // types in the same order
+        let mut ty_to_locals = BTreeMap::new();
+        let args = self.args.iter().cloned().collect::<HashSet<_>>();
 
-            fn visit_local_id(&mut self, &id: &LocalId) {
-                if !self.seen.insert(id) {
-                    return; // already seen? no more work to do
-                }
-                if self.args.contains(&id) {
-                    return; // is this an argument? we'll handle that separately
-                }
-                let ty = self.locals.get(id).ty();
-                self.ty_to_locals.entry(ty).or_insert(Vec::new()).push(id);
+        // Partition all locals by their type as we'll create at most one entry
+        // for each type. Skip all arguments to the function because they're
+        // handled separately.
+        for local in used_locals.iter() {
+            if !args.contains(local) {
+                let ty = module.locals.get(*local).ty();
+                ty_to_locals.entry(ty).or_insert_with(Vec::new).push(*local);
             }
         }
 
-        let mut v = LocalsVisitor {
-            func: self,
-            locals,
-            seen: HashSet::new(),
-            ty_to_locals: BTreeMap::new(),
-            args: self.args.iter().cloned().collect(),
-        };
-        self.entry_block().visit(&mut v);
+        let mut local_map = HashMap::with_capacity(used_locals.len());
 
-        // First up allocate indices to the arguments of the function. These
-        // arguments get the first few indexes in the local index space, and are
-        // unconditionally used.
+        // Allocate an index to all the function arguments, as these are all
+        // unconditionally used and are implicit locals in wasm.
         let mut idx = 0;
         for &arg in self.args.iter() {
-            indices.set_local_index(arg, idx);
+            local_map.insert(arg, idx);
             idx += 1;
         }
 
-        // Next up assign chunks of locals all at once as we see them.
-        let mut ret = Vec::with_capacity(5);
-        for (ty, locals) in v.ty_to_locals {
-            let element_ty = match ty {
-                ValType::I32 => elements::ValueType::I32,
-                ValType::I64 => elements::ValueType::I64,
-                ValType::F32 => elements::ValueType::F32,
-                ValType::F64 => elements::ValueType::F64,
-                ValType::V128 => elements::ValueType::V128,
-            };
-            ret.push(elements::Local::new(locals.len() as u32, element_ty));
+        // Assign an index to all remaining locals
+        for (_, locals) in ty_to_locals.iter() {
             for l in locals {
-                indices.set_local_index(l, idx);
+                local_map.insert(*l, idx);
                 idx += 1;
             }
         }
 
-        return ret;
+        // Use our type map to emit a compact representation of all locals now
+        encoder.usize(ty_to_locals.len());
+        for (ty, locals) in ty_to_locals.iter() {
+            encoder.usize(locals.len());
+            ty.emit(encoder);
+        }
+
+        local_map
     }
 
     /// Emit this function's instruction sequence.
-    pub(crate) fn emit_instructions(&self, indices: &IdsToIndices) -> Vec<elements::Instruction> {
-        emit::run(self, indices)
+    pub(crate) fn emit_instructions(&self, indices: &IdsToIndices, local_indices: &HashMap<LocalId, u32>, dst: &mut Encoder) {
+        emit::run(self, indices, local_indices, dst)
     }
 }
 

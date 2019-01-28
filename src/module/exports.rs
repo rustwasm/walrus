@@ -3,13 +3,12 @@
 use super::globals::GlobalId;
 use super::memories::MemoryId;
 use super::tables::TableId;
-use crate::emit::{Emit, EmitContext, IdsToIndices};
+use crate::emit::{Emit, EmitContext, Section};
 use crate::error::Result;
 use crate::module::functions::FunctionId;
 use crate::module::Module;
 use crate::parse::IndicesToIds;
 use id_arena::{Arena, Id};
-use parity_wasm::elements;
 
 /// The id of an export.
 pub type ExportId = Id<Export>;
@@ -29,11 +28,6 @@ impl Export {
     pub fn id(&self) -> ExportId {
         self.id
     }
-
-    fn entry(&self, indices: &IdsToIndices) -> elements::ExportEntry {
-        let internal = self.item.internal(indices);
-        elements::ExportEntry::new(self.name.clone(), internal)
-    }
 }
 
 /// An exported item.
@@ -47,29 +41,6 @@ pub enum ExportItem {
     Memory(MemoryId),
     /// An exported global.
     Global(GlobalId),
-}
-
-impl ExportItem {
-    fn internal(&self, indices: &IdsToIndices) -> elements::Internal {
-        match *self {
-            ExportItem::Function(f) => {
-                let idx = indices.get_func_index(f);
-                elements::Internal::Function(idx)
-            }
-            ExportItem::Table(t) => {
-                let idx = indices.get_table_index(t);
-                elements::Internal::Table(idx)
-            }
-            ExportItem::Memory(m) => {
-                let idx = indices.get_memory_index(m);
-                elements::Internal::Memory(idx)
-            }
-            ExportItem::Global(g) => {
-                let idx = indices.get_global_index(g);
-                elements::Internal::Global(idx)
-            }
-        }
-    }
 }
 
 /// The set of exports in a module.
@@ -103,6 +74,7 @@ impl Module {
         section: wasmparser::ExportSectionReader,
         ids: &IndicesToIds,
     ) -> Result<()> {
+        log::debug!("parse export section");
         use wasmparser::ExternalKind::*;
 
         for entry in section {
@@ -126,22 +98,41 @@ impl Module {
 
 impl Emit for ModuleExports {
     fn emit(&self, cx: &mut EmitContext) {
+        log::debug!("emit export section");
         // NB: exports are always considered used. They are the roots that the
         // used analysis searches out from.
 
-        let mut exports = vec![];
-
-        for (_id, exp) in self.arena.iter() {
-            let export = exp.entry(cx.indices);
-            exports.push(export);
-        }
-
-        if exports.is_empty() {
+        if self.arena.len() == 0 {
             return;
         }
 
-        let exports = elements::ExportSection::with_entries(exports);
-        let exports = elements::Section::Export(exports);
-        cx.dst.sections_mut().push(exports);
+        let mut cx = cx.start_section(Section::Export);
+        cx.encoder.usize(self.arena.len());
+
+        for (_id, export) in self.arena.iter() {
+            cx.encoder.str(&export.name);
+            match export.item {
+                ExportItem::Function(id) => {
+                    let index = cx.indices.get_func_index(id);
+                    cx.encoder.byte(0x00);
+                    cx.encoder.u32(index);
+                }
+                ExportItem::Table(id) => {
+                    let index = cx.indices.get_table_index(id);
+                    cx.encoder.byte(0x01);
+                    cx.encoder.u32(index);
+                }
+                ExportItem::Memory(id) => {
+                    let index = cx.indices.get_memory_index(id);
+                    cx.encoder.byte(0x02);
+                    cx.encoder.u32(index);
+                }
+                ExportItem::Global(id) => {
+                    let index = cx.indices.get_global_index(id);
+                    cx.encoder.byte(0x03);
+                    cx.encoder.u32(index);
+                }
+            }
+        }
     }
 }

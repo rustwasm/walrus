@@ -7,11 +7,10 @@ version = "0.1.0"
 [dependencies]
 failure = "0.1.2"
 id-arena = { version = "2.1.0", features = ['rayon'] }
-parity-wasm = "0.35.6"
-petgraph = "0.4.13"
+leb128 = "0.2.3"
 log = "0.4"
-wasmparser = "0.26"
 rayon = "1.0.3"
+wasmparser = "0.26"
 
 [dependencies.walrus-derive]
 path = "./walrus-derive"

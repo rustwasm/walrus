@@ -1,15 +1,15 @@
 //! Data segments within a wasm module.
 
 use crate::const_value::Const;
-use crate::emit::{Emit, EmitContext};
+use crate::emit::{Emit, EmitContext, Section};
 use crate::error::Result;
 use crate::ir::Value;
 use crate::module::Module;
 use crate::parse::IndicesToIds;
+use crate::passes::Used;
 use crate::ty::ValType;
 use failure::{bail, ResultExt};
 use id_arena::{Arena, Id};
-use parity_wasm::elements;
 
 /// A passive element segment identifier
 pub type DataId = Id<Data>;
@@ -17,7 +17,16 @@ pub type DataId = Id<Data>;
 /// A passive data segment
 #[derive(Debug)]
 pub struct Data {
-    value: Vec<u8>,
+    id: DataId,
+    /// The payload of this passive data segment
+    pub value: Vec<u8>,
+}
+
+impl Data {
+    /// Returns the id of this passive data segment
+    pub fn id(&self) -> DataId {
+        self.id
+    }
 }
 
 /// All passive data sections of a wasm module, used to initialize memories via
@@ -42,6 +51,27 @@ impl ModuleData {
     pub fn iter(&self) -> impl Iterator<Item = &Data> {
         self.arena.iter().map(|(_, f)| f)
     }
+
+    pub(crate) fn iter_used<'a>(&'a self, used: &'a Used) -> impl Iterator<Item = &'a Data> + 'a {
+        self.iter().filter(move |data| used.data.contains(&data.id))
+    }
+
+    // Note that this is inaccordance with the upstream bulk memory proposal to
+    // WebAssembly and isn't currently part of the WebAssembly standard.
+    pub(crate) fn emit_data_count(&self, cx: &mut EmitContext) {
+        let mut count = 0;
+
+        // Assign indices before we start translating functions to ensure that
+        // references to data have all been assigned
+        for data in self.iter_used(cx.used) {
+            cx.indices.push_data(data.id());
+            count += 1;
+        }
+
+        if count != 0 {
+            cx.start_section(Section::DataCount).encoder.usize(count);
+        }
+    }
 }
 
 impl Module {
@@ -51,6 +81,7 @@ impl Module {
         section: wasmparser::DataSectionReader,
         ids: &mut IndicesToIds,
     ) -> Result<()> {
+        log::debug!("parse data section");
         for (i, segment) in section.into_iter().enumerate() {
             let segment = segment?;
 
@@ -86,44 +117,52 @@ impl Module {
 
 impl Emit for ModuleData {
     fn emit(&self, cx: &mut EmitContext) {
-        let mut segments = Vec::new();
-
+        log::debug!("emit data section");
         // Sort table ids for a deterministic emission for now, eventually we
         // may want some sort of sorting heuristic here.
         let mut active = cx
             .module
             .memories
             .iter()
-            .filter(|t| cx.used.memories.contains(&t.id()))
-            .map(|m| (m.id(), m))
+            .filter(|m| cx.used.memories.contains(&m.id()))
+            .flat_map(|memory| memory.emit_data().map(move |data| (memory.id(), data)))
             .collect::<Vec<_>>();
         active.sort_by_key(|pair| pair.0);
+        let passive = self
+            .arena
+            .iter()
+            .filter(|(id, _seg)| cx.used.data.contains(id))
+            .count();
 
-        for (_memory_id, memory) in active {
-            segments.extend(memory.emit_data(cx.indices));
+        if active.len() == 0 && passive == 0 {
+            return;
+        }
+
+        let mut cx = cx.start_section(Section::Data);
+        cx.encoder.usize(active.len() + passive);
+
+        // The encodings here are with respect to the bulk memory proposal, but
+        // should be backwards compatible with the current stable WebAssembly
+        // spec so long as only memory 0 is used.
+        for (id, (offset, data)) in active {
+            let index = cx.indices.get_memory_index(id);
+            if index == 0 {
+                cx.encoder.byte(0x00);
+            } else {
+                cx.encoder.byte(0x02);
+                cx.encoder.u32(index);
+            }
+            offset.emit(&mut cx);
+            cx.encoder.bytes(data);
         }
 
         // After all the active segments are added add passive segments next. We
-        // may want to sort this more intelligently in the future. Othrewise
+        // may want to sort this more intelligently in the future. Otherwise
         // emitting a segment here is in general much simpler than above as we
         // know there are no holes.
-        for (id, segment) in self.arena.iter() {
-            if !cx.used.data.contains(&id) {
-                continue;
-            }
-            cx.indices.push_data(id);
-            segments.push(elements::DataSegment::new(
-                0,
-                None,
-                segment.value.clone(),
-                true,
-            ));
-        }
-
-        if segments.len() > 0 {
-            let elements = elements::DataSection::with_entries(segments);
-            let elements = elements::Section::Data(elements);
-            cx.dst.sections_mut().push(elements);
+        for data in self.iter_used(cx.used) {
+            cx.encoder.byte(0x01);
+            cx.encoder.bytes(&data.value);
         }
     }
 }

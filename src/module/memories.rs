@@ -1,7 +1,7 @@
 //! Memories used in a wasm module.
 
 use crate::const_value::Const;
-use crate::emit::{Emit, EmitContext, IdsToIndices};
+use crate::emit::{Emit, EmitContext, Section};
 use crate::error::Result;
 use crate::ir::Value;
 use crate::module::globals::GlobalId;
@@ -9,7 +9,6 @@ use crate::module::imports::ImportId;
 use crate::module::Module;
 use crate::parse::IndicesToIds;
 use id_arena::{Arena, Id};
-use parity_wasm::elements;
 
 /// The id of a memory.
 pub type MemoryId = Id<Memory>;
@@ -47,28 +46,31 @@ impl Memory {
         self.id
     }
 
-    pub(crate) fn emit_data<'a>(
-        &'a self,
-        indices: &'a IdsToIndices,
-    ) -> impl Iterator<Item = elements::DataSegment> + 'a {
-        let index = indices.get_memory_index(self.id);
-        let absolute = self.data.absolute.iter().map(move |(pos, data)| {
-            elements::DataSegment::new(
-                index,
-                Some(Const::Value(Value::I32(*pos as i32)).emit_instructions(indices)),
-                data.to_vec(),
-                false,
-            )
-        });
-        let relative = self.data.relative.iter().map(move |(id, data)| {
-            elements::DataSegment::new(
-                index,
-                Some(Const::Global(*id).emit_instructions(indices)),
-                data.to_vec(),
-                false,
-            )
-        });
+    pub(crate) fn emit_data(&self) -> impl Iterator<Item = (Const, &[u8])> {
+        let absolute = self
+            .data
+            .absolute
+            .iter()
+            .map(move |(pos, data)| (Const::Value(Value::I32(*pos as i32)), &data[..]));
+        let relative = self
+            .data
+            .relative
+            .iter()
+            .map(move |(id, data)| (Const::Global(*id), &data[..]));
         absolute.chain(relative)
+    }
+}
+
+impl Emit for Memory {
+    fn emit(&self, cx: &mut EmitContext) {
+        if let Some(max) = self.maximum {
+            cx.encoder.byte(if self.shared { 0x03 } else { 0x01 });
+            cx.encoder.u32(self.initial);
+            cx.encoder.u32(max);
+        } else {
+            cx.encoder.byte(0x00);
+            cx.encoder.u32(self.initial);
+        }
     }
 }
 
@@ -139,6 +141,7 @@ impl Module {
         section: wasmparser::MemorySectionReader,
         ids: &mut IndicesToIds,
     ) -> Result<()> {
+        log::debug!("parse memory section");
         for m in section {
             let m = m?;
             let id = self
@@ -152,25 +155,29 @@ impl Module {
 
 impl Emit for ModuleMemories {
     fn emit(&self, cx: &mut EmitContext) {
-        let mut memories = Vec::with_capacity(cx.used.memories.len());
+        log::debug!("emit memory section");
+        let emitted = |cx: &EmitContext, memory: &Memory| {
+            // If it's imported we already emitted this in the import section
+            cx.used.memories.contains(&memory.id) && memory.import.is_none()
+        };
 
-        for (id, mem) in &self.arena {
-            if !cx.used.memories.contains(&id) {
-                continue;
-            }
-            if mem.import.is_some() {
-                continue; // already emitted in the import section
-            }
+        let memories = self
+            .arena
+            .iter()
+            .filter(|(_id, memory)| emitted(cx, memory))
+            .count();
 
-            cx.indices.push_memory(id);
-            let memory = elements::MemoryType::new(mem.initial, mem.maximum, mem.shared);
-            memories.push(memory);
+        if memories == 0 {
+            return;
         }
 
-        if !memories.is_empty() {
-            let memories = elements::MemorySection::with_entries(memories);
-            let memories = elements::Section::Memory(memories);
-            cx.dst.sections_mut().push(memories);
+        let mut cx = cx.start_section(Section::Memory);
+        cx.encoder.usize(memories);
+        for (id, memory) in self.arena.iter() {
+            if emitted(&cx, memory) {
+                cx.indices.push_memory(id);
+                memory.emit(&mut cx);
+            }
         }
     }
 }

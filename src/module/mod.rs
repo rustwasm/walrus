@@ -12,7 +12,8 @@ pub mod producers;
 pub mod tables;
 pub mod types;
 
-use crate::emit::{Emit, EmitContext, IdsToIndices};
+use crate::emit::{Emit, EmitContext, IdsToIndices, Section};
+use crate::encode::Encoder;
 use crate::error::Result;
 use crate::module::data::ModuleData;
 use crate::module::elements::ModuleElements;
@@ -28,7 +29,6 @@ use crate::module::types::ModuleTypes;
 use crate::parse::IndicesToIds;
 use crate::passes;
 use failure::{bail, ResultExt};
-use parity_wasm::elements as parity;
 use std::fs;
 use std::path::Path;
 
@@ -81,67 +81,56 @@ impl Module {
             let section = parser.read()?;
             match section.code {
                 wasmparser::SectionCode::Data => {
-                    log::debug!("parsing data section");
                     let reader = section.get_data_section_reader()?;
                     ret.parse_data(reader, &mut indices)
                         .context("failed to parse data section")?;
                 }
                 wasmparser::SectionCode::Type => {
-                    log::debug!("parsing type section");
                     let reader = section.get_type_section_reader()?;
                     ret.parse_types(reader, &mut indices)
                         .context("failed to parse type section")?;
                 }
                 wasmparser::SectionCode::Import => {
-                    log::debug!("parsing import section");
                     let reader = section.get_import_section_reader()?;
                     ret.parse_imports(reader, &mut indices)
                         .context("failed to parse import section")?;
                 }
                 wasmparser::SectionCode::Table => {
-                    log::debug!("parsing table section");
                     let reader = section.get_table_section_reader()?;
                     ret.parse_tables(reader, &mut indices)
                         .context("failed to parse table section")?;
                 }
                 wasmparser::SectionCode::Memory => {
-                    log::debug!("parsing memory section");
                     let reader = section.get_memory_section_reader()?;
                     ret.parse_memories(reader, &mut indices)
                         .context("failed to parse memory section")?;
                 }
                 wasmparser::SectionCode::Global => {
-                    log::debug!("parsing global section");
                     let reader = section.get_global_section_reader()?;
                     ret.parse_globals(reader, &mut indices)
                         .context("failed to parse global section")?;
                 }
                 wasmparser::SectionCode::Export => {
-                    log::debug!("parsing export section");
                     let reader = section.get_export_section_reader()?;
                     ret.parse_exports(reader, &mut indices)
                         .context("failed to parse export section")?;
                 }
                 wasmparser::SectionCode::Element => {
-                    log::debug!("parsing element section");
                     let reader = section.get_element_section_reader()?;
                     ret.parse_elements(reader, &mut indices)
                         .context("failed to parse element section")?;
                 }
                 wasmparser::SectionCode::Start => {
-                    log::debug!("parsing start section");
                     let idx = section.get_start_section_content()?;
                     ret.start = Some(indices.get_func(idx)?);
                 }
                 wasmparser::SectionCode::Function => {
-                    log::debug!("parsing function section");
                     let reader = section.get_function_section_reader()?;
                     function_section_size = Some(reader.get_count());
                     ret.declare_local_functions(reader, &mut indices)
                         .context("failed to parse function section")?;
                 }
                 wasmparser::SectionCode::Code => {
-                    log::debug!("parsing code section");
                     let function_section_size = match function_section_size.take() {
                         Some(i) => i,
                         None => bail!("cannot have a code section without function section"),
@@ -151,7 +140,6 @@ impl Module {
                         .context("failed to parse code section")?;
                 }
                 wasmparser::SectionCode::Custom { name, kind: _ } => {
-                    log::debug!("parsing custom section `{}`", name);
                     let result = match name {
                         "producers" => {
                             let reader = section.get_binary_reader();
@@ -162,6 +150,7 @@ impl Module {
                             .map_err(failure::Error::from)
                             .and_then(|r| ret.parse_name_section(r, &indices)),
                         _ => {
+                            log::debug!("parsing custom section `{}`", name);
                             let mut reader = section.get_binary_reader();
                             let len = reader.bytes_remaining();
                             let payload = reader.read_bytes(len)?;
@@ -187,7 +176,6 @@ impl Module {
             .add_processed_by("walrus", env!("CARGO_PKG_VERSION"));
 
         // TODO: probably run this in a different location
-        log::debug!("validating module");
         crate::passes::validate::run(&ret)?;
 
         log::debug!("parse complete");
@@ -206,67 +194,46 @@ impl Module {
 
     /// Emit this module into an in-memory wasm buffer.
     pub fn emit_wasm(&self) -> Result<Vec<u8>> {
+        log::debug!("start emit");
         let roots = self.exports.iter();
         let used = passes::Used::new(self, roots.map(|e| e.id()));
 
         let indices = &mut IdsToIndices::default();
-        let mut module = parity::Module::new(Vec::new());
+        let mut wasm = Vec::new();
+        wasm.extend(&[0x00, 0x61, 0x73, 0x6d]); // magic
+        wasm.extend(&[0x01, 0x00, 0x00, 0x00]); // version
 
         let mut cx = EmitContext {
             module: self,
             indices,
             used: &used,
-            dst: &mut module,
+            encoder: Encoder::new(&mut wasm),
         };
         self.types.emit(&mut cx);
         self.imports.emit(&mut cx);
+        self.funcs.emit_func_section(&mut cx);
         self.tables.emit(&mut cx);
         self.memories.emit(&mut cx);
         self.globals.emit(&mut cx);
-        self.funcs.emit(&mut cx);
         self.exports.emit(&mut cx);
         if let Some(start) = self.start {
             let idx = cx.indices.get_func_index(start);
-            cx.dst.sections_mut().push(parity::Section::Start(idx));
+            cx.start_section(Section::Start).encoder.u32(idx);
         }
         self.elements.emit(&mut cx);
+        self.data.emit_data_count(&mut cx);
+        self.funcs.emit(&mut cx);
         self.data.emit(&mut cx);
 
-        emit_module_name_section(&mut cx);
-        emit_function_name_section(&mut cx);
-        emit_local_name_section(&mut cx);
-
-        let producers = parity::CustomSection::new("producers".to_string(), self.producers.emit());
-        module
-            .sections_mut()
-            .push(parity::Section::Custom(producers));
-
+        emit_name_section(&mut cx);
+        self.producers.emit(&mut cx);
         for section in self.custom.iter() {
-            let section = parity::CustomSection::new(section.name.clone(), section.value.clone());
-            module.sections_mut().push(parity::Section::Custom(section));
+            log::debug!("emitting custom section {}", section.name);
+            cx.custom_section(&section.name).encoder.raw(&section.value);
         }
 
-        module.sections_mut().sort_by_key(|s| match s {
-            parity::Section::Type(_) => 1,
-            parity::Section::Import(_) => 2,
-            parity::Section::Function(_) => 3,
-            parity::Section::Table(_) => 4,
-            parity::Section::Memory(_) => 5,
-            parity::Section::Global(_) => 6,
-            parity::Section::Export(_) => 7,
-            parity::Section::Start(_) => 8,
-            parity::Section::Element(_) => 9,
-            parity::Section::Code(_) => 10,
-            parity::Section::Data(_) => 11,
-
-            parity::Section::Custom(_)
-            | parity::Section::Unparsed { .. }
-            | parity::Section::Reloc(_)
-            | parity::Section::Name(_) => 12,
-        });
-        let buffer =
-            parity::serialize(module).context("failed to serialize wasm module to file")?;
-        Ok(buffer)
+        log::debug!("emission finished");
+        Ok(wasm)
     }
 
     /// Returns an iterator over all functions in this module
@@ -279,6 +246,7 @@ impl Module {
         names: wasmparser::NameSectionReader,
         indices: &IndicesToIds,
     ) -> Result<()> {
+        log::debug!("parse name section");
         for name in names {
             match name? {
                 wasmparser::Name::Module(m) => {
@@ -311,56 +279,69 @@ impl Module {
     }
 }
 
-fn emit_module_name_section(cx: &mut EmitContext) {
-    let name = match &cx.module.name {
-        Some(name) => name,
-        None => return,
-    };
-    let section = parity::ModuleNameSection::new(name.clone());
-    let section = parity::NameSection::Module(section);
-    cx.dst.sections_mut().push(parity::Section::Name(section));
-}
+fn emit_name_section(cx: &mut EmitContext) {
+    log::debug!("emit name section");
+    let mut funcs = cx
+        .module
+        .funcs
+        .iter_used(cx.used)
+        .filter_map(|func| func.name.as_ref().map(|name| (func, name)))
+        .map(|(func, name)| (cx.indices.get_func_index(func.id()), name))
+        .collect::<Vec<_>>();
+    funcs.sort_by_key(|p| p.0); // sort by index
 
-fn emit_function_name_section(cx: &mut EmitContext) {
-    let mut map = parity::NameMap::default();
-    for id in cx.used.funcs.iter() {
-        let name = match &cx.module.funcs.get(*id).name {
-            Some(name) => name,
-            None => continue,
-        };
-        map.insert(cx.indices.get_func_index(*id), name.clone());
+    let mut locals = cx
+        .module
+        .funcs
+        .iter_used(cx.used)
+        .filter_map(|func| cx.used.locals.get(&func.id()).map(|l| (func, l)))
+        .filter_map(|(func, locals)| {
+            let local_names = locals
+                .iter()
+                .filter_map(|id| {
+                    let name = cx.module.locals.get(*id).name.as_ref()?;
+                    let index = cx.indices.locals.get(&func.id())?.get(id)?;
+                    Some((*index, name))
+                })
+                .collect::<Vec<_>>();
+            if local_names.len() == 0 {
+                None
+            } else {
+                Some((cx.indices.get_func_index(func.id()), local_names))
+            }
+        })
+        .collect::<Vec<_>>();
+    locals.sort_by_key(|p| p.0); // sort by index
+
+    if cx.module.name.is_none() && funcs.len() == 0 && locals.len() == 0 {
+        return;
     }
-    if map.len() > 0 {
-        let mut section = parity::FunctionNameSection::default();
-        *section.names_mut() = map;
-        let section = parity::NameSection::Function(section);
-        cx.dst.sections_mut().push(parity::Section::Name(section));
+
+    let mut cx = cx.custom_section("name");
+    if let Some(name) = &cx.module.name {
+        cx.subsection(0).encoder.str(name);
     }
-}
 
-fn emit_local_name_section(cx: &mut EmitContext) {
-    let mut map = parity::IndexMap::default();
-    for id in cx.used.funcs.iter() {
-        let mut locals = parity::NameMap::default();
+    if funcs.len() > 0 {
+        let mut cx = cx.subsection(1);
+        cx.encoder.usize(funcs.len());
+        for (index, name) in funcs {
+            cx.encoder.u32(index);
+            cx.encoder.str(name);
+        }
+    }
 
-        if let Some(set) = cx.used.locals.get(id) {
-            for local_id in set {
-                let name = match &cx.module.locals.get(*local_id).name {
-                    Some(name) => name,
-                    None => continue,
-                };
-                locals.insert(cx.indices.get_local_index(*local_id), name.clone());
+    if locals.len() > 0 {
+        let mut cx = cx.subsection(2);
+        cx.encoder.usize(locals.len());
+        for (index, mut map) in locals {
+            cx.encoder.u32(index);
+            cx.encoder.usize(map.len());
+            map.sort_by_key(|p| p.0); // sort by index
+            for (index, name) in map {
+                cx.encoder.u32(index);
+                cx.encoder.str(name);
             }
         }
-
-        if locals.len() > 0 {
-            map.insert(cx.indices.get_func_index(*id), locals);
-        }
-    }
-    if map.len() > 0 {
-        let mut section = parity::LocalNameSection::default();
-        *section.local_names_mut() = map;
-        let section = parity::NameSection::Local(section);
-        cx.dst.sections_mut().push(parity::Section::Name(section));
     }
 }

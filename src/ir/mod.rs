@@ -18,6 +18,7 @@ use crate::ty::TypeId;
 use crate::ty::ValType;
 use id_arena::Id;
 use std::fmt;
+use std::mem;
 use walrus_derive::walrus_expr;
 
 /// The id of a local.
@@ -885,12 +886,38 @@ pub trait Visit<'expr> {
         V: Visitor<'expr>;
 }
 
+/// Anything that can be visited by a `Visitor`.
+pub trait VisitMut {
+    /// Visit this thing with the given visitor.
+    fn visit_mut<V>(&mut self, visitor: &mut V)
+    where
+        V: VisitorMut;
+}
+
 impl<'expr> Visit<'expr> for ExprId {
     fn visit<V>(&self, visitor: &mut V)
     where
         V: Visitor<'expr>,
     {
         visitor.visit_expr(&visitor.local_function().exprs[*self])
+    }
+}
+
+impl VisitMut for ExprId {
+    fn visit_mut<V>(&mut self, visitor: &mut V)
+    where
+        V: VisitorMut,
+    {
+        // TODO: this is somewhat unfortunate and seems like it's susceptible to
+        // being bug-prone when we have a DAG of an IR. We'll need to for sure
+        // use graph traversal instead of a simple tree walk like we have today
+        // when that comes about.
+        let mut expr = mem::replace(
+            &mut visitor.local_function_mut().exprs[*self],
+            Expr::Unreachable(Unreachable {}),
+        );
+        visitor.visit_expr_mut(&mut expr);
+        visitor.local_function_mut().exprs[*self] = expr;
     }
 }
 

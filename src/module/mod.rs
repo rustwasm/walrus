@@ -34,21 +34,28 @@ use std::path::Path;
 
 /// A wasm module.
 #[derive(Debug, Default)]
+#[allow(missing_docs)]
 pub struct Module {
-    pub(crate) imports: ModuleImports,
-    pub(crate) tables: ModuleTables,
-    pub(crate) types: ModuleTypes,
-    pub(crate) funcs: ModuleFunctions,
-    pub(crate) globals: ModuleGlobals,
-    pub(crate) locals: ModuleLocals,
-    pub(crate) exports: ModuleExports,
-    pub(crate) memories: ModuleMemories,
-    pub(crate) data: ModuleData,
-    pub(crate) elements: ModuleElements,
-    pub(crate) start: Option<FunctionId>,
+    pub imports: ModuleImports,
+    pub tables: ModuleTables,
+    pub types: ModuleTypes,
+    pub funcs: ModuleFunctions,
+    pub globals: ModuleGlobals,
+    pub locals: ModuleLocals,
+    pub exports: ModuleExports,
+    pub memories: ModuleMemories,
+    /// Registration of passive data segments, if any
+    pub data: ModuleData,
+    /// Registration of passive element segments, if any
+    pub elements: ModuleElements,
+    /// The `start` function, if any
+    pub start: Option<FunctionId>,
+    /// Representation of the eventual custom section, `producers`
+    pub producers: ModuleProducers,
     custom: Vec<CustomSection>,
-    name: Option<String>,
-    pub(crate) producers: ModuleProducers,
+    /// The name of this module, used for debugging purposes in the `name`
+    /// custom section.
+    pub name: Option<String>,
 }
 
 #[derive(Debug)]

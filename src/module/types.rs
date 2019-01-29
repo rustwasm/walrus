@@ -28,6 +28,16 @@ impl ModuleTypes {
     pub fn iter(&self) -> impl Iterator<Item = &Type> {
         self.arena.iter().map(|(_, f)| f)
     }
+
+    /// Add a new type to this module, and return its `Id`
+    pub fn add(&mut self, params: &[ValType], results: &[ValType]) -> TypeId {
+        let id = self.arena.next_id();
+        self.arena.insert(Type::new(
+            id,
+            params.to_vec().into_boxed_slice(),
+            results.to_vec().into_boxed_slice(),
+        ))
+    }
 }
 
 impl Module {

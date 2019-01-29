@@ -44,11 +44,26 @@ pub struct LocalFunction {
 }
 
 impl LocalFunction {
+    /// Creates a new definition of a local function from its components
+    pub(crate) fn new(
+        ty: TypeId,
+        args: Vec<LocalId>,
+        exprs: Arena<Expr>,
+        entry: BlockId,
+    ) -> LocalFunction {
+        LocalFunction {
+            ty,
+            args,
+            entry: Some(entry),
+            exprs,
+        }
+    }
+
     /// Construct a new `LocalFunction`.
     ///
     /// Validates the given function body and constructs the `Expr` IR at the
     /// same time.
-    pub fn parse(
+    pub(crate) fn parse(
         module: &Module,
         indices: &IndicesToIds,
         id: FunctionId,

@@ -9,7 +9,7 @@ use failure::bail;
 
 /// A constant which is produced in WebAssembly, typically used in global
 /// initializers or element/data offsets.
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub enum Const {
     /// An immediate constant value
     Value(Value),

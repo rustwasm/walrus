@@ -134,6 +134,11 @@ impl ModuleMemories {
         self.arena.iter().map(|(_, f)| f)
     }
 
+    /// Get a mutable reference to this module's memories.
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut Memory> {
+        self.arena.iter_mut().map(|(_, f)| f)
+    }
+
     pub(crate) fn iter_used<'a>(&'a self, used: &'a Used) -> impl Iterator<Item = &'a Memory> + 'a {
         self.iter().filter(move |m| used.memories.contains(&m.id))
     }
@@ -201,5 +206,18 @@ impl MemoryData {
     /// Returns an iterator of all globals used as relative bases
     pub fn globals<'a>(&'a self) -> impl Iterator<Item = GlobalId> + 'a {
         self.relative.iter().map(|p| p.0)
+    }
+
+    /// Consumes this data and returns a by-value iterator of each segment
+    pub fn into_iter(self) -> impl Iterator<Item = (Const, Vec<u8>)> {
+        let absolute = self
+            .absolute
+            .into_iter()
+            .map(move |(pos, data)| (Const::Value(Value::I32(pos as i32)), data));
+        let relative = self
+            .relative
+            .into_iter()
+            .map(move |(id, data)| (Const::Global(id), data));
+        absolute.chain(relative)
     }
 }

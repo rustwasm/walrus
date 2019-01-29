@@ -62,6 +62,16 @@ impl ModuleData {
         self.arena.iter().map(|(_, f)| f)
     }
 
+    /// Adds a new passive data segment with the specified contents
+    pub fn add(&mut self, value: Vec<u8>) -> DataId {
+        let id = self.arena.next_id();
+        self.arena.alloc(Data {
+            passive: true,
+            value,
+            id,
+        })
+    }
+
     pub(crate) fn iter_used<'a>(&'a self, used: &'a Used) -> impl Iterator<Item = &'a Data> + 'a {
         self.iter().filter(move |data| used.data.contains(&data.id))
     }

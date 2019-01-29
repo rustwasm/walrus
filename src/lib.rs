@@ -10,6 +10,7 @@ mod emit;
 mod encode;
 pub mod error;
 pub mod ir;
+mod map;
 pub mod module;
 mod parse;
 pub mod passes;

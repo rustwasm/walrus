@@ -1,15 +1,15 @@
 use crate::const_value::Const;
 use crate::ir::*;
-use crate::module::data::DataId;
-use crate::module::elements::ElementId;
+use crate::map::{IdHashMap, IdHashSet};
+use crate::module::data::Data;
+use crate::module::elements::Element;
 use crate::module::exports::{ExportId, ExportItem};
-use crate::module::functions::{FunctionId, FunctionKind, LocalFunction};
-use crate::module::globals::{GlobalId, GlobalKind};
-use crate::module::memories::MemoryId;
-use crate::module::tables::{TableId, TableKind};
+use crate::module::functions::{Function, FunctionId, FunctionKind, LocalFunction};
+use crate::module::globals::{Global, GlobalId, GlobalKind};
+use crate::module::memories::{Memory, MemoryId};
+use crate::module::tables::{Table, TableId, TableKind};
 use crate::module::Module;
-use crate::ty::TypeId;
-use std::collections::{HashMap, HashSet};
+use crate::ty::{Type, TypeId};
 
 /// Finds the things within a module that are used.
 ///
@@ -19,21 +19,21 @@ use std::collections::{HashMap, HashSet};
 #[derive(Debug, Default)]
 pub struct Used {
     /// The module's used tables.
-    pub tables: HashSet<TableId>,
+    pub tables: IdHashSet<Table>,
     /// The module's used types.
-    pub types: HashSet<TypeId>,
+    pub types: IdHashSet<Type>,
     /// The module's used functions.
-    pub funcs: HashSet<FunctionId>,
+    pub funcs: IdHashSet<Function>,
     /// The module's used globals.
-    pub globals: HashSet<GlobalId>,
+    pub globals: IdHashSet<Global>,
     /// The module's used memories.
-    pub memories: HashSet<MemoryId>,
+    pub memories: IdHashSet<Memory>,
     /// The module's used passive element segments.
-    pub elements: HashSet<ElementId>,
+    pub elements: IdHashSet<Element>,
     /// The module's used passive data segments.
-    pub data: HashSet<DataId>,
+    pub data: IdHashSet<Data>,
     /// Locals used within functions
-    pub locals: HashMap<FunctionId, HashSet<LocalId>>,
+    pub locals: IdHashMap<Function, IdHashSet<Local>>,
 }
 
 impl Used {
@@ -195,7 +195,7 @@ impl<'expr> Visitor<'expr> for UsedVisitor<'expr, '_> {
             .used
             .locals
             .entry(self.id)
-            .or_insert(HashSet::new())
+            .or_insert_with(IdHashSet::default)
             .insert(l);
     }
 }

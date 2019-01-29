@@ -1,14 +1,14 @@
 use crate::emit::IdsToIndices;
 use crate::encode::Encoder;
 use crate::ir::*;
+use crate::map::IdHashMap;
 use crate::module::functions::LocalFunction;
 use crate::ty::ValType;
-use std::collections::HashMap;
 
 pub(crate) fn run(
     func: &LocalFunction,
     indices: &IdsToIndices,
-    local_indices: &HashMap<LocalId, u32>,
+    local_indices: &IdHashMap<Local, u32>,
     encoder: &mut Encoder,
 ) {
     let mut v = Emit {
@@ -31,7 +31,7 @@ struct Emit<'a, 'b> {
 
     // Needed so we can map locals to their indices.
     indices: &'a IdsToIndices,
-    local_indices: &'a HashMap<LocalId, u32>,
+    local_indices: &'a IdHashMap<Local, u32>,
 
     // Stack of blocks that we are currently emitting instructions for. A branch
     // is only valid if its target is one of these blocks.

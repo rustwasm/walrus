@@ -1,14 +1,14 @@
 use crate::error::Result;
 use crate::ir::LocalId;
+use crate::map::IdHashMap;
 use crate::module::data::DataId;
 use crate::module::elements::ElementId;
-use crate::module::functions::FunctionId;
+use crate::module::functions::{Function, FunctionId};
 use crate::module::globals::GlobalId;
 use crate::module::memories::MemoryId;
 use crate::module::tables::TableId;
 use crate::ty::TypeId;
 use failure::bail;
-use std::collections::HashMap;
 
 #[derive(Debug, Default)]
 pub struct IndicesToIds {
@@ -19,7 +19,7 @@ pub struct IndicesToIds {
     memories: Vec<MemoryId>,
     elements: Vec<ElementId>,
     data: Vec<DataId>,
-    locals: HashMap<FunctionId, Vec<LocalId>>,
+    locals: IdHashMap<Function, Vec<LocalId>>,
 }
 
 macro_rules! define_push_get {

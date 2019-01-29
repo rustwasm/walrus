@@ -12,13 +12,14 @@ use crate::encode::Encoder;
 use crate::error::{ErrorKind, Result};
 use crate::ir::matcher::{ConstMatcher, Matcher};
 use crate::ir::*;
+use crate::map::{IdHashMap, IdHashSet};
 use crate::module::Module;
 use crate::parse::IndicesToIds;
 use crate::passes::Used;
 use crate::ty::{TypeId, ValType};
 use failure::{bail, Fail, ResultExt};
 use id_arena::{Arena, Id};
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::BTreeMap;
 use std::fmt;
 use std::mem;
 use wasmparser::{Operator, OperatorsReader};
@@ -151,7 +152,7 @@ impl LocalFunction {
         module: &Module,
         used: &Used,
         encoder: &mut Encoder,
-    ) -> HashMap<LocalId, u32> {
+    ) -> IdHashMap<Local, u32> {
         let mut used_locals = Vec::new();
         if let Some(locals) = used.locals.get(&id) {
             used_locals = locals.iter().cloned().collect();
@@ -163,7 +164,7 @@ impl LocalFunction {
         // NB: Use `BTreeMap` to make compilation deterministic by emitting
         // types in the same order
         let mut ty_to_locals = BTreeMap::new();
-        let args = self.args.iter().cloned().collect::<HashSet<_>>();
+        let args = self.args.iter().cloned().collect::<IdHashSet<_>>();
 
         // Partition all locals by their type as we'll create at most one entry
         // for each type. Skip all arguments to the function because they're
@@ -175,7 +176,8 @@ impl LocalFunction {
             }
         }
 
-        let mut local_map = HashMap::with_capacity(used_locals.len());
+        let mut local_map = IdHashMap::default();
+        local_map.reserve(used_locals.len());
 
         // Allocate an index to all the function arguments, as these are all
         // unconditionally used and are implicit locals in wasm.
@@ -207,7 +209,7 @@ impl LocalFunction {
     pub(crate) fn emit_instructions(
         &self,
         indices: &IdsToIndices,
-        local_indices: &HashMap<LocalId, u32>,
+        local_indices: &IdHashMap<Local, u32>,
         dst: &mut Encoder,
     ) {
         emit::run(self, indices, local_indices, dst)

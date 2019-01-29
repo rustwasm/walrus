@@ -59,8 +59,8 @@ pub struct IdsToIndices {
     pub locals: IdHashMap<Function, IdHashMap<Local, u32>>,
 }
 
-macro_rules! define_get_push_index {
-    ( $get_name:ident, $push_name:ident, $id_ty:ty, $member:ident ) => {
+macro_rules! define_get_index {
+    ( $get_name:ident, $id_ty:ty, $member:ident ) => {
         impl IdsToIndices {
             /// Get the index for the given identifier.
             #[inline]
@@ -72,7 +72,14 @@ macro_rules! define_get_push_index {
                      an unused identifier, or that we are emitting sections in the wrong order."
                 )
             }
+        }
+    };
+}
 
+macro_rules! define_get_push_index {
+    ( $get_name:ident, $push_name:ident, $id_ty:ty, $member:ident ) => {
+        define_get_index!($get_name, $id_ty, $member);
+        impl IdsToIndices {
             /// Adds the given identifier to this set, assigning it the next
             /// available index.
             #[inline]
@@ -90,7 +97,14 @@ define_get_push_index!(get_func_index, push_func, FunctionId, funcs);
 define_get_push_index!(get_global_index, push_global, GlobalId, globals);
 define_get_push_index!(get_memory_index, push_memory, MemoryId, memories);
 define_get_push_index!(get_element_index, push_element, ElementId, elements);
-define_get_push_index!(get_data_index, push_data, DataId, data);
+define_get_index!(get_data_index, DataId, data);
+
+impl IdsToIndices {
+    /// Sets the data index to the specified value
+    pub fn set_data_index(&mut self, id: DataId, idx: u32) {
+        self.data.insert(id, idx);
+    }
+}
 
 impl<'a> EmitContext<'a> {
     pub fn start_section<'b>(&'b mut self, id: Section) -> SubContext<'a, 'b> {

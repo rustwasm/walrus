@@ -497,6 +497,11 @@ fn create_visit(variants: &[WalrusVariant]) -> impl quote::ToTokens {
                 // ...
             }
 
+            /// Visit `DataId`.
+            fn visit_data_id(&mut self, function: &crate::module::data::DataId) {
+                // ...
+            }
+
             /// Visit `TypeId`
             fn visit_type_id(&mut self, ty: &crate::ty::TypeId) {
                 // ...
@@ -719,6 +724,10 @@ fn create_display(variants: &[WalrusVariant]) -> impl quote::ToTokens {
                 self.id(*ty);
             }
 
+            fn visit_data_id(&mut self, data: &crate::module::data::DataId) {
+                self.id(*data);
+            }
+
             fn visit_value(&mut self, value: &crate::ir::Value) {
                 self.f.push_str(" ");
                 self.f.push_str(&value.to_string());
@@ -801,6 +810,10 @@ fn create_dot(variants: &[WalrusVariant]) -> impl quote::ToTokens {
 
             fn visit_type_id(&mut self, ty: &crate::ty::TypeId) {
                 self.id(*ty);
+            }
+
+            fn visit_data_id(&mut self, data: &crate::module::data::DataId) {
+                self.id(*data);
             }
 
             fn visit_value(&mut self, value: &crate::ir::Value) {

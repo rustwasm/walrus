@@ -3,6 +3,8 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::{Once, ONCE_INIT};
 
+pub const FEATURES: &[&str] = &["--enable-threads"];
+
 fn require_wat2wasm() {
     let status = Command::new("wat2wasm")
         .arg("--help")
@@ -30,6 +32,7 @@ pub fn wat2wasm(path: &Path) -> Vec<u8> {
 
     let mut cmd = Command::new("wat2wasm");
     cmd.arg(path)
+        .args(FEATURES)
         .arg("--debug-names")
         .arg("-o")
         .arg(file.path());
@@ -67,6 +70,7 @@ pub fn wasm2wat(path: &Path) -> String {
 
     let mut cmd = Command::new("wasm2wat");
     cmd.arg(path);
+    cmd.args(FEATURES);
     println!("running: {:?}", cmd);
     let output = cmd.output().expect("should spawn wasm2wat OK");
     if !output.status.success() {

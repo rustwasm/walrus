@@ -336,6 +336,8 @@ fn validate_instruction(
     inst: Operator,
     ops: &mut OperatorsReader,
 ) -> Result<()> {
+    use ExtendedLoad::*;
+    use Operator as O;
     use ValType::*;
 
     let const_ = |ctx: &mut FunctionContext, ty, value| {
@@ -359,10 +361,10 @@ fn validate_instruction(
 
     let binop = |ctx, ty, op| two_ops(ctx, ty, ty, op);
     let unop = |ctx, ty, op| one_op(ctx, ty, ty, op);
-    let testop = |ctx, ty, op| one_op(ctx, ty, ValType::I32, op);
-    let relop = |ctx, ty, op| two_ops(ctx, ty, ValType::I32, op);
+    let testop = |ctx, ty, op| one_op(ctx, ty, I32, op);
+    let relop = |ctx, ty, op| two_ops(ctx, ty, I32, op);
 
-    let memarg = |arg: wasmparser::MemoryImmediate| -> Result<MemArg> {
+    let mem_arg = |arg: &wasmparser::MemoryImmediate| -> Result<MemArg> {
         if arg.flags >= 32 {
             failure::bail!("invalid alignment");
         }
@@ -373,9 +375,9 @@ fn validate_instruction(
     };
 
     let load = |ctx: &mut FunctionContext, arg, ty, kind| -> Result<()> {
-        let (_, address) = ctx.pop_operand_expected(Some(ValType::I32))?;
+        let (_, address) = ctx.pop_operand_expected(Some(I32))?;
         let memory = ctx.indices.get_memory(0)?;
-        let arg = memarg(arg)?;
+        let arg = mem_arg(&arg)?;
         let expr = ctx.func.alloc(Load {
             arg,
             kind,
@@ -388,9 +390,9 @@ fn validate_instruction(
 
     let store = |ctx: &mut FunctionContext, arg, ty, kind| -> Result<()> {
         let (_, value) = ctx.pop_operand_expected(Some(ty))?;
-        let (_, address) = ctx.pop_operand_expected(Some(ValType::I32))?;
+        let (_, address) = ctx.pop_operand_expected(Some(I32))?;
         let memory = ctx.indices.get_memory(0)?;
-        let arg = memarg(arg)?;
+        let arg = mem_arg(&arg)?;
         let expr = ctx.func.alloc(Store {
             arg,
             kind,
@@ -399,6 +401,41 @@ fn validate_instruction(
             value,
         });
         ctx.add_to_current_frame_block(expr);
+        Ok(())
+    };
+
+    let atomicrmw = |ctx: &mut FunctionContext, arg, ty, op, width| -> Result<()> {
+        let (_, value) = ctx.pop_operand_expected(Some(ty))?;
+        let (_, address) = ctx.pop_operand_expected(Some(I32))?;
+        let memory = ctx.indices.get_memory(0)?;
+        let arg = mem_arg(&arg)?;
+        let expr = ctx.func.alloc(AtomicRmw {
+            arg,
+            address,
+            memory,
+            value,
+            op,
+            width,
+        });
+        ctx.push_operand(Some(ty), expr);
+        Ok(())
+    };
+
+    let cmpxchg = |ctx: &mut FunctionContext, arg, ty, width| -> Result<()> {
+        let (_, replacement) = ctx.pop_operand_expected(Some(ty))?;
+        let (_, expected) = ctx.pop_operand_expected(Some(ty))?;
+        let (_, address) = ctx.pop_operand_expected(Some(I32))?;
+        let memory = ctx.indices.get_memory(0)?;
+        let arg = mem_arg(&arg)?;
+        let expr = ctx.func.alloc(Cmpxchg {
+            arg,
+            address,
+            memory,
+            expected,
+            width,
+            replacement,
+        });
+        ctx.push_operand(Some(ty), expr);
         Ok(())
     };
 
@@ -425,7 +462,7 @@ fn validate_instruction(
                 .indices
                 .get_table(table_index)
                 .context("invalid call_indirect")?;
-            let (_, func) = ctx.pop_operand_expected(Some(ValType::I32))?;
+            let (_, func) = ctx.pop_operand_expected(Some(I32))?;
             let mut args = ctx.pop_operands(ty.params())?.into_boxed_slice();
             args.reverse();
             let expr = ctx.func.alloc(CallIndirect {
@@ -651,7 +688,7 @@ fn validate_instruction(
             ctx.add_to_current_frame_block(expr);
         }
         Operator::Select => {
-            let (_, condition) = ctx.pop_operand_expected(Some(ValType::I32))?;
+            let (_, condition) = ctx.pop_operand_expected(Some(I32))?;
             let (t1, consequent) = ctx.pop_operand()?;
             let (t2, alternative) = ctx.pop_operand_expected(t1)?;
             let expr = ctx.func.alloc(Select {
@@ -686,7 +723,7 @@ fn validate_instruction(
         }
         Operator::If { ty } => {
             let ty = ValType::from_block_ty(ty)?;
-            let (_, condition) = ctx.pop_operand_expected(Some(ValType::I32))?;
+            let (_, condition) = ctx.pop_operand_expected(Some(I32))?;
 
             let consequent = ctx.push_control(BlockKind::IfElse, ty.clone(), ty.clone());
 
@@ -739,7 +776,7 @@ fn validate_instruction(
         }
         Operator::BrIf { relative_depth } => {
             let n = relative_depth as usize;
-            let (_, condition) = ctx.pop_operand_expected(Some(ValType::I32))?;
+            let (_, condition) = ctx.pop_operand_expected(Some(I32))?;
 
             let expected = ctx.control(n)?.label_types.clone();
             let args = ctx.pop_operands(&expected)?.into_boxed_slice();
@@ -783,7 +820,7 @@ fn validate_instruction(
 
             let blocks = blocks.into_boxed_slice();
             let expected = label_types.unwrap().clone();
-            let (_, which) = ctx.pop_operand_expected(Some(ValType::I32))?;
+            let (_, which) = ctx.pop_operand_expected(Some(I32))?;
 
             let args = ctx.pop_operands(&expected)?.into_boxed_slice();
             let expr = ctx.func.alloc(BrTable {
@@ -802,96 +839,330 @@ fn validate_instruction(
             }
             let memory = ctx.indices.get_memory(0)?;
             let expr = ctx.func.alloc(MemorySize { memory });
-            ctx.push_operand(Some(ValType::I32), expr);
+            ctx.push_operand(Some(I32), expr);
         }
         Operator::MemoryGrow { reserved } => {
             if reserved != 0 {
                 bail!("reserved byte isn't zero");
             }
-            let (_, pages) = ctx.pop_operand_expected(Some(ValType::I32))?;
+            let (_, pages) = ctx.pop_operand_expected(Some(I32))?;
             let memory = ctx.indices.get_memory(0)?;
             let expr = ctx.func.alloc(MemoryGrow { memory, pages });
-            ctx.push_operand(Some(ValType::I32), expr);
+            ctx.push_operand(Some(I32), expr);
         }
 
         Operator::Nop => {}
 
-        Operator::I32Load { memarg } => load(ctx, memarg, ValType::I32, LoadKind::I32)?,
-        Operator::I64Load { memarg } => load(ctx, memarg, ValType::I64, LoadKind::I64)?,
-        Operator::F32Load { memarg } => load(ctx, memarg, ValType::F32, LoadKind::F32)?,
-        Operator::F64Load { memarg } => load(ctx, memarg, ValType::F64, LoadKind::F64)?,
-        Operator::V128Load { memarg } => load(ctx, memarg, ValType::V128, LoadKind::V128)?,
-        Operator::I32Load8S { memarg } => load(
+        Operator::I32Load { memarg } => load(ctx, memarg, I32, LoadKind::I32 { atomic: false })?,
+        Operator::I64Load { memarg } => load(ctx, memarg, I64, LoadKind::I64 { atomic: false })?,
+        Operator::F32Load { memarg } => load(ctx, memarg, F32, LoadKind::F32)?,
+        Operator::F64Load { memarg } => load(ctx, memarg, F64, LoadKind::F64)?,
+        Operator::V128Load { memarg } => load(ctx, memarg, V128, LoadKind::V128)?,
+        Operator::I32Load8S { memarg } => {
+            load(ctx, memarg, I32, LoadKind::I32_8 { kind: SignExtend })?
+        }
+        Operator::I32Load8U { memarg } => {
+            load(ctx, memarg, I32, LoadKind::I32_8 { kind: ZeroExtend })?
+        }
+        Operator::I32Load16S { memarg } => {
+            load(ctx, memarg, I32, LoadKind::I32_16 { kind: SignExtend })?
+        }
+        Operator::I32Load16U { memarg } => {
+            load(ctx, memarg, I32, LoadKind::I32_16 { kind: ZeroExtend })?
+        }
+        Operator::I64Load8S { memarg } => {
+            load(ctx, memarg, I64, LoadKind::I64_8 { kind: SignExtend })?
+        }
+        Operator::I64Load8U { memarg } => {
+            load(ctx, memarg, I64, LoadKind::I64_8 { kind: ZeroExtend })?
+        }
+        Operator::I64Load16S { memarg } => {
+            load(ctx, memarg, I64, LoadKind::I64_16 { kind: SignExtend })?
+        }
+        Operator::I64Load16U { memarg } => {
+            load(ctx, memarg, I64, LoadKind::I64_16 { kind: ZeroExtend })?
+        }
+        Operator::I64Load32S { memarg } => {
+            load(ctx, memarg, I64, LoadKind::I64_32 { kind: SignExtend })?
+        }
+        Operator::I64Load32U { memarg } => {
+            load(ctx, memarg, I64, LoadKind::I64_32 { kind: ZeroExtend })?
+        }
+
+        Operator::I32Store { memarg } => store(ctx, memarg, I32, StoreKind::I32 { atomic: false })?,
+        Operator::I64Store { memarg } => store(ctx, memarg, I64, StoreKind::I64 { atomic: false })?,
+        Operator::F32Store { memarg } => store(ctx, memarg, F32, StoreKind::F32)?,
+        Operator::F64Store { memarg } => store(ctx, memarg, F64, StoreKind::F64)?,
+        Operator::V128Store { memarg } => store(ctx, memarg, V128, StoreKind::V128)?,
+        Operator::I32Store8 { memarg } => {
+            store(ctx, memarg, I32, StoreKind::I32_8 { atomic: false })?
+        }
+        Operator::I32Store16 { memarg } => {
+            store(ctx, memarg, I32, StoreKind::I32_16 { atomic: false })?
+        }
+        Operator::I64Store8 { memarg } => {
+            store(ctx, memarg, I64, StoreKind::I64_8 { atomic: false })?
+        }
+        Operator::I64Store16 { memarg } => {
+            store(ctx, memarg, I64, StoreKind::I64_16 { atomic: false })?
+        }
+        Operator::I64Store32 { memarg } => {
+            store(ctx, memarg, I64, StoreKind::I64_32 { atomic: false })?
+        }
+
+        Operator::I32AtomicLoad { memarg } => {
+            load(ctx, memarg, I32, LoadKind::I32 { atomic: true })?
+        }
+        Operator::I64AtomicLoad { memarg } => {
+            load(ctx, memarg, I64, LoadKind::I64 { atomic: true })?
+        }
+        Operator::I32AtomicLoad8U { memarg } => load(
             ctx,
             memarg,
-            ValType::I32,
-            LoadKind::I32_8 { sign_extend: true },
+            I32,
+            LoadKind::I32_8 {
+                kind: ZeroExtendAtomic,
+            },
         )?,
-        Operator::I32Load8U { memarg } => load(
+        Operator::I32AtomicLoad16U { memarg } => load(
             ctx,
             memarg,
-            ValType::I32,
-            LoadKind::I32_8 { sign_extend: false },
+            I32,
+            LoadKind::I32_16 {
+                kind: ZeroExtendAtomic,
+            },
         )?,
-        Operator::I32Load16S { memarg } => load(
+        Operator::I64AtomicLoad8U { memarg } => load(
             ctx,
             memarg,
-            ValType::I32,
-            LoadKind::I32_16 { sign_extend: true },
+            I64,
+            LoadKind::I64_8 {
+                kind: ZeroExtendAtomic,
+            },
         )?,
-        Operator::I32Load16U { memarg } => load(
+        Operator::I64AtomicLoad16U { memarg } => load(
             ctx,
             memarg,
-            ValType::I32,
-            LoadKind::I32_16 { sign_extend: false },
+            I64,
+            LoadKind::I64_16 {
+                kind: ZeroExtendAtomic,
+            },
         )?,
-        Operator::I64Load8S { memarg } => load(
+        Operator::I64AtomicLoad32U { memarg } => load(
             ctx,
             memarg,
-            ValType::I64,
-            LoadKind::I64_8 { sign_extend: true },
-        )?,
-        Operator::I64Load8U { memarg } => load(
-            ctx,
-            memarg,
-            ValType::I64,
-            LoadKind::I64_8 { sign_extend: false },
-        )?,
-        Operator::I64Load16S { memarg } => load(
-            ctx,
-            memarg,
-            ValType::I64,
-            LoadKind::I64_16 { sign_extend: true },
-        )?,
-        Operator::I64Load16U { memarg } => load(
-            ctx,
-            memarg,
-            ValType::I64,
-            LoadKind::I64_16 { sign_extend: false },
-        )?,
-        Operator::I64Load32S { memarg } => load(
-            ctx,
-            memarg,
-            ValType::I64,
-            LoadKind::I64_32 { sign_extend: true },
-        )?,
-        Operator::I64Load32U { memarg } => load(
-            ctx,
-            memarg,
-            ValType::I64,
-            LoadKind::I64_32 { sign_extend: false },
+            I64,
+            LoadKind::I64_32 {
+                kind: ZeroExtendAtomic,
+            },
         )?,
 
-        Operator::I32Store { memarg } => store(ctx, memarg, ValType::I32, StoreKind::I32)?,
-        Operator::I64Store { memarg } => store(ctx, memarg, ValType::I64, StoreKind::I64)?,
-        Operator::F32Store { memarg } => store(ctx, memarg, ValType::F32, StoreKind::F32)?,
-        Operator::F64Store { memarg } => store(ctx, memarg, ValType::F64, StoreKind::F64)?,
-        Operator::V128Store { memarg } => store(ctx, memarg, ValType::V128, StoreKind::V128)?,
-        Operator::I32Store8 { memarg } => store(ctx, memarg, ValType::I32, StoreKind::I32_8)?,
-        Operator::I32Store16 { memarg } => store(ctx, memarg, ValType::I32, StoreKind::I32_16)?,
-        Operator::I64Store8 { memarg } => store(ctx, memarg, ValType::I64, StoreKind::I64_8)?,
-        Operator::I64Store16 { memarg } => store(ctx, memarg, ValType::I64, StoreKind::I64_16)?,
-        Operator::I64Store32 { memarg } => store(ctx, memarg, ValType::I64, StoreKind::I64_32)?,
+        Operator::I32AtomicStore { memarg } => {
+            store(ctx, memarg, I32, StoreKind::I32 { atomic: true })?
+        }
+        Operator::I64AtomicStore { memarg } => {
+            store(ctx, memarg, I64, StoreKind::I64 { atomic: true })?
+        }
+        Operator::I32AtomicStore8 { memarg } => {
+            store(ctx, memarg, I32, StoreKind::I32_8 { atomic: true })?
+        }
+        Operator::I32AtomicStore16 { memarg } => {
+            store(ctx, memarg, I32, StoreKind::I32_16 { atomic: true })?
+        }
+        Operator::I64AtomicStore8 { memarg } => {
+            store(ctx, memarg, I64, StoreKind::I64_8 { atomic: true })?
+        }
+        Operator::I64AtomicStore16 { memarg } => {
+            store(ctx, memarg, I64, StoreKind::I64_16 { atomic: true })?
+        }
+        Operator::I64AtomicStore32 { memarg } => {
+            store(ctx, memarg, I64, StoreKind::I64_32 { atomic: true })?
+        }
+
+        Operator::I32AtomicRmwAdd { memarg } => {
+            atomicrmw(ctx, memarg, I32, AtomicOp::Add, AtomicWidth::I32)?;
+        }
+        Operator::I64AtomicRmwAdd { memarg } => {
+            atomicrmw(ctx, memarg, I64, AtomicOp::Add, AtomicWidth::I64)?;
+        }
+        Operator::I32AtomicRmw8UAdd { memarg } => {
+            atomicrmw(ctx, memarg, I32, AtomicOp::Add, AtomicWidth::I32_8)?;
+        }
+        Operator::I32AtomicRmw16UAdd { memarg } => {
+            atomicrmw(ctx, memarg, I32, AtomicOp::Add, AtomicWidth::I32_16)?;
+        }
+        Operator::I64AtomicRmw8UAdd { memarg } => {
+            atomicrmw(ctx, memarg, I64, AtomicOp::Add, AtomicWidth::I64_8)?;
+        }
+        Operator::I64AtomicRmw16UAdd { memarg } => {
+            atomicrmw(ctx, memarg, I64, AtomicOp::Add, AtomicWidth::I64_16)?;
+        }
+        Operator::I64AtomicRmw32UAdd { memarg } => {
+            atomicrmw(ctx, memarg, I64, AtomicOp::Add, AtomicWidth::I64_32)?;
+        }
+
+        Operator::I32AtomicRmwSub { memarg } => {
+            atomicrmw(ctx, memarg, I32, AtomicOp::Sub, AtomicWidth::I32)?;
+        }
+        Operator::I64AtomicRmwSub { memarg } => {
+            atomicrmw(ctx, memarg, I64, AtomicOp::Sub, AtomicWidth::I64)?;
+        }
+        Operator::I32AtomicRmw8USub { memarg } => {
+            atomicrmw(ctx, memarg, I32, AtomicOp::Sub, AtomicWidth::I32_8)?;
+        }
+        Operator::I32AtomicRmw16USub { memarg } => {
+            atomicrmw(ctx, memarg, I32, AtomicOp::Sub, AtomicWidth::I32_16)?;
+        }
+        Operator::I64AtomicRmw8USub { memarg } => {
+            atomicrmw(ctx, memarg, I64, AtomicOp::Sub, AtomicWidth::I64_8)?;
+        }
+        Operator::I64AtomicRmw16USub { memarg } => {
+            atomicrmw(ctx, memarg, I64, AtomicOp::Sub, AtomicWidth::I64_16)?;
+        }
+        Operator::I64AtomicRmw32USub { memarg } => {
+            atomicrmw(ctx, memarg, I64, AtomicOp::Sub, AtomicWidth::I64_32)?;
+        }
+
+        Operator::I32AtomicRmwAnd { memarg } => {
+            atomicrmw(ctx, memarg, I32, AtomicOp::And, AtomicWidth::I32)?;
+        }
+        Operator::I64AtomicRmwAnd { memarg } => {
+            atomicrmw(ctx, memarg, I64, AtomicOp::And, AtomicWidth::I64)?;
+        }
+        Operator::I32AtomicRmw8UAnd { memarg } => {
+            atomicrmw(ctx, memarg, I32, AtomicOp::And, AtomicWidth::I32_8)?;
+        }
+        Operator::I32AtomicRmw16UAnd { memarg } => {
+            atomicrmw(ctx, memarg, I32, AtomicOp::And, AtomicWidth::I32_16)?;
+        }
+        Operator::I64AtomicRmw8UAnd { memarg } => {
+            atomicrmw(ctx, memarg, I64, AtomicOp::And, AtomicWidth::I64_8)?;
+        }
+        Operator::I64AtomicRmw16UAnd { memarg } => {
+            atomicrmw(ctx, memarg, I64, AtomicOp::And, AtomicWidth::I64_16)?;
+        }
+        Operator::I64AtomicRmw32UAnd { memarg } => {
+            atomicrmw(ctx, memarg, I64, AtomicOp::And, AtomicWidth::I64_32)?;
+        }
+
+        Operator::I32AtomicRmwOr { memarg } => {
+            atomicrmw(ctx, memarg, I32, AtomicOp::Or, AtomicWidth::I32)?;
+        }
+        Operator::I64AtomicRmwOr { memarg } => {
+            atomicrmw(ctx, memarg, I64, AtomicOp::Or, AtomicWidth::I64)?;
+        }
+        Operator::I32AtomicRmw8UOr { memarg } => {
+            atomicrmw(ctx, memarg, I32, AtomicOp::Or, AtomicWidth::I32_8)?;
+        }
+        Operator::I32AtomicRmw16UOr { memarg } => {
+            atomicrmw(ctx, memarg, I32, AtomicOp::Or, AtomicWidth::I32_16)?;
+        }
+        Operator::I64AtomicRmw8UOr { memarg } => {
+            atomicrmw(ctx, memarg, I64, AtomicOp::Or, AtomicWidth::I64_8)?;
+        }
+        Operator::I64AtomicRmw16UOr { memarg } => {
+            atomicrmw(ctx, memarg, I64, AtomicOp::Or, AtomicWidth::I64_16)?;
+        }
+        Operator::I64AtomicRmw32UOr { memarg } => {
+            atomicrmw(ctx, memarg, I64, AtomicOp::Or, AtomicWidth::I64_32)?;
+        }
+
+        Operator::I32AtomicRmwXor { memarg } => {
+            atomicrmw(ctx, memarg, I32, AtomicOp::Xor, AtomicWidth::I32)?;
+        }
+        Operator::I64AtomicRmwXor { memarg } => {
+            atomicrmw(ctx, memarg, I64, AtomicOp::Xor, AtomicWidth::I64)?;
+        }
+        Operator::I32AtomicRmw8UXor { memarg } => {
+            atomicrmw(ctx, memarg, I32, AtomicOp::Xor, AtomicWidth::I32_8)?;
+        }
+        Operator::I32AtomicRmw16UXor { memarg } => {
+            atomicrmw(ctx, memarg, I32, AtomicOp::Xor, AtomicWidth::I32_16)?;
+        }
+        Operator::I64AtomicRmw8UXor { memarg } => {
+            atomicrmw(ctx, memarg, I64, AtomicOp::Xor, AtomicWidth::I64_8)?;
+        }
+        Operator::I64AtomicRmw16UXor { memarg } => {
+            atomicrmw(ctx, memarg, I64, AtomicOp::Xor, AtomicWidth::I64_16)?;
+        }
+        Operator::I64AtomicRmw32UXor { memarg } => {
+            atomicrmw(ctx, memarg, I64, AtomicOp::Xor, AtomicWidth::I64_32)?;
+        }
+
+        Operator::I32AtomicRmwXchg { memarg } => {
+            atomicrmw(ctx, memarg, I32, AtomicOp::Xchg, AtomicWidth::I32)?;
+        }
+        Operator::I64AtomicRmwXchg { memarg } => {
+            atomicrmw(ctx, memarg, I64, AtomicOp::Xchg, AtomicWidth::I64)?;
+        }
+        Operator::I32AtomicRmw8UXchg { memarg } => {
+            atomicrmw(ctx, memarg, I32, AtomicOp::Xchg, AtomicWidth::I32_8)?;
+        }
+        Operator::I32AtomicRmw16UXchg { memarg } => {
+            atomicrmw(ctx, memarg, I32, AtomicOp::Xchg, AtomicWidth::I32_16)?;
+        }
+        Operator::I64AtomicRmw8UXchg { memarg } => {
+            atomicrmw(ctx, memarg, I64, AtomicOp::Xchg, AtomicWidth::I64_8)?;
+        }
+        Operator::I64AtomicRmw16UXchg { memarg } => {
+            atomicrmw(ctx, memarg, I64, AtomicOp::Xchg, AtomicWidth::I64_16)?;
+        }
+        Operator::I64AtomicRmw32UXchg { memarg } => {
+            atomicrmw(ctx, memarg, I64, AtomicOp::Xchg, AtomicWidth::I64_32)?;
+        }
+
+        Operator::I32AtomicRmwCmpxchg { memarg } => {
+            cmpxchg(ctx, memarg, I32, AtomicWidth::I32)?;
+        }
+        Operator::I64AtomicRmwCmpxchg { memarg } => {
+            cmpxchg(ctx, memarg, I64, AtomicWidth::I64)?;
+        }
+        Operator::I32AtomicRmw8UCmpxchg { memarg } => {
+            cmpxchg(ctx, memarg, I32, AtomicWidth::I32_8)?;
+        }
+        Operator::I32AtomicRmw16UCmpxchg { memarg } => {
+            cmpxchg(ctx, memarg, I32, AtomicWidth::I32_16)?;
+        }
+        Operator::I64AtomicRmw8UCmpxchg { memarg } => {
+            cmpxchg(ctx, memarg, I64, AtomicWidth::I64_8)?;
+        }
+        Operator::I64AtomicRmw16UCmpxchg { memarg } => {
+            cmpxchg(ctx, memarg, I64, AtomicWidth::I64_16)?;
+        }
+        Operator::I64AtomicRmw32UCmpxchg { memarg } => {
+            cmpxchg(ctx, memarg, I64, AtomicWidth::I64_32)?;
+        }
+        Operator::Wake { ref memarg } => {
+            let (_, count) = ctx.pop_operand_expected(Some(I32))?;
+            let (_, address) = ctx.pop_operand_expected(Some(I32))?;
+            let memory = ctx.indices.get_memory(0)?;
+            let expr = ctx.func.alloc(AtomicNotify {
+                count,
+                address,
+                memory,
+                arg: mem_arg(memarg)?,
+            });
+            ctx.push_operand(Some(I32), expr);
+        }
+        Operator::I32Wait { ref memarg } | Operator::I64Wait { ref memarg } => {
+            let (ty, sixty_four) = match inst {
+                Operator::I32Wait { .. } => (I32, false),
+                _ => (I64, true),
+            };
+            let (_, timeout) = ctx.pop_operand_expected(Some(I64))?;
+            let (_, expected) = ctx.pop_operand_expected(Some(ty))?;
+            let (_, address) = ctx.pop_operand_expected(Some(I32))?;
+            let memory = ctx.indices.get_memory(0)?;
+            let expr = ctx.func.alloc(AtomicWait {
+                timeout,
+                expected,
+                sixty_four,
+                address,
+                memory,
+                arg: mem_arg(memarg)?,
+            });
+            ctx.push_operand(Some(I32), expr);
+        }
 
         op => bail!("Have not implemented support for opcode yet: {:?}", op),
     }

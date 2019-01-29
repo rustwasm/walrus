@@ -332,6 +332,74 @@ pub enum Expr {
         /// The value that we're storing
         value: ExprId,
     },
+
+    /// An atomic read/modify/write operation
+    AtomicRmw {
+        /// The memory we're modifying
+        memory: MemoryId,
+        /// The atomic operation being performed
+        #[walrus(skip_visit)]
+        op: AtomicOp,
+        /// The atomic operation being performed
+        #[walrus(skip_visit)]
+        width: AtomicWidth,
+        /// The alignment and offset from the base address
+        #[walrus(skip_visit)]
+        arg: MemArg,
+        /// The address at which to perform the operation
+        address: ExprId,
+        /// The value that's being used to modify what's at the address
+        value: ExprId,
+    },
+
+    /// An atomic compare exchange operation
+    Cmpxchg {
+        /// The memory we're modifying
+        memory: MemoryId,
+        /// The atomic operation being performed
+        #[walrus(skip_visit)]
+        width: AtomicWidth,
+        /// The alignment and offset from the base address
+        #[walrus(skip_visit)]
+        arg: MemArg,
+        /// The address at which to perform the operation
+        address: ExprId,
+        /// The value that's being used to modify what's at the address
+        expected: ExprId,
+        /// The value that's being used to modify what's at the address
+        replacement: ExprId,
+    },
+
+    /// The `atomic.notify` instruction to wake up threads
+    AtomicNotify {
+        /// The memory we're notifying through
+        memory: MemoryId,
+        /// The alignment and offset from the base address
+        #[walrus(skip_visit)]
+        arg: MemArg,
+        /// The address at which to perform the operation
+        address: ExprId,
+        /// The number of threads to wake up
+        count: ExprId,
+    },
+
+    /// The `*.atomic.wait` instruction to block threads
+    AtomicWait {
+        /// The memory we're waiting through
+        memory: MemoryId,
+        /// The alignment and offset from the base address
+        #[walrus(skip_visit)]
+        arg: MemArg,
+        /// The address at which to perform the operation
+        address: ExprId,
+        /// The expected value at the address above
+        expected: ExprId,
+        /// The timeout, in nanoseconds, of this wait
+        timeout: ExprId,
+        /// Whether or not this is an i32 or i64 wait
+        #[walrus(skip_visit)]
+        sixty_four: bool,
+    },
 }
 
 /// Constant values that can show up in WebAssembly
@@ -552,16 +620,25 @@ pub enum LoadKind {
     // ambiently available, we probably want to trim this down to just "value"
     // and then maybe some sign extensions. We'd then use the type of the node
     // to figure out what kind of store it actually is.
-    I32,
-    I64,
+    I32 { atomic: bool },
+    I64 { atomic: bool },
     F32,
     F64,
     V128,
-    I32_8 { sign_extend: bool },
-    I32_16 { sign_extend: bool },
-    I64_8 { sign_extend: bool },
-    I64_16 { sign_extend: bool },
-    I64_32 { sign_extend: bool },
+    I32_8 { kind: ExtendedLoad },
+    I32_16 { kind: ExtendedLoad },
+    I64_8 { kind: ExtendedLoad },
+    I64_16 { kind: ExtendedLoad },
+    I64_32 { kind: ExtendedLoad },
+}
+
+/// The kinds of extended loads which can happen
+#[derive(Debug, Copy, Clone)]
+#[allow(missing_docs)]
+pub enum ExtendedLoad {
+    SignExtend,
+    ZeroExtend,
+    ZeroExtendAtomic,
 }
 
 impl LoadKind {
@@ -571,9 +648,33 @@ impl LoadKind {
         match self {
             I32_8 { .. } | I64_8 { .. } => 1,
             I32_16 { .. } | I64_16 { .. } => 2,
-            I32 | F32 | I64_32 { .. } => 4,
-            I64 | F64 => 8,
+            I32 { .. } | F32 | I64_32 { .. } => 4,
+            I64 { .. } | F64 => 8,
             V128 => 16,
+        }
+    }
+
+    /// Returns if this is an atomic load
+    pub fn atomic(&self) -> bool {
+        use LoadKind::*;
+        match self {
+            I32_8 { kind }
+            | I32_16 { kind }
+            | I64_8 { kind }
+            | I64_16 { kind }
+            | I64_32 { kind } => kind.atomic(),
+            I32 { atomic } | I64 { atomic } => *atomic,
+            F32 | F64 | V128 => false,
+        }
+    }
+}
+
+impl ExtendedLoad {
+    /// Returns whether this is an atomic extended load
+    pub fn atomic(&self) -> bool {
+        match self {
+            ExtendedLoad::SignExtend | ExtendedLoad::ZeroExtend => false,
+            ExtendedLoad::ZeroExtendAtomic => true,
         }
     }
 }
@@ -582,16 +683,16 @@ impl LoadKind {
 #[derive(Debug, Copy, Clone)]
 #[allow(missing_docs)]
 pub enum StoreKind {
-    I32,
-    I64,
+    I32 { atomic: bool },
+    I64 { atomic: bool },
     F32,
     F64,
     V128,
-    I32_8,
-    I32_16,
-    I64_8,
-    I64_16,
-    I64_32,
+    I32_8 { atomic: bool },
+    I32_16 { atomic: bool },
+    I64_8 { atomic: bool },
+    I64_16 { atomic: bool },
+    I64_32 { atomic: bool },
 }
 
 impl StoreKind {
@@ -599,11 +700,27 @@ impl StoreKind {
     pub fn width(&self) -> u32 {
         use StoreKind::*;
         match self {
-            I32_8 | I64_8 => 1,
-            I32_16 | I64_16 => 2,
-            I32 | F32 | I64_32 => 4,
-            I64 | F64 => 8,
+            I32_8 { .. } | I64_8 { .. } => 1,
+            I32_16 { .. } | I64_16 { .. } => 2,
+            I32 { .. } | F32 | I64_32 { .. } => 4,
+            I64 { .. } | F64 => 8,
             V128 => 16,
+        }
+    }
+
+    /// Returns whether this is an atomic store
+    pub fn atomic(&self) -> bool {
+        use StoreKind::*;
+
+        match self {
+            I32 { atomic }
+            | I64 { atomic }
+            | I32_8 { atomic }
+            | I32_16 { atomic }
+            | I64_8 { atomic }
+            | I64_16 { atomic }
+            | I64_32 { atomic } => *atomic,
+            F32 | F64 | V128 => false,
         }
     }
 }
@@ -616,6 +733,44 @@ pub struct MemArg {
     pub align: u32,
     /// The offset of the memory operation, in bytes from the source address
     pub offset: u32,
+}
+
+/// The different kinds of atomic rmw operations
+#[derive(Debug, Copy, Clone)]
+#[allow(missing_docs)]
+pub enum AtomicOp {
+    Add,
+    Sub,
+    And,
+    Or,
+    Xor,
+    Xchg,
+}
+
+/// The different kinds of atomic rmw operations
+#[derive(Debug, Copy, Clone)]
+#[allow(missing_docs)]
+pub enum AtomicWidth {
+    I32,
+    I32_8,
+    I32_16,
+    I64,
+    I64_8,
+    I64_16,
+    I64_32,
+}
+
+impl AtomicWidth {
+    /// Returns the size, in bytes, of this atomic operation
+    pub fn bytes(&self) -> u32 {
+        use AtomicWidth::*;
+        match self {
+            I32_8 | I64_8 => 1,
+            I32_16 | I64_16 => 2,
+            I32 | I64_32 => 4,
+            I64 => 8,
+        }
+    }
 }
 
 impl Expr {
@@ -649,6 +804,10 @@ impl Expr {
             | Expr::CallIndirect(..)
             | Expr::Load(..)
             | Expr::Store(..)
+            | Expr::AtomicRmw(..)
+            | Expr::Cmpxchg(..)
+            | Expr::AtomicNotify(..)
+            | Expr::AtomicWait(..)
             | Expr::Drop(..) => false,
         }
     }

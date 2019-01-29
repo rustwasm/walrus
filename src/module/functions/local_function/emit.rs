@@ -3,6 +3,7 @@ use crate::encode::Encoder;
 use crate::ir::*;
 use crate::map::IdHashMap;
 use crate::module::functions::LocalFunction;
+use crate::module::memories::MemoryId;
 use crate::ty::ValType;
 
 pub(crate) fn run(
@@ -332,51 +333,171 @@ impl Emit<'_, '_> {
             }
 
             Load(e) => {
+                use ExtendedLoad::*;
                 use LoadKind::*;
                 self.visit(e.address);
-                // parity-wasm doesn't have support for multiple memories yet
-                assert_eq!(self.indices.get_memory_index(e.memory), 0);
                 match e.kind {
-                    I32 => self.encoder.byte(0x28), // i32.load
-                    I64 => self.encoder.byte(0x29), // i64.load
-                    F32 => self.encoder.byte(0x2a), // f32.load
-                    F64 => self.encoder.byte(0x2b), // f64.load
+                    I32 { atomic: false } => self.encoder.byte(0x28), // i32.load
+                    I32 { atomic: true } => self.encoder.raw(&[0xfe, 0x10]), // i32.atomic.load
+                    I64 { atomic: false } => self.encoder.byte(0x29), // i64.load
+                    I64 { atomic: true } => self.encoder.raw(&[0xfe, 0x11]), // i64.atomic.load
+                    F32 => self.encoder.byte(0x2a),                   // f32.load
+                    F64 => self.encoder.byte(0x2b),                   // f64.load
                     V128 => self.encoder.raw(&[0xfd, 0x00]),
-                    I32_8 { sign_extend: true } => self.encoder.byte(0x2c),
-                    I32_8 { sign_extend: false } => self.encoder.byte(0x2d),
-                    I32_16 { sign_extend: true } => self.encoder.byte(0x2e),
-                    I32_16 { sign_extend: false } => self.encoder.byte(0x2f),
-                    I64_8 { sign_extend: true } => self.encoder.byte(0x30),
-                    I64_8 { sign_extend: false } => self.encoder.byte(0x31),
-                    I64_16 { sign_extend: true } => self.encoder.byte(0x32),
-                    I64_16 { sign_extend: false } => self.encoder.byte(0x33),
-                    I64_32 { sign_extend: true } => self.encoder.byte(0x34),
-                    I64_32 { sign_extend: false } => self.encoder.byte(0x35),
+                    I32_8 { kind: SignExtend } => self.encoder.byte(0x2c),
+                    I32_8 { kind: ZeroExtend } => self.encoder.byte(0x2d),
+                    I32_8 {
+                        kind: ZeroExtendAtomic,
+                    } => self.encoder.raw(&[0xfe, 0x12]),
+                    I32_16 { kind: SignExtend } => self.encoder.byte(0x2e),
+                    I32_16 { kind: ZeroExtend } => self.encoder.byte(0x2f),
+                    I32_16 {
+                        kind: ZeroExtendAtomic,
+                    } => self.encoder.raw(&[0xfe, 0x13]),
+                    I64_8 { kind: SignExtend } => self.encoder.byte(0x30),
+                    I64_8 { kind: ZeroExtend } => self.encoder.byte(0x31),
+                    I64_8 {
+                        kind: ZeroExtendAtomic,
+                    } => self.encoder.raw(&[0xfe, 0x14]),
+                    I64_16 { kind: SignExtend } => self.encoder.byte(0x32),
+                    I64_16 { kind: ZeroExtend } => self.encoder.byte(0x33),
+                    I64_16 {
+                        kind: ZeroExtendAtomic,
+                    } => self.encoder.raw(&[0xfe, 0x15]),
+                    I64_32 { kind: SignExtend } => self.encoder.byte(0x34),
+                    I64_32 { kind: ZeroExtend } => self.encoder.byte(0x35),
+                    I64_32 {
+                        kind: ZeroExtendAtomic,
+                    } => self.encoder.raw(&[0xfe, 0x16]),
                 }
-                self.encoder.u32(e.arg.align.trailing_zeros());
-                self.encoder.u32(e.arg.offset);
+                self.memarg(e.memory, &e.arg);
             }
 
             Store(e) => {
                 use StoreKind::*;
                 self.visit(e.address);
                 self.visit(e.value);
-                // parity-wasm doesn't have support for multiple memories yet
-                assert_eq!(self.indices.get_memory_index(e.memory), 0);
                 match e.kind {
-                    I32 => self.encoder.byte(0x36),          // i32.store
-                    I64 => self.encoder.byte(0x37),          // i64.store
-                    F32 => self.encoder.byte(0x38),          // f32.store
-                    F64 => self.encoder.byte(0x39),          // f64.store
-                    V128 => self.encoder.raw(&[0xfd, 0x01]), // v128.store
-                    I32_8 => self.encoder.byte(0x3a),        // i32.store8
-                    I32_16 => self.encoder.byte(0x3b),       // i32.store16
-                    I64_8 => self.encoder.byte(0x3c),        // i64.store8
-                    I64_16 => self.encoder.byte(0x3d),       // i64.store16
-                    I64_32 => self.encoder.byte(0x3e),       // i64.store32
+                    I32 { atomic: false } => self.encoder.byte(0x36), // i32.store
+                    I32 { atomic: true } => self.encoder.raw(&[0xfe, 0x17]), // i32.atomic.store
+                    I64 { atomic: false } => self.encoder.byte(0x37), // i64.store
+                    I64 { atomic: true } => self.encoder.raw(&[0xfe, 0x18]), // i64.atomic.store
+                    F32 => self.encoder.byte(0x38),                   // f32.store
+                    F64 => self.encoder.byte(0x39),                   // f64.store
+                    V128 => self.encoder.raw(&[0xfd, 0x01]),          // v128.store
+                    I32_8 { atomic: false } => self.encoder.byte(0x3a), // i32.store8
+                    I32_8 { atomic: true } => self.encoder.raw(&[0xfe, 0x19]), // i32.atomic.store8
+                    I32_16 { atomic: false } => self.encoder.byte(0x3b), // i32.store16
+                    I32_16 { atomic: true } => self.encoder.raw(&[0xfe, 0x1a]), // i32.atomic.store16
+                    I64_8 { atomic: false } => self.encoder.byte(0x3c),         // i64.store8
+                    I64_8 { atomic: true } => self.encoder.raw(&[0xfe, 0x1b]),  // i64.atomic.store8
+                    I64_16 { atomic: false } => self.encoder.byte(0x3d),        // i64.store16
+                    I64_16 { atomic: true } => self.encoder.raw(&[0xfe, 0x1c]), // i64.atomic.store16
+                    I64_32 { atomic: false } => self.encoder.byte(0x3e),        // i64.store32
+                    I64_32 { atomic: true } => self.encoder.raw(&[0xfe, 0x1d]), // i64.atomic.store32
                 }
-                self.encoder.u32(e.arg.align.trailing_zeros());
-                self.encoder.u32(e.arg.offset);
+                self.memarg(e.memory, &e.arg);
+            }
+
+            AtomicRmw(e) => {
+                use AtomicOp::*;
+                use AtomicWidth::*;
+
+                self.visit(e.address);
+                self.visit(e.value);
+
+                self.encoder.byte(0xfe);
+                self.encoder.byte(match (e.op, e.width) {
+                    (Add, I32) => 0x1e,
+                    (Add, I64) => 0x1f,
+                    (Add, I32_8) => 0x20,
+                    (Add, I32_16) => 0x21,
+                    (Add, I64_8) => 0x22,
+                    (Add, I64_16) => 0x23,
+                    (Add, I64_32) => 0x24,
+
+                    (Sub, I32) => 0x25,
+                    (Sub, I64) => 0x26,
+                    (Sub, I32_8) => 0x27,
+                    (Sub, I32_16) => 0x28,
+                    (Sub, I64_8) => 0x29,
+                    (Sub, I64_16) => 0x2a,
+                    (Sub, I64_32) => 0x2b,
+
+                    (And, I32) => 0x2c,
+                    (And, I64) => 0x2d,
+                    (And, I32_8) => 0x2e,
+                    (And, I32_16) => 0x2f,
+                    (And, I64_8) => 0x30,
+                    (And, I64_16) => 0x31,
+                    (And, I64_32) => 0x32,
+
+                    (Or, I32) => 0x33,
+                    (Or, I64) => 0x34,
+                    (Or, I32_8) => 0x35,
+                    (Or, I32_16) => 0x36,
+                    (Or, I64_8) => 0x37,
+                    (Or, I64_16) => 0x38,
+                    (Or, I64_32) => 0x39,
+
+                    (Xor, I32) => 0x3a,
+                    (Xor, I64) => 0x3b,
+                    (Xor, I32_8) => 0x3c,
+                    (Xor, I32_16) => 0x3d,
+                    (Xor, I64_8) => 0x3e,
+                    (Xor, I64_16) => 0x3f,
+                    (Xor, I64_32) => 0x40,
+
+                    (Xchg, I32) => 0x41,
+                    (Xchg, I64) => 0x42,
+                    (Xchg, I32_8) => 0x43,
+                    (Xchg, I32_16) => 0x44,
+                    (Xchg, I64_8) => 0x45,
+                    (Xchg, I64_16) => 0x46,
+                    (Xchg, I64_32) => 0x47,
+                });
+
+                self.memarg(e.memory, &e.arg);
+            }
+
+            Cmpxchg(e) => {
+                use AtomicWidth::*;
+
+                self.visit(e.address);
+                self.visit(e.expected);
+                self.visit(e.replacement);
+
+                self.encoder.byte(0xfe);
+                self.encoder.byte(match e.width {
+                    I32 => 0x48,
+                    I64 => 0x49,
+                    I32_8 => 0x4a,
+                    I32_16 => 0x4b,
+                    I64_8 => 0x4c,
+                    I64_16 => 0x4d,
+                    I64_32 => 0x4e,
+                });
+
+                self.memarg(e.memory, &e.arg);
+            }
+
+            AtomicNotify(e) => {
+                self.visit(e.address);
+                self.visit(e.count);
+
+                self.encoder.byte(0xfe);
+                self.encoder.byte(0x00);
+                self.memarg(e.memory, &e.arg);
+            }
+
+            AtomicWait(e) => {
+                self.visit(e.address);
+                self.visit(e.expected);
+                self.visit(e.timeout);
+
+                self.encoder.byte(0xfe);
+                self.encoder.byte(if e.sixty_four { 0x02 } else { 0x01 });
+                self.memarg(e.memory, &e.arg);
             }
         }
 
@@ -459,5 +580,11 @@ impl Emit<'_, '_> {
                  rewrite them into single value returns"
             ),
         }
+    }
+
+    fn memarg(&mut self, id: MemoryId, arg: &MemArg) {
+        assert_eq!(self.indices.get_memory_index(id), 0);
+        self.encoder.u32(arg.align.trailing_zeros());
+        self.encoder.u32(arg.offset);
     }
 }

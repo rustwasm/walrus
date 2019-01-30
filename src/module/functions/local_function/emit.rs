@@ -87,6 +87,47 @@ impl Emit<'_, '_> {
                 self.encoder.u32(idx);
             }
 
+            MemoryInit(e) => {
+                self.visit(e.memory_offset);
+                self.visit(e.data_offset);
+                self.visit(e.len);
+                self.encoder.raw(&[0xfc, 0x08]); // memory.init
+                let idx = self.indices.get_data_index(e.data);
+                self.encoder.u32(idx);
+                let idx = self.indices.get_memory_index(e.memory);
+                assert_eq!(idx, 0);
+                self.encoder.u32(idx);
+            }
+
+            DataDrop(e) => {
+                self.encoder.raw(&[0xfc, 0x09]); // data.drop
+                let idx = self.indices.get_data_index(e.data);
+                self.encoder.u32(idx);
+            }
+
+            MemoryCopy(e) => {
+                self.visit(e.dst_offset);
+                self.visit(e.src_offset);
+                self.visit(e.len);
+                self.encoder.raw(&[0xfc, 0x0a]); // memory.copy
+                let idx = self.indices.get_memory_index(e.src);
+                assert_eq!(idx, 0);
+                self.encoder.u32(idx);
+                let idx = self.indices.get_memory_index(e.dst);
+                assert_eq!(idx, 0);
+                self.encoder.u32(idx);
+            }
+
+            MemoryFill(e) => {
+                self.visit(e.offset);
+                self.visit(e.value);
+                self.visit(e.len);
+                self.encoder.raw(&[0xfc, 0x0b]); // memory.fill
+                let idx = self.indices.get_memory_index(e.memory);
+                assert_eq!(idx, 0);
+                self.encoder.u32(idx);
+            }
+
             Binop(e) => {
                 use BinaryOp::*;
 

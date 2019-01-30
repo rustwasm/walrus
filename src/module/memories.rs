@@ -8,6 +8,7 @@ use crate::module::globals::GlobalId;
 use crate::module::imports::ImportId;
 use crate::module::Module;
 use crate::parse::IndicesToIds;
+use crate::passes::Used;
 use id_arena::{Arena, Id};
 
 /// The id of a memory.
@@ -131,6 +132,10 @@ impl ModuleMemories {
     /// Get a shared reference to this module's memories.
     pub fn iter(&self) -> impl Iterator<Item = &Memory> {
         self.arena.iter().map(|(_, f)| f)
+    }
+
+    pub(crate) fn iter_used<'a>(&'a self, used: &'a Used) -> impl Iterator<Item = &'a Memory> + 'a {
+        self.iter().filter(move |m| used.memories.contains(&m.id))
     }
 }
 

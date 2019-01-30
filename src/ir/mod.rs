@@ -8,6 +8,7 @@ pub mod matcher;
 
 use crate::dot::Dot;
 use crate::encode::Encoder;
+use crate::module::data::DataId;
 use crate::module::functions::FunctionId;
 use crate::module::functions::{DisplayExpr, DotExpr};
 use crate::module::globals::GlobalId;
@@ -301,6 +302,52 @@ pub enum Expr {
         memory: MemoryId,
         /// The number of pages to grow by.
         pages: ExprId,
+    },
+
+    /// memory.init
+    MemoryInit {
+        /// The memory we're growing.
+        memory: MemoryId,
+        /// The data to copy in
+        data: DataId,
+        /// The offset in bytes in memory
+        memory_offset: ExprId,
+        /// The offset in bytes in the data
+        data_offset: ExprId,
+        /// The number of bytes to copy
+        len: ExprId,
+    },
+
+    /// data.drop
+    DataDrop {
+        /// The data to drop
+        data: DataId,
+    },
+
+    /// memory.copy
+    MemoryCopy {
+        /// The source memory
+        src: MemoryId,
+        /// The destination memory
+        dst: MemoryId,
+        /// The offset in the destination memory
+        dst_offset: ExprId,
+        /// The offset in the source memory
+        src_offset: ExprId,
+        /// The number of bytes to copy
+        len: ExprId,
+    },
+
+    /// memory.fill
+    MemoryFill {
+        /// The memory to fill
+        memory: MemoryId,
+        /// The offset in memory to start filling
+        offset: ExprId,
+        /// The value to fill
+        value: ExprId,
+        /// The number of bytes to fill in
+        len: ExprId,
     },
 
     /// Loading a value from memory
@@ -801,6 +848,10 @@ impl Expr {
             | Expr::IfElse(..)
             | Expr::MemorySize(..)
             | Expr::MemoryGrow(..)
+            | Expr::MemoryInit(..)
+            | Expr::DataDrop(..)
+            | Expr::MemoryCopy(..)
+            | Expr::MemoryFill(..)
             | Expr::CallIndirect(..)
             | Expr::Load(..)
             | Expr::Store(..)

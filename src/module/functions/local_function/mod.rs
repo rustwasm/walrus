@@ -337,7 +337,6 @@ fn validate_instruction(
     ops: &mut OperatorsReader,
 ) -> Result<()> {
     use ExtendedLoad::*;
-    use Operator as O;
     use ValType::*;
 
     let const_ = |ctx: &mut FunctionContext, ty, value| {
@@ -849,6 +848,53 @@ fn validate_instruction(
             let memory = ctx.indices.get_memory(0)?;
             let expr = ctx.func.alloc(MemoryGrow { memory, pages });
             ctx.push_operand(Some(I32), expr);
+        }
+        Operator::MemoryInit { segment } => {
+            let (_, len) = ctx.pop_operand_expected(Some(I32))?;
+            let (_, data_offset) = ctx.pop_operand_expected(Some(I32))?;
+            let (_, memory_offset) = ctx.pop_operand_expected(Some(I32))?;
+            let memory = ctx.indices.get_memory(0)?;
+            let data = ctx.indices.get_data(segment)?;
+            let expr = ctx.func.alloc(MemoryInit {
+                len,
+                data_offset,
+                memory_offset,
+                memory,
+                data,
+            });
+            ctx.add_to_current_frame_block(expr);
+        }
+        Operator::DataDrop { segment } => {
+            let data = ctx.indices.get_data(segment)?;
+            let expr = ctx.func.alloc(DataDrop { data });
+            ctx.add_to_current_frame_block(expr);
+        }
+        Operator::MemoryCopy => {
+            let (_, len) = ctx.pop_operand_expected(Some(I32))?;
+            let (_, src_offset) = ctx.pop_operand_expected(Some(I32))?;
+            let (_, dst_offset) = ctx.pop_operand_expected(Some(I32))?;
+            let memory = ctx.indices.get_memory(0)?;
+            let expr = ctx.func.alloc(MemoryCopy {
+                len,
+                src_offset,
+                dst_offset,
+                src: memory,
+                dst: memory,
+            });
+            ctx.add_to_current_frame_block(expr);
+        }
+        Operator::MemoryFill => {
+            let (_, len) = ctx.pop_operand_expected(Some(I32))?;
+            let (_, value) = ctx.pop_operand_expected(Some(I32))?;
+            let (_, offset) = ctx.pop_operand_expected(Some(I32))?;
+            let memory = ctx.indices.get_memory(0)?;
+            let expr = ctx.func.alloc(MemoryFill {
+                len,
+                offset,
+                value,
+                memory,
+            });
+            ctx.add_to_current_frame_block(expr);
         }
 
         Operator::Nop => {}

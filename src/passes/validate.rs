@@ -6,6 +6,7 @@
 use crate::const_value::Const;
 use crate::error::Result;
 use crate::ir::*;
+use crate::module::data::DataId;
 use crate::module::functions::{Function, FunctionKind, LocalFunction};
 use crate::module::globals::{Global, GlobalKind};
 use crate::module::memories::{Memory, MemoryId};
@@ -252,5 +253,14 @@ impl<'a> Visitor<'a> for Validate<'a> {
         let width = if e.sixty_four { 8 } else { 4 };
         self.require_atomic(e.memory, &e.arg, width);
         e.visit(self);
+    }
+
+    fn visit_data_id(&mut self, id: &DataId) {
+        // Catch references in `memory.init` and such instructions to active
+        // data segments, which our implementation will generate but in general
+        // shouldn't be allowed.
+        if !self.module.data.get(*id).passive {
+            self.err("referenced data segment is not passive");
+        }
     }
 }

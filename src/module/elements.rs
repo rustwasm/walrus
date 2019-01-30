@@ -47,7 +47,7 @@ impl ModuleElements {
 
 impl Module {
     /// Parses a raw was section into a fully-formed `ModuleElements` instance.
-    pub fn parse_elements(
+    pub(crate) fn parse_elements(
         &mut self,
         section: wasmparser::ElementSectionReader,
         ids: &mut IndicesToIds,
@@ -55,45 +55,45 @@ impl Module {
         log::debug!("parse element section");
         for (i, segment) in section.into_iter().enumerate() {
             let segment = segment?;
-            // TODO: get support for passive segments in wasmparser
-            // if segment.passive() {
-            //     let mut list = Vec::with_capacity(segment.members().len());
-            //     for &func in segment.members() {
-            //         list.push(ids.get_func(func)?);
-            //     }
-            //     let id = self.elements.arena.next_id();
-            //     self.elements.arena.alloc(Element { members: list });
-            //     ids.push_element(id);
-            //     continue;
-            // }
 
-            let table = ids.get_table(segment.table_index)?;
-            let table = match &mut self.tables.get_mut(table).kind {
-                TableKind::Function(t) => t,
-            };
+            match segment.kind {
+                wasmparser::ElementKind::Passive(ty) => {
+                    drop(ty);
+                    bail!("passive element segments not supported yet");
+                }
+                wasmparser::ElementKind::Active {
+                    table_index,
+                    init_expr,
+                } => {
+                    let table = ids.get_table(table_index)?;
+                    let table = match &mut self.tables.get_mut(table).kind {
+                        TableKind::Function(t) => t,
+                    };
 
-            let offset = Const::eval(&segment.init_expr, ids)
-                .with_context(|_e| format!("in segment {}", i))?;
-            let functions = segment.items.get_items_reader()?.into_iter().map(|func| {
-                let func = func?;
-                ids.get_func(func)
-            });
+                    let offset = Const::eval(&init_expr, ids)
+                        .with_context(|_e| format!("in segment {}", i))?;
+                    let functions = segment.items.get_items_reader()?.into_iter().map(|func| {
+                        let func = func?;
+                        ids.get_func(func)
+                    });
 
-            match offset {
-                Const::Value(Value::I32(n)) => {
-                    let offset = n as usize;
-                    for (i, id) in functions.enumerate() {
-                        while i + offset + 1 > table.elements.len() {
-                            table.elements.push(None);
+                    match offset {
+                        Const::Value(Value::I32(n)) => {
+                            let offset = n as usize;
+                            for (i, id) in functions.enumerate() {
+                                while i + offset + 1 > table.elements.len() {
+                                    table.elements.push(None);
+                                }
+                                table.elements[i + offset] = Some(id?);
+                            }
                         }
-                        table.elements[i + offset] = Some(id?);
+                        Const::Global(global) if self.globals.get(global).ty == ValType::I32 => {
+                            let list = functions.collect::<Result<_>>()?;
+                            table.relative_elements.push((global, list));
+                        }
+                        _ => bail!("non-i32 constant in segment {}", i),
                     }
                 }
-                Const::Global(global) if self.globals.get(global).ty == ValType::I32 => {
-                    let list = functions.collect::<Result<_>>()?;
-                    table.relative_elements.push((global, list));
-                }
-                _ => bail!("non-i32 constant in segment {}", i),
             }
         }
         Ok(())

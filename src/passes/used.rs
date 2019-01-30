@@ -1,7 +1,7 @@
 use crate::const_value::Const;
 use crate::ir::*;
 use crate::map::{IdHashMap, IdHashSet};
-use crate::module::data::Data;
+use crate::module::data::{Data, DataId};
 use crate::module::elements::Element;
 use crate::module::exports::{ExportId, ExportItem};
 use crate::module::functions::{Function, FunctionId, FunctionKind, LocalFunction};
@@ -188,6 +188,10 @@ impl<'expr> Visitor<'expr> for UsedVisitor<'expr, '_> {
 
     fn visit_type_id(&mut self, &t: &TypeId) {
         self.stack.used.types.insert(t);
+    }
+
+    fn visit_data_id(&mut self, &t: &DataId) {
+        self.stack.used.data.insert(t);
     }
 
     fn visit_local_id(&mut self, &l: &LocalId) {

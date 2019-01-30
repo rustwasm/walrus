@@ -18,6 +18,16 @@ pub type DataId = Id<Data>;
 #[derive(Debug)]
 pub struct Data {
     id: DataId,
+
+    /// Initially set to `false` when reserving `Data` entries while parsing,
+    /// and then read during validation to ensure that `memory.init`
+    /// instructions only reference valid `Data` entries (ones that are actually
+    /// passive).
+    ///
+    /// From a user-facing perspective, though, this is always `true` for all
+    /// instances of `Data` as `Data` only makes sense as a passive segment.
+    pub(crate) passive: bool,
+
     /// The payload of this passive data segment
     pub value: Vec<u8>,
 }
@@ -61,54 +71,91 @@ impl ModuleData {
     pub(crate) fn emit_data_count(&self, cx: &mut EmitContext) {
         let mut count = 0;
 
-        // Assign indices before we start translating functions to ensure that
-        // references to data have all been assigned
-        for data in self.iter_used(cx.used) {
-            cx.indices.push_data(data.id());
-            count += 1;
+        // The first elements in the index space will be active segments, so
+        // count all those first. Here we push an "invalid id", or one we know
+        // isn't ever used, as the low data segments.
+        for mem in cx.module.memories.iter_used(cx.used) {
+            count += mem.emit_data().count();
         }
 
-        if count != 0 {
+        // After the active data segments, assign indices to the passive data
+        // segments.
+        let mut any_passive = false;
+        for data in self.iter_used(cx.used) {
+            cx.indices.set_data_index(data.id(), count as u32);
+            count += 1;
+            any_passive = true;
+        }
+
+        if any_passive {
             cx.start_section(Section::DataCount).encoder.usize(count);
         }
     }
 }
 
 impl Module {
+    /// Called when we see the data section section to create an id for all data
+    /// indices
+    ///
+    /// Note that during function parsing all data indices less than `count` are
+    /// considered valid, and it's only afterwards that we discover whether
+    /// they're actually passive or not, and that property is checked during
+    /// validation.
+    pub(crate) fn reserve_data(&mut self, count: u32, ids: &mut IndicesToIds) {
+        for _ in 0..count {
+            let id = self.data.arena.next_id();
+            self.data.arena.alloc(Data {
+                id,
+                passive: false, // this'll get set to `true` when parsing data
+                value: Vec::new(),
+            });
+            ids.push_data(id);
+        }
+    }
+
     /// Parses a raw wasm section into a fully-formed `ModuleData` instance.
     pub(crate) fn parse_data(
         &mut self,
         section: wasmparser::DataSectionReader,
-        ids: &mut IndicesToIds,
+        ids: &IndicesToIds,
+        data_count: Option<u32>,
     ) -> Result<()> {
         log::debug!("parse data section");
+        if let Some(count) = data_count {
+            if count != section.get_count() {
+                bail!("data count section mismatches actual data section");
+            }
+        }
         for (i, segment) in section.into_iter().enumerate() {
             let segment = segment?;
 
-            // TODO: upstream passive support
-            // if segment.passive() {
-            //     let id = self.data.arena.next_id();
-            //     self.data.arena.alloc(Data {
-            //         value: segment.value().to_vec(),
-            //     });
-            //     ids.push_data(id);
-            //     continue;
-            // }
-
-            let memory = ids.get_memory(segment.memory_index)?;
-            let value = segment.data.to_vec();
-            let memory = self.memories.get_mut(memory);
-
-            let offset = Const::eval(&segment.init_expr, ids)
-                .with_context(|_e| format!("in segment {}", i))?;
-            match offset {
-                Const::Value(Value::I32(n)) => {
-                    memory.data.add_absolute(n as u32, value);
+            match segment.kind {
+                wasmparser::DataKind::Passive => {
+                    let id = ids.get_data(i as u32)?;
+                    let data = self.data.get_mut(id);
+                    data.value = segment.data.to_vec();
+                    data.passive = true;
                 }
-                Const::Global(global) if self.globals.get(global).ty == ValType::I32 => {
-                    memory.data.add_relative(global, value);
+                wasmparser::DataKind::Active {
+                    memory_index,
+                    init_expr,
+                } => {
+                    let memory = ids.get_memory(memory_index)?;
+                    let value = segment.data.to_vec();
+                    let memory = self.memories.get_mut(memory);
+
+                    let offset = Const::eval(&init_expr, ids)
+                        .with_context(|_e| format!("in segment {}", i))?;
+                    match offset {
+                        Const::Value(Value::I32(n)) => {
+                            memory.data.add_absolute(n as u32, value);
+                        }
+                        Const::Global(global) if self.globals.get(global).ty == ValType::I32 => {
+                            memory.data.add_relative(global, value);
+                        }
+                        _ => bail!("non-i32 constant in segment {}", i),
+                    }
                 }
-                _ => bail!("non-i32 constant in segment {}", i),
             }
         }
         Ok(())
@@ -123,16 +170,11 @@ impl Emit for ModuleData {
         let mut active = cx
             .module
             .memories
-            .iter()
-            .filter(|m| cx.used.memories.contains(&m.id()))
+            .iter_used(cx.used)
             .flat_map(|memory| memory.emit_data().map(move |data| (memory.id(), data)))
             .collect::<Vec<_>>();
         active.sort_by_key(|pair| pair.0);
-        let passive = self
-            .arena
-            .iter()
-            .filter(|(id, _seg)| cx.used.data.contains(id))
-            .count();
+        let passive = self.iter_used(cx.used).count();
 
         if active.len() == 0 && passive == 0 {
             return;

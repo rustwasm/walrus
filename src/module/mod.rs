@@ -76,13 +76,14 @@ impl Module {
         let mut ret = Module::default();
         let mut indices = IndicesToIds::default();
         let mut function_section_size = None;
+        let mut data_count = None;
 
         while !parser.eof() {
             let section = parser.read()?;
             match section.code {
                 wasmparser::SectionCode::Data => {
                     let reader = section.get_data_section_reader()?;
-                    ret.parse_data(reader, &mut indices)
+                    ret.parse_data(reader, &mut indices, data_count)
                         .context("failed to parse data section")?;
                 }
                 wasmparser::SectionCode::Type => {
@@ -138,6 +139,11 @@ impl Module {
                     let reader = section.get_code_section_reader()?;
                     ret.parse_local_functions(reader, function_section_size, &mut indices)
                         .context("failed to parse code section")?;
+                }
+                wasmparser::SectionCode::DataCount => {
+                    let count = section.get_data_count_section_content()?;
+                    data_count = Some(count);
+                    ret.reserve_data(count, &mut indices);
                 }
                 wasmparser::SectionCode::Custom { name, kind: _ } => {
                     let result = match name {

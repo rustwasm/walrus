@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::{Once, ONCE_INIT};
 
-pub const FEATURES: &[&str] = &["--enable-threads"];
+pub const FEATURES: &[&str] = &["--enable-threads", "--enable-bulk-memory"];
 
 fn require_wat2wasm() {
     let status = Command::new("wat2wasm")

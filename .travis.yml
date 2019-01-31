@@ -32,6 +32,7 @@ matrix:
 
     - name: "master doc to gh-pages"
       rust: nightly
+      install: true
       script:
         - cargo doc --no-deps
       deploy:

@@ -11,6 +11,7 @@ pub mod memories;
 pub mod producers;
 pub mod tables;
 pub mod types;
+mod config;
 
 use crate::emit::{Emit, EmitContext, IdsToIndices, Section};
 use crate::encode::Encoder;
@@ -31,6 +32,8 @@ use crate::passes;
 use failure::{bail, ResultExt};
 use std::fs;
 use std::path::Path;
+
+pub use self::config::ModuleConfig;
 
 /// A wasm module.
 #[derive(Debug, Default)]
@@ -56,6 +59,7 @@ pub struct Module {
     /// The name of this module, used for debugging purposes in the `name`
     /// custom section.
     pub name: Option<String>,
+    config: ModuleConfig,
 }
 
 #[derive(Debug)]
@@ -75,12 +79,17 @@ impl Module {
 
     /// Construct a new module.
     pub fn from_buffer(wasm: &[u8]) -> Result<Module> {
+        ModuleConfig::new().parse(wasm)
+    }
+
+    fn parse(wasm: &[u8], config: &ModuleConfig) -> Result<Module> {
         let mut parser = wasmparser::ModuleReader::new(wasm)?;
         if parser.get_version() != 1 {
             bail!("only support version 1 of wasm");
         }
 
         let mut ret = Module::default();
+        ret.config = config.clone();
         let mut indices = IndicesToIds::default();
         let mut function_section_size = None;
         let mut data_count = None;
@@ -281,6 +290,13 @@ impl Module {
                         let mut map = name.get_map()?;
                         for _ in 0..map.get_count() {
                             let naming = map.read()?;
+                            // Looks like tools like `wat2wasm` generate empty
+                            // names for locals if they aren't specified, so
+                            // just ignore empty names which would in theory
+                            // make debugging a bit harder.
+                            if self.config.generate_names && naming.name.is_empty() {
+                                continue
+                            }
                             let id = indices.get_local(func_id, naming.index)?;
                             self.locals.get_mut(id).name = Some(naming.name.to_string());
                         }

@@ -26,8 +26,9 @@ macro_rules! define_push_get {
     ( $push:ident, $get:ident, $id_ty:ty, $member:ident ) => {
         impl IndicesToIds {
             /// Pushes a new local ID to map it to the next index internally
-            pub fn $push(&mut self, id: $id_ty) {
+            pub fn $push(&mut self, id: $id_ty) -> u32 {
                 self.$member.push(id);
+                (self.$member.len() - 1) as u32
             }
 
             /// Gets the ID for a particular index
@@ -55,8 +56,10 @@ define_push_get!(push_data, get_data, DataId, data);
 
 impl IndicesToIds {
     /// Pushes a new local ID to map it to the next index internally
-    pub fn push_local(&mut self, function: FunctionId, id: LocalId) {
-        self.locals.entry(function).or_insert(Vec::new()).push(id);
+    pub fn push_local(&mut self, function: FunctionId, id: LocalId) -> u32 {
+        let list = self.locals.entry(function).or_insert(Vec::new());
+        list.push(id);
+        (list.len() as u32) - 1
     }
 
     /// Gets the ID for a particular index

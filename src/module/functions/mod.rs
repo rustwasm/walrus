@@ -282,7 +282,10 @@ impl Module {
             let ty = ids.get_type(func?)?;
             let id = self.funcs.arena.next_id();
             self.funcs.arena.alloc(Function::new_uninitialized(id, ty));
-            ids.push_func(id);
+            let idx = ids.push_func(id);
+            if self.config.generate_names {
+                self.funcs.get_mut(id).name = Some(format!("f{}", idx));
+            }
         }
 
         Ok(())
@@ -319,10 +322,14 @@ impl Module {
             // First up, implicitly add locals for all function arguments. We also
             // record these in the function itself for later processing.
             let mut args = Vec::new();
-            for ty in self.types.get(ty).params() {
+            for ty in self.types.get(ty).params().iter() {
                 let local_id = self.locals.add(*ty);
-                indices.push_local(id, local_id);
+                let idx = indices.push_local(id, local_id);
                 args.push(local_id);
+                if self.config.generate_names {
+                    let name = format!("arg{}", idx);
+                    self.locals.get_mut(local_id).name = Some(name);
+                }
             }
 
             // WebAssembly local indices are 32 bits, so it's a validation error to
@@ -343,7 +350,11 @@ impl Module {
                 let ty = ValType::parse(&ty)?;
                 for _ in 0..count {
                     let local_id = self.locals.add(ty);
-                    indices.push_local(id, local_id);
+                    let idx = indices.push_local(id, local_id);
+                    if self.config.generate_names {
+                        let name = format!("l{}", idx);
+                        self.locals.get_mut(local_id).name = Some(name);
+                    }
                 }
             }
 
@@ -356,20 +367,15 @@ impl Module {
         let results = bodies
             .into_par_iter()
             .map(|(id, body, args, ty)| {
-                LocalFunction::parse(self, indices, id, ty, args, body).map(|local| Function {
-                    id,
-                    kind: FunctionKind::Local(local),
-                    name: None,
-                })
+                (id, LocalFunction::parse(self, indices, id, ty, args, body))
             })
             .collect::<Vec<_>>();
 
         // After all the function bodies are collected and finished push them
         // into our function arena.
-        for func in results {
+        for (id, func) in results {
             let func = func?;
-            let id = func.id;
-            self.funcs.arena[id] = func;
+            self.funcs.arena[id].kind = FunctionKind::Local(func);
         }
 
         Ok(())

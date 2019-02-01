@@ -65,6 +65,17 @@ impl ModuleExports {
     pub fn iter(&self) -> impl Iterator<Item = &Export> {
         self.arena.iter().map(|(_, f)| f)
     }
+
+    /// Add a new export to this module
+    pub fn add(&mut self, name: &str, item: impl Into<ExportItem>) -> ExportId {
+        self.arena.alloc_with_id(|id| {
+            Export {
+                id,
+                name: name.to_string(),
+                item: item.into(),
+            }
+        })
+    }
 }
 
 impl Module {
@@ -134,5 +145,29 @@ impl Emit for ModuleExports {
                 }
             }
         }
+    }
+}
+
+impl From<MemoryId> for ExportItem {
+    fn from(id: MemoryId) -> ExportItem {
+        ExportItem::Memory(id)
+    }
+}
+
+impl From<FunctionId> for ExportItem {
+    fn from(id: FunctionId) -> ExportItem {
+        ExportItem::Function(id)
+    }
+}
+
+impl From<GlobalId> for ExportItem {
+    fn from(id: GlobalId) -> ExportItem {
+        ExportItem::Global(id)
+    }
+}
+
+impl From<TableId> for ExportItem {
+    fn from(id: TableId) -> ExportItem {
+        ExportItem::Table(id)
     }
 }

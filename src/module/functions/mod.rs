@@ -188,6 +188,58 @@ impl ModuleFunctions {
         self.arena.par_iter().map(|(_, f)| f)
     }
 
+    /// Get an iterator of this module's local functions
+    pub fn iter_local(&self) -> impl Iterator<Item = (FunctionId, &LocalFunction)> {
+        self.iter().filter_map(|f| {
+            match &f.kind {
+                FunctionKind::Local(local) => Some((f.id(), local)),
+                _ => None,
+            }
+        })
+    }
+
+    /// Get a parallel iterator of this module's local functions
+    pub fn par_iter_local(&self) -> impl ParallelIterator<Item = (FunctionId, &LocalFunction)> {
+        self.par_iter().filter_map(|f| {
+            match &f.kind {
+                FunctionKind::Local(local) => Some((f.id(), local)),
+                _ => None,
+            }
+        })
+    }
+
+    /// Get a mutable reference to this module's functions.
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut Function> {
+        self.arena.iter_mut().map(|(_, f)| f)
+    }
+
+    /// Get a mutable reference to this module's functions.
+    pub fn par_iter_mut(&mut self) -> impl ParallelIterator<Item = &mut Function> {
+        self.arena.par_iter_mut().map(|(_, f)| f)
+    }
+
+    /// Get an iterator of this module's local functions
+    pub fn iter_local_mut(&mut self) -> impl Iterator<Item = (FunctionId, &mut LocalFunction)> {
+        self.iter_mut().filter_map(|f| {
+            let id = f.id();
+            match &mut f.kind {
+                FunctionKind::Local(local) => Some((id, local)),
+                _ => None,
+            }
+        })
+    }
+
+    /// Get a parallel iterator of this module's local functions
+    pub fn par_iter_local_mut(&mut self) -> impl ParallelIterator<Item = (FunctionId, &mut LocalFunction)> {
+        self.par_iter_mut().filter_map(|f| {
+            let id = f.id();
+            match &mut f.kind {
+                FunctionKind::Local(local) => Some((id, local)),
+                _ => None,
+            }
+        })
+    }
+
     pub(crate) fn iter_used<'a>(
         &'a self,
         used: &'a Used,

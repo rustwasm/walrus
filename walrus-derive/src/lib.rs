@@ -30,6 +30,7 @@ pub fn walrus_expr(_attr: TokenStream, input: TokenStream) -> TokenStream {
     let matchers = create_matchers(&variants);
     let display = create_display(&variants);
     let dot = create_dot(&variants);
+    let builder = create_builder(&variants);
 
     let expanded = quote! {
         #types
@@ -37,6 +38,7 @@ pub fn walrus_expr(_attr: TokenStream, input: TokenStream) -> TokenStream {
         #matchers
         #display
         #dot
+        #builder
     };
 
     TokenStream::from(expanded)
@@ -247,6 +249,12 @@ fn create_types(attrs: &[syn::Attribute], variants: &[WalrusVariant]) -> impl qu
                         v.visit_expr_id(&self.0);
                     }
                 }
+
+                impl VisitMut for #id_name {
+                    fn visit_mut<V: VisitorMut>(&mut self, v: &mut V) {
+                        v.visit_expr_id_mut(&mut self.0);
+                    }
+                }
             }
         })
         .collect();
@@ -403,7 +411,9 @@ fn visit_fields<'a>(
 fn create_visit(variants: &[WalrusVariant]) -> impl quote::ToTokens {
     let mut visit_impls = Vec::new();
     let mut visitor_trait_methods = Vec::new();
+    let mut visitor_mut_trait_methods = Vec::new();
     let mut visit_impl = Vec::new();
+    let mut visit_mut_impl = Vec::new();
 
     for variant in variants {
         let name = &variant.syn.ident;
@@ -413,8 +423,11 @@ fn create_visit(variants: &[WalrusVariant]) -> impl quote::ToTokens {
         method_name.push_str(&name.to_string().to_snake_case());
         let method_name = syn::Ident::new(&method_name, Span::call_site());
         let method_id_name = syn::Ident::new(&format!("{}_id", method_name), Span::call_site());
+        let method_name_mut = syn::Ident::new(&format!("{}_mut", method_name), Span::call_site());
+        let method_id_name_mut =
+            syn::Ident::new(&format!("{}_id_mut", method_name), Span::call_site());
 
-        let visit_fields = visit_fields(variant, true).map(|(method_name, field_name, list)| {
+        let recurse_fields = visit_fields(variant, true).map(|(method_name, field_name, list)| {
             if list {
                 quote! {
                     for item in self.#field_name.iter() {
@@ -425,11 +438,30 @@ fn create_visit(variants: &[WalrusVariant]) -> impl quote::ToTokens {
                 quote! { visitor.#method_name(&self.#field_name); }
             }
         });
+        let recurse_fields_mut =
+            visit_fields(variant, true).map(|(method_name, field_name, list)| {
+                let name = format!("{}_mut", method_name);
+                let method_name = syn::Ident::new(&name, Span::call_site());
+                if list {
+                    quote! {
+                        for item in self.#field_name.iter_mut() {
+                            visitor.#method_name(item);
+                        }
+                    }
+                } else {
+                    quote! { visitor.#method_name(&mut self.#field_name); }
+                }
+            });
 
         visit_impls.push(quote! {
             impl<'expr> Visit<'expr> for #name {
                 fn visit<V: Visitor<'expr>>(&self, visitor: &mut V) {
-                    #(#visit_fields);*
+                    #(#recurse_fields);*
+                }
+            }
+            impl VisitMut for #name {
+                fn visit_mut<V: VisitorMut>(&mut self, visitor: &mut V) {
+                    #(#recurse_fields_mut);*
                 }
             }
         });
@@ -447,12 +479,26 @@ fn create_visit(variants: &[WalrusVariant]) -> impl quote::ToTokens {
                 id.visit(self);
             }
         });
+        visitor_mut_trait_methods.push(quote! {
+            #[doc=#doc]
+            fn #method_name_mut(&mut self, expr: &mut #name) {
+                expr.visit_mut(self);
+            }
+
+            #[doc=#doc_id]
+            fn #method_id_name_mut(&mut self, id: &mut #name_id) {
+                id.visit_mut(self);
+            }
+        });
 
         let mut method_name = "visit_".to_string();
         method_name.push_str(&name.to_string().to_snake_case());
         let method_name = syn::Ident::new(&method_name, Span::call_site());
         visit_impl.push(quote! {
             Expr::#name(e) => visitor.#method_name(e),
+        });
+        visit_mut_impl.push(quote! {
+            Expr::#name(e) => visitor.#method_name_mut(e),
         });
     }
 
@@ -515,10 +561,77 @@ fn create_visit(variants: &[WalrusVariant]) -> impl quote::ToTokens {
             #( #visitor_trait_methods )*
         }
 
+        /// A visitor walks over a mutable IR expression tree.
+        pub trait VisitorMut: Sized {
+            /// Return the local function we're visiting
+            fn local_function_mut(&mut self) -> &mut crate::module::functions::LocalFunction;
+
+            /// Visit `Expr`.
+            fn visit_expr_mut(&mut self, expr: &mut Expr) {
+                expr.visit_mut(self)
+            }
+
+            /// Visit `ExprId`.
+            fn visit_expr_id_mut(&mut self, expr: &mut ExprId) {
+                expr.visit_mut(self);
+            }
+
+            /// Visit `Local`.
+            fn visit_local_id_mut(&mut self, local: &mut crate::ir::LocalId) {
+                // ...
+            }
+
+            /// Visit `Memory`.
+            fn visit_memory_id_mut(&mut self, memory: &mut crate::module::memories::MemoryId) {
+                // ...
+            }
+
+            /// Visit `Table`.
+            fn visit_table_id_mut(&mut self, table: &mut crate::module::tables::TableId) {
+                // ...
+            }
+
+            /// Visit `GlobalId`.
+            fn visit_global_id_mut(&mut self, global: &mut crate::module::globals::GlobalId) {
+                // ...
+            }
+
+            /// Visit `FunctionId`.
+            fn visit_function_id_mut(&mut self, function: &mut crate::module::functions::FunctionId) {
+                // ...
+            }
+
+            /// Visit `DataId`.
+            fn visit_data_id_mut(&mut self, function: &mut crate::module::data::DataId) {
+                // ...
+            }
+
+            /// Visit `TypeId`
+            fn visit_type_id_mut(&mut self, ty: &mut crate::ty::TypeId) {
+                // ...
+            }
+
+            /// Visit `Value`.
+            fn visit_value_mut(&mut self, value: &mut crate::ir::Value) {
+                // ...
+            }
+
+            #( #visitor_mut_trait_methods )*
+        }
+
+
         impl<'expr> Visit<'expr> for Expr {
             fn visit<V>(&self, visitor: &mut V) where V: Visitor<'expr> {
                 match self {
                     #( #visit_impl )*
+                }
+            }
+        }
+
+        impl VisitMut for Expr {
+            fn visit_mut<V>(&mut self, visitor: &mut V) where V: VisitorMut {
+                match self {
+                    #( #visit_mut_impl )*
                 }
             }
         }
@@ -822,6 +935,43 @@ fn create_dot(variants: &[WalrusVariant]) -> impl quote::ToTokens {
             }
 
             #(#dot_methods)*
+        }
+    }
+}
+
+fn create_builder(variants: &[WalrusVariant]) -> impl quote::ToTokens {
+    let mut builder_methods = Vec::new();
+    for variant in variants {
+        let name = &variant.syn.ident;
+
+        let mut method_name = name.to_string().to_snake_case();
+        if method_name == "return" || method_name == "const" {
+            method_name.push('_');
+        } else if method_name == "block" {
+            continue;
+        }
+        let method_name = syn::Ident::new(&method_name, Span::call_site());
+
+        let mut args = Vec::new();
+        let mut arg_names = Vec::new();
+
+        for field in variant.syn.fields.iter() {
+            let name = field.ident.as_ref().expect("can't have unnamed fields");
+            arg_names.push(name);
+            let ty = &field.ty;
+            args.push(quote! { #name: #ty });
+        }
+
+        builder_methods.push(quote! {
+            pub fn #method_name(&mut self, #(#args),*) -> ExprId {
+                self.alloc(#name { #(#arg_names),* }).into()
+            }
+        });
+    }
+    quote! {
+        #[allow(missing_docs)]
+        impl crate::FunctionBuilder {
+            #(#builder_methods)*
         }
     }
 }

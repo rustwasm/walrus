@@ -60,6 +60,15 @@ impl ModuleImports {
     pub fn iter(&self) -> impl Iterator<Item = &Import> {
         self.arena.iter().map(|(_, f)| f)
     }
+
+    /// Adds a new import to this module
+    pub fn add(&mut self, module: &str, name: &str, kind: ImportKind) -> ImportId {
+        self.arena.insert(Import {
+            module: module.to_string(),
+            name: name.to_string(),
+            kind,
+        })
+    }
 }
 
 impl Module {

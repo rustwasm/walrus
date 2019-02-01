@@ -77,9 +77,32 @@ fn run(wast: &Path) -> Result<(), failure::Error> {
                 // where we should improve our representation to not allocate so
                 // much, but that's another bug for another day.
             }
-            _ => {
-                let wasm = walrus::module::Module::from_file(&path)
+            cmd => {
+                let mut wasm = walrus::module::Module::from_file(&path)
                     .context(format!("error parsing wasm (line {})", line))?;
+
+                // If a module is supposed to be unlinkable we'll often gc out
+                // items which would have otherwise made it unlinkable, so make
+                // sure that everything is exported.
+                if cmd == "assert_unlinkable" {
+                    for (i, memory) in wasm.memories.iter().enumerate() {
+                        let name = format!("__memory_{}", i);
+                        wasm.exports.add(&name, memory.id());
+                    }
+                    for (i, table) in wasm.tables.iter().enumerate() {
+                        let name = format!("__table_{}", i);
+                        wasm.exports.add(&name, table.id());
+                    }
+                    for (i, func) in wasm.funcs.iter().enumerate() {
+                        let name = format!("__function_{}", i);
+                        wasm.exports.add(&name, func.id());
+                    }
+                    for (i, global) in wasm.globals.iter().enumerate() {
+                        let name = format!("__global_{}", i);
+                        wasm.exports.add(&name, global.id());
+                    }
+                }
+
                 let wasm1 = wasm
                     .emit_wasm()
                     .context(format!("error emitting wasm (line {})", line))?;
@@ -115,8 +138,21 @@ fn run(wast: &Path) -> Result<(), failure::Error> {
         .args(extra_args)
         .output()
         .context("executing `spectest-interp`")?;
+
+    // If the interpreter exits with success it may still have failed some
+    // tests. Check the output for `X/Y tests passed.` and make sure `X` equals
+    // `Y`.
     if output.status.success() {
-        return Ok(());
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        if let Some(line) = stdout.lines().find(|l| l.ends_with("tests passed.")) {
+            let part = line.split_whitespace().next().unwrap();
+            let mut parts = part.split("/");
+            let a = parts.next().unwrap().parse::<u32>();
+            let b = parts.next().unwrap().parse::<u32>();
+            if a == b {
+                return Ok(())
+            }
+        }
     }
     println!("status: {}", output.status);
     println!("stdout:\n{}", String::from_utf8_lossy(&output.stdout));

@@ -1,7 +1,7 @@
 //! Context needed when validating instructions and constructing our `Expr` IR.
 
 use crate::error::{ErrorKind, Result};
-use crate::ir::{Block, BlockId, BlockKind, ExprId};
+use crate::ir::{Block, BlockId, BlockKind, ExprId, Drop};
 use crate::module::functions::{FunctionId, LocalFunction};
 use crate::module::Module;
 use crate::parse::IndicesToIds;
@@ -143,8 +143,30 @@ impl<'a> FunctionContext<'a> {
         E: Into<ExprId>,
     {
         let expr = expr.into();
-        self.add_to_current_frame_block(expr);
-        impl_unreachable(&mut self.operands, &mut self.controls, expr);
+
+        let frame = self.controls.last_mut().unwrap();
+
+        // If we're not unreachable yet then we need to commit this expression.
+        // Note that we also need to commit any previous expressions on the
+        // stack because they may have side effects. For any lingering operands
+        // synthesize `Drop` nodes for them here.
+        if frame.unreachable.is_none() {
+            let mut extra_exprs = Vec::new();
+            if self.operands.len() > frame.height {
+                for (_, operand) in self.operands[frame.height..].iter() {
+                    let drop = self.func.alloc(Drop { expr: *operand });
+                    extra_exprs.push(ExprId::from(drop));
+                }
+            }
+
+            let block = self.func.exprs[frame.block.into()].unwrap_block_mut();
+            block.exprs.extend(extra_exprs);
+            block.exprs.push(expr);
+        }
+
+        frame.unreachable = Some(expr);
+        let height = frame.height;
+        self.operands.truncate(height);
     }
 
     pub fn control(&self, n: usize) -> Result<&ControlFrame> {
@@ -287,15 +309,4 @@ fn impl_pop_control(
     }
     let frame = controls.pop().unwrap();
     Ok((frame, exprs))
-}
-
-fn impl_unreachable<E>(operands: &mut OperandStack, controls: &mut ControlStack, expr: E)
-where
-    E: Into<ExprId>,
-{
-    let frame = controls.last_mut().unwrap();
-    frame.unreachable = Some(expr.into());
-    let height = frame.height;
-
-    operands.truncate(height);
 }

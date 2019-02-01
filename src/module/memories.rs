@@ -208,6 +208,11 @@ impl MemoryData {
         self.relative.iter().map(|p| p.0)
     }
 
+    /// Returns whether this data has no initialization sections
+    pub fn is_empty(&self) -> bool {
+        self.absolute.is_empty() && self.relative.is_empty()
+    }
+
     /// Consumes this data and returns a by-value iterator of each segment
     pub fn into_iter(self) -> impl Iterator<Item = (Const, Vec<u8>)> {
         let absolute = self

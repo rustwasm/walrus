@@ -8,6 +8,7 @@ use crate::module::functions::{Function, FunctionId, FunctionKind, LocalFunction
 use crate::module::globals::{Global, GlobalId, GlobalKind};
 use crate::module::memories::{Memory, MemoryId};
 use crate::module::tables::{Table, TableId, TableKind};
+use crate::module::imports::ImportKind;
 use crate::module::Module;
 use crate::ty::{Type, TypeId};
 
@@ -64,6 +65,32 @@ impl Used {
             stack.push_func(f);
         }
 
+        // Initialization of imported memories or imported tables is a
+        // side-effectful operation, so be sure to retain any tables/memories
+        // that are imported and initialized, even if they aren't used.
+        for import in module.imports.iter() {
+            match import.kind {
+                ImportKind::Memory(m) => {
+                    let mem = module.memories.get(m);
+                    if !mem.data.is_empty() {
+                        stack.push_memory(m);
+                    }
+                }
+                ImportKind::Table(t) => {
+                    let table = module.tables.get(t);
+                    match &table.kind {
+                        TableKind::Function(init) => {
+                            if !init.elements.is_empty() || !init.relative_elements.is_empty() {
+                                stack.push_table(t);
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        // Iteratively visit all items until our stack is empty
         while stack.functions.len() > 0
             || stack.tables.len() > 0
             || stack.memories.len() > 0

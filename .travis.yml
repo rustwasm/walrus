@@ -44,4 +44,5 @@ matrix:
 
 
 script:
-  - cargo test --all
+  - cargo build --all
+  - cargo test --all --exclude walrus-fuzz

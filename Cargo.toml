@@ -21,6 +21,7 @@ env_logger = "0.6"
 
 [workspace]
 members = [
+    "./fuzz",
     "./walrus-derive",
     "./walrus-tests",
     "./walrus-tests-utils",

@@ -32,7 +32,7 @@ pub fn wat2wasm(path: &Path) -> Vec<u8> {
 
     let mut cmd = Command::new("wat2wasm");
     cmd.arg(path)
-        // .args(FEATURES)
+        .args(FEATURES)
         .arg("--debug-names")
         .arg("-o")
         .arg(file.path());
@@ -103,10 +103,9 @@ pub fn wasm_interp(path: &Path) -> String {
 
     let mut cmd = Command::new("wasm-interp");
     cmd.arg(path);
-    // cmd.arg("--trace");
     cmd.arg("--run-all-exports");
     cmd.arg("--host-print");
-    // cmd.args(FEATURES);
+    cmd.args(FEATURES);
     println!("running: {:?}", cmd);
     let output = cmd.output().expect("should spawn wasm-interp OK");
     if !output.status.success() {

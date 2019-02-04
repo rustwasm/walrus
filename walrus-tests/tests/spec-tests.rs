@@ -150,7 +150,7 @@ fn run(wast: &Path) -> Result<(), failure::Error> {
             let a = parts.next().unwrap().parse::<u32>();
             let b = parts.next().unwrap().parse::<u32>();
             if a == b {
-                return Ok(())
+                return Ok(());
             }
         }
     }

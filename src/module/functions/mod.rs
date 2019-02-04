@@ -190,21 +190,17 @@ impl ModuleFunctions {
 
     /// Get an iterator of this module's local functions
     pub fn iter_local(&self) -> impl Iterator<Item = (FunctionId, &LocalFunction)> {
-        self.iter().filter_map(|f| {
-            match &f.kind {
-                FunctionKind::Local(local) => Some((f.id(), local)),
-                _ => None,
-            }
+        self.iter().filter_map(|f| match &f.kind {
+            FunctionKind::Local(local) => Some((f.id(), local)),
+            _ => None,
         })
     }
 
     /// Get a parallel iterator of this module's local functions
     pub fn par_iter_local(&self) -> impl ParallelIterator<Item = (FunctionId, &LocalFunction)> {
-        self.par_iter().filter_map(|f| {
-            match &f.kind {
-                FunctionKind::Local(local) => Some((f.id(), local)),
-                _ => None,
-            }
+        self.par_iter().filter_map(|f| match &f.kind {
+            FunctionKind::Local(local) => Some((f.id(), local)),
+            _ => None,
         })
     }
 
@@ -230,7 +226,9 @@ impl ModuleFunctions {
     }
 
     /// Get a parallel iterator of this module's local functions
-    pub fn par_iter_local_mut(&mut self) -> impl ParallelIterator<Item = (FunctionId, &mut LocalFunction)> {
+    pub fn par_iter_local_mut(
+        &mut self,
+    ) -> impl ParallelIterator<Item = (FunctionId, &mut LocalFunction)> {
         self.par_iter_mut().filter_map(|f| {
             let id = f.id();
             match &mut f.kind {

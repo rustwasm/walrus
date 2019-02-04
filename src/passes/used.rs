@@ -6,9 +6,9 @@ use crate::module::elements::Element;
 use crate::module::exports::{ExportId, ExportItem};
 use crate::module::functions::{Function, FunctionId, FunctionKind, LocalFunction};
 use crate::module::globals::{Global, GlobalId, GlobalKind};
+use crate::module::imports::ImportKind;
 use crate::module::memories::{Memory, MemoryId};
 use crate::module::tables::{Table, TableId, TableKind};
-use crate::module::imports::ImportKind;
 use crate::module::Module;
 use crate::ty::{Type, TypeId};
 

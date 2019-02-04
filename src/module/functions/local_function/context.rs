@@ -1,7 +1,7 @@
 //! Context needed when validating instructions and constructing our `Expr` IR.
 
 use crate::error::{ErrorKind, Result};
-use crate::ir::{Block, BlockId, BlockKind, ExprId, Drop};
+use crate::ir::{Block, BlockId, BlockKind, Drop, ExprId};
 use crate::module::functions::{FunctionId, LocalFunction};
 use crate::module::Module;
 use crate::parse::IndicesToIds;

@@ -208,14 +208,14 @@ fn update_output(path: &Path, output: &str) {
     for line in output.lines() {
         if !line.is_empty() {
             new_output.push_str("  ");
-            new_output.push_str(line.trim_right());
+            new_output.push_str(line.trim_end());
         }
         new_output.push_str("\n");
     }
     let new = format!(
         "{}\n\n(; CHECK-ALL:\n{}\n;)\n",
         contents[..start].trim(),
-        new_output.trim_right()
+        new_output.trim_end()
     );
     fs::write(path, new).unwrap();
 }

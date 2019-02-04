@@ -448,6 +448,52 @@ pub enum Expr {
         #[walrus(skip_visit)]
         sixty_four: bool,
     },
+
+    /// A value followed by one or more stack-neutral, side-effecting
+    /// expressions.
+    ///
+    /// This allows us to express "stacky" and "non-tree-like" expressions such
+    /// as:
+    ///
+    /// ```wasm
+    /// ;; Assuming `f` has type `[] -> i32` and potential side effects.
+    /// call $f
+    /// call $f
+    /// call $f
+    /// drop
+    /// i32.add
+    /// ```
+    ///
+    /// Without `WithSideEffects`, we would need to create a synthetic block
+    /// with a temporary local like this:
+    ///
+    /// ```wasm
+    /// (i32.added
+    ///   (call $f)
+    ///   (block
+    ///     (set_local $temp (call $f))
+    ///     (drop (call $f))
+    ///     (get_local $temp)
+    ///   end))
+    /// ```
+    ///
+    /// But using `WithoutSideEffects` we can represent this like so:
+    ///
+    /// ```wasm
+    /// (i32.add
+    ///   (with_side_effects
+    ///     ;; value
+    ///     (call $f)
+    ///     ;; side_effects
+    ///     (drop (call $f)))
+    ///   (call $f))
+    /// ```
+    WithSideEffects {
+        /// The value.
+        value: ExprId,
+        /// The stack-neutral, side-effecting operations.
+        side_effects: Vec<ExprId>,
+    },
 }
 
 /// Constant values that can show up in WebAssembly
@@ -860,6 +906,7 @@ impl Expr {
             | Expr::Cmpxchg(..)
             | Expr::AtomicNotify(..)
             | Expr::AtomicWait(..)
+            | Expr::WithSideEffects(..)
             | Expr::Drop(..) => false,
         }
     }

@@ -10,8 +10,8 @@ walkdir = "2.2.5"
 [dev-dependencies]
 failure = "0.1.2"
 parity-wasm = "0.35.7"
-walrus = { path = ".." }
-walrus-tests-utils = { path = "../walrus-tests-utils" }
+walrus = { path = "../.." }
+walrus-tests-utils = { path = "../tests-utils" }
 tempfile = "3"
 serde_json = { version = "1", features = ['preserve_order'] }
 serde = { version = "1", features = ['derive'] }

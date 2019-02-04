@@ -19,7 +19,7 @@ use crate::ty::ValType;
 use id_arena::Id;
 use std::fmt;
 use std::mem;
-use walrus_derive::walrus_expr;
+use walrus_macro::walrus_expr;
 
 /// The id of a local.
 pub type LocalId = Id<Local>;

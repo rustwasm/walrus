@@ -1,7 +1,7 @@
 //! Context needed when validating instructions and constructing our `Expr` IR.
 
 use crate::error::{ErrorKind, Result};
-use crate::ir::{Block, BlockId, BlockKind, ExprId, Drop};
+use crate::ir::{Block, BlockId, BlockKind, Drop, Expr, ExprId, WithSideEffects};
 use crate::module::functions::{FunctionId, LocalFunction};
 use crate::module::Module;
 use crate::parse::IndicesToIds;
@@ -201,7 +201,36 @@ impl<'a> FunctionContext<'a> {
     where
         E: Into<ExprId>,
     {
-        self.add_to_frame_block(0, expr);
+        let control_height = self.controls.last().unwrap().height;
+        match self.operands.len() {
+            height if height == control_height => {
+                self.add_to_frame_block(0, expr);
+            }
+            height if height > control_height => {
+                let (ty, value) = self.operands.pop().unwrap();
+                let id = self.add_side_effect(value, expr.into());
+                self.operands.push((ty, id));
+            }
+            _ => panic!("operand stack should never be below control frame's height"),
+        }
+    }
+
+    pub fn add_side_effect(&mut self, value: ExprId, side_effect: ExprId) -> ExprId {
+        // If we can add it to an existing `WithSideEffects` expr for this value, then do that.
+        if let Some(Expr::WithSideEffects(WithSideEffects { side_effects, .. })) =
+            self.func.exprs.get_mut(value)
+        {
+            side_effects.push(side_effect);
+            return value;
+        }
+
+        // Otherwise, allocate a new `WithSideEffects`.
+        self.func
+            .alloc(WithSideEffects {
+                value,
+                side_effects: vec![side_effect],
+            })
+            .into()
     }
 }
 

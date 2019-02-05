@@ -1,5 +1,6 @@
 //! A high-level API for manipulating wasm modules.
 
+mod config;
 pub mod data;
 pub mod elements;
 pub mod exports;
@@ -11,7 +12,6 @@ pub mod memories;
 pub mod producers;
 pub mod tables;
 pub mod types;
-mod config;
 
 use crate::emit::{Emit, EmitContext, IdsToIndices, Section};
 use crate::encode::Encoder;
@@ -295,7 +295,7 @@ impl Module {
                             // just ignore empty names which would in theory
                             // make debugging a bit harder.
                             if self.config.generate_names && naming.name.is_empty() {
-                                continue
+                                continue;
                             }
                             let id = indices.get_local(func_id, naming.index)?;
                             self.locals.get_mut(id).name = Some(naming.name.to_string());

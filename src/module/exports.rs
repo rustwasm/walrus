@@ -68,12 +68,10 @@ impl ModuleExports {
 
     /// Add a new export to this module
     pub fn add(&mut self, name: &str, item: impl Into<ExportItem>) -> ExportId {
-        self.arena.alloc_with_id(|id| {
-            Export {
-                id,
-                name: name.to_string(),
-                item: item.into(),
-            }
+        self.arena.alloc_with_id(|id| Export {
+            id,
+            name: name.to_string(),
+            item: item.into(),
         })
     }
 }

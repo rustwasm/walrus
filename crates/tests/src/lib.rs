@@ -62,8 +62,8 @@
 //! Note that this is somewhat experimental, so it's recommended to make liberal
 //! use of git to prevent destructive edits.
 
-use std::fs;
 use std::env;
+use std::fs;
 use std::path::{Path, PathBuf};
 
 pub enum FileCheck {
@@ -85,14 +85,14 @@ impl FileCheck {
                 let mut pattern = Vec::new();
                 while let Some(line) = iter.next() {
                     if line == ";)" {
-                        break
+                        break;
                     }
                     pattern.push(line.to_string());
                 }
                 if iter.next().is_some() {
                     panic!("CHECK-ALL must be at the end of the file");
                 }
-                return FileCheck::Exhaustive(pattern, path.to_path_buf())
+                return FileCheck::Exhaustive(pattern, path.to_path_buf());
             }
 
             if line.starts_with(";; CHECK:") {
@@ -131,7 +131,9 @@ impl FileCheck {
                         if output_lines[pos..].len() + 1 < pattern.len() {
                             break;
                         }
-                        for (out_line, pat_line) in output_lines[pos + 1..].iter().zip(&pattern[1..]) {
+                        for (out_line, pat_line) in
+                            output_lines[pos + 1..].iter().zip(&pattern[1..])
+                        {
                             if !matches(out_line, pat_line) {
                                 continue 'inner;
                             }
@@ -206,10 +208,14 @@ fn update_output(path: &Path, output: &str) {
     for line in output.lines() {
         if !line.is_empty() {
             new_output.push_str("  ");
-            new_output.push_str(line.trim_right());
+            new_output.push_str(line.trim_end());
         }
         new_output.push_str("\n");
     }
-    let new = format!("{}\n\n(; CHECK-ALL:\n{}\n;)\n", contents[..start].trim(), new_output.trim_right());
+    let new = format!(
+        "{}\n\n(; CHECK-ALL:\n{}\n;)\n",
+        contents[..start].trim(),
+        new_output.trim_end()
+    );
     fs::write(path, new).unwrap();
 }

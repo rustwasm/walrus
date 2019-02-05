@@ -44,4 +44,5 @@ matrix:
 
 
 script:
+  - cargo build --all
   - cargo test --all

@@ -74,6 +74,13 @@ impl Emit<'_, '_> {
                 self.encoder.byte(0x0f); // return
             }
 
+            WithSideEffects(e) => {
+                self.visit(e.value);
+                for x in e.side_effects.iter() {
+                    self.visit(*x);
+                }
+            }
+
             MemorySize(e) => {
                 let idx = self.indices.get_memory_index(e.memory);
                 self.encoder.byte(0x3f); // memory.size

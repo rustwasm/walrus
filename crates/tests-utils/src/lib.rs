@@ -81,6 +81,41 @@ pub fn wasm2wat(path: &Path) -> String {
     String::from_utf8_lossy(&output.stdout).into_owned()
 }
 
+fn require_wasm_interp() {
+    let status = Command::new("wasm-interp")
+        .arg("--help")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .expect(
+            "Could not spawn wasm-interp; do you have https://github.com/WebAssembly/wabt installed?",
+        );
+    assert!(
+        status.success(),
+        "wasm-interp did not run OK; do you have https://github.com/WebAssembly/wabt installed?"
+    )
+}
+
+/// Run the wasm-interp on the given wat file.
+pub fn wasm_interp(path: &Path) -> String {
+    static CHECK: Once = ONCE_INIT;
+    CHECK.call_once(require_wasm_interp);
+
+    let mut cmd = Command::new("wasm-interp");
+    cmd.arg(path);
+    cmd.arg("--run-all-exports");
+    cmd.arg("--host-print");
+    cmd.args(FEATURES);
+    println!("running: {:?}", cmd);
+    let output = cmd.output().expect("should spawn wasm-interp OK");
+    if !output.status.success() {
+        println!("status: {}", output.status);
+        println!("stderr: {}", String::from_utf8_lossy(&output.stderr));
+        panic!("expected ok");
+    }
+    String::from_utf8_lossy(&output.stdout).into_owned()
+}
+
 pub fn handle<T: TestResult>(result: T) {
     result.handle();
 }

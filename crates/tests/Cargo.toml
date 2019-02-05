@@ -9,7 +9,6 @@ walkdir = "2.2.5"
 
 [dev-dependencies]
 failure = "0.1.2"
-parity-wasm = "0.35.7"
 walrus = { path = "../.." }
 walrus-tests-utils = { path = "../tests-utils" }
 tempfile = "3"

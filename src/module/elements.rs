@@ -1,14 +1,9 @@
 //! Table elements within a wasm module.
 
-use crate::const_value::Const;
 use crate::emit::{Emit, EmitContext, Section};
-use crate::error::Result;
 use crate::ir::Value;
-use crate::module::functions::FunctionId;
-use crate::module::tables::TableKind;
-use crate::module::Module;
 use crate::parse::IndicesToIds;
-use crate::ty::ValType;
+use crate::{FunctionId, InitExpr, Module, Result, TableKind, ValType};
 use failure::{bail, ResultExt};
 use id_arena::{Arena, Id};
 
@@ -70,7 +65,7 @@ impl Module {
                         TableKind::Function(t) => t,
                     };
 
-                    let offset = Const::eval(&init_expr, ids)
+                    let offset = InitExpr::eval(&init_expr, ids)
                         .with_context(|_e| format!("in segment {}", i))?;
                     let functions = segment.items.get_items_reader()?.into_iter().map(|func| {
                         let func = func?;
@@ -78,7 +73,7 @@ impl Module {
                     });
 
                     match offset {
-                        Const::Value(Value::I32(n)) => {
+                        InitExpr::Value(Value::I32(n)) => {
                             let offset = n as usize;
                             for (i, id) in functions.enumerate() {
                                 while i + offset + 1 > table.elements.len() {
@@ -87,7 +82,7 @@ impl Module {
                                 table.elements[i + offset] = Some(id?);
                             }
                         }
-                        Const::Global(global) if self.globals.get(global).ty == ValType::I32 => {
+                        InitExpr::Global(global) if self.globals.get(global).ty == ValType::I32 => {
                             let list = functions.collect::<Result<_>>()?;
                             table.relative_elements.push((global, list));
                         }
@@ -177,7 +172,7 @@ impl Emit for ModuleElements {
         for (&id, table, offset, len) in chunks {
             let table_index = cx.indices.get_table_index(id);
             active_table_header(&mut cx, table_index);
-            Const::Value(Value::I32(offset as i32)).emit(&mut cx);
+            InitExpr::Value(Value::I32(offset as i32)).emit(&mut cx);
             cx.encoder.usize(len);
             for item in table.elements[offset..][..len].iter() {
                 let index = cx.indices.get_func_index(item.unwrap());
@@ -191,7 +186,7 @@ impl Emit for ModuleElements {
             let table_index = cx.indices.get_table_index(*id);
             for (global, list) in table.relative_elements.iter() {
                 active_table_header(&mut cx, table_index);
-                Const::Global(*global).emit(&mut cx);
+                InitExpr::Global(*global).emit(&mut cx);
                 cx.encoder.usize(list.len());
                 for func in list {
                     let index = cx.indices.get_func_index(*func);

@@ -5,12 +5,12 @@ use walrus::dot::Dot;
 
 fn run(wat_path: &Path) -> Result<(), failure::Error> {
     let wasm = walrus_tests_utils::wat2wasm(wat_path);
-    let module = walrus::module::Module::from_buffer(&wasm)?;
+    let module = walrus::Module::from_buffer(&wasm)?;
 
     let local_funcs: Vec<_> = module
         .functions()
         .filter(|f| match f.kind {
-            walrus::module::functions::FunctionKind::Local(_) => true,
+            walrus::FunctionKind::Local(_) => true,
             _ => false,
         })
         .collect();

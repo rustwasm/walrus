@@ -8,14 +8,8 @@ pub mod matcher;
 
 use crate::dot::Dot;
 use crate::encode::Encoder;
-use crate::module::data::DataId;
-use crate::module::functions::FunctionId;
-use crate::module::functions::{DisplayExpr, DotExpr};
-use crate::module::globals::GlobalId;
-use crate::module::memories::MemoryId;
-use crate::module::tables::TableId;
-use crate::ty::TypeId;
-use crate::ty::ValType;
+use crate::module::{DisplayExpr, DotExpr};
+use crate::{DataId, FunctionId, GlobalId, MemoryId, TableId, TypeId, ValType};
 use id_arena::Id;
 use std::fmt;
 use std::mem;

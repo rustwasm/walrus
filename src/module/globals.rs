@@ -1,12 +1,8 @@
 //! Globals within a wasm module.
 
-use crate::const_value::Const;
 use crate::emit::{Emit, EmitContext, Section};
-use crate::error::Result;
-use crate::module::imports::ImportId;
-use crate::module::Module;
 use crate::parse::IndicesToIds;
-use crate::ty::ValType;
+use crate::{ImportId, InitExpr, Module, Result, ValType};
 use id_arena::{Arena, Id};
 
 /// The id of a global.
@@ -35,7 +31,7 @@ pub enum GlobalKind {
     /// An imported global without a known initializer
     Import(ImportId),
     /// A locally declare global with the specified identifier
-    Local(Const),
+    Local(InitExpr),
 }
 
 impl Global {
@@ -73,7 +69,7 @@ impl ModuleGlobals {
 
     /// Construct a new global, that does not originate from any of the input
     /// wasm globals.
-    pub fn add_local(&mut self, ty: ValType, mutable: bool, init: Const) -> GlobalId {
+    pub fn add_local(&mut self, ty: ValType, mutable: bool, init: InitExpr) -> GlobalId {
         let id = self.arena.next_id();
         self.arena.alloc(Global {
             id,
@@ -112,7 +108,7 @@ impl Module {
             let id = self.globals.add_local(
                 ValType::parse(&g.ty.content_type)?,
                 g.ty.mutable,
-                Const::eval(&g.init_expr, ids)?,
+                InitExpr::eval(&g.init_expr, ids)?,
             );
             ids.push_global(id);
         }
@@ -123,7 +119,7 @@ impl Module {
 impl Emit for ModuleGlobals {
     fn emit(&self, cx: &mut EmitContext) {
         log::debug!("emit global section");
-        fn get_local<'a>(cx: &EmitContext, global: &'a Global) -> Option<&'a Const> {
+        fn get_local<'a>(cx: &EmitContext, global: &'a Global) -> Option<&'a InitExpr> {
             // If it's imported we already emitted this in the import section
             if !cx.used.globals.contains(&global.id) {
                 return None;

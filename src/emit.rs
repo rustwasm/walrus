@@ -5,15 +5,10 @@
 use crate::encode::{Encoder, MAX_U32_LENGTH};
 use crate::ir::Local;
 use crate::map::IdHashMap;
-use crate::module::data::{Data, DataId};
-use crate::module::elements::{Element, ElementId};
-use crate::module::functions::{Function, FunctionId};
-use crate::module::globals::{Global, GlobalId};
-use crate::module::memories::{Memory, MemoryId};
-use crate::module::tables::{Table, TableId};
-use crate::module::Module;
 use crate::passes::Used;
-use crate::ty::{Type, TypeId};
+use crate::{Data, DataId, Element, ElementId, Function, FunctionId};
+use crate::{Global, GlobalId, Memory, MemoryId, Module, Table, TableId};
+use crate::{Type, TypeId};
 use std::ops::{Deref, DerefMut};
 
 pub struct EmitContext<'a> {

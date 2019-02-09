@@ -33,7 +33,8 @@ pub struct LocalFunction {
     /// The arena that contains this function's expressions.
     pub(crate) exprs: Arena<Expr>,
 
-    args: Vec<LocalId>,
+    /// Arguments to this function, and the locals that they're assigned to
+    pub args: Vec<LocalId>,
 
     /// The entry block for this function. Always `Some` after the constructor
     /// returns.
@@ -118,6 +119,16 @@ impl LocalFunction {
     /// Get the block associated with the given id.
     pub fn block_mut(&mut self, block: BlockId) -> &mut Block {
         self.exprs[block.into()].unwrap_block_mut()
+    }
+
+    /// Get the expression associated with the given id
+    pub fn get(&self, id: ExprId) -> &Expr {
+        &self.exprs[id]
+    }
+
+    /// Get the expression associated with the given id
+    pub fn get_mut(&mut self, id: ExprId) -> &mut Expr {
+        &mut self.exprs[id]
     }
 
     /// Get the size of this function, in number of expressions.

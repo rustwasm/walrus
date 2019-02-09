@@ -1,32 +1,34 @@
 //! A high-level API for manipulating wasm modules.
 
 mod config;
-pub mod data;
-pub mod elements;
-pub mod exports;
-pub mod functions;
-pub mod globals;
-pub mod imports;
-pub mod locals;
-pub mod memories;
-pub mod producers;
-pub mod tables;
-pub mod types;
+mod data;
+mod elements;
+mod exports;
+mod functions;
+mod globals;
+mod imports;
+mod locals;
+mod memories;
+mod producers;
+mod tables;
+mod types;
 
 use crate::emit::{Emit, EmitContext, IdsToIndices, Section};
 use crate::encode::Encoder;
 use crate::error::Result;
-use crate::module::data::ModuleData;
-use crate::module::elements::ModuleElements;
-use crate::module::exports::ModuleExports;
-use crate::module::functions::{Function, FunctionId, ModuleFunctions};
-use crate::module::globals::ModuleGlobals;
-use crate::module::imports::ModuleImports;
-use crate::module::locals::ModuleLocals;
-use crate::module::memories::ModuleMemories;
-use crate::module::producers::ModuleProducers;
-use crate::module::tables::ModuleTables;
-use crate::module::types::ModuleTypes;
+pub use crate::module::data::{Data, DataId, ModuleData};
+pub use crate::module::elements::{Element, ElementId, ModuleElements};
+pub use crate::module::exports::{Export, ExportId, ExportItem, ModuleExports};
+pub use crate::module::functions::{Function, FunctionId, ModuleFunctions};
+pub use crate::module::functions::{FunctionKind, LocalFunction};
+pub use crate::module::globals::{Global, GlobalId, GlobalKind, ModuleGlobals};
+pub use crate::module::imports::{Import, ImportId, ImportKind, ModuleImports};
+pub use crate::module::locals::ModuleLocals;
+pub use crate::module::memories::{Memory, MemoryData, MemoryId, ModuleMemories};
+pub use crate::module::producers::ModuleProducers;
+pub use crate::module::tables::FunctionTable;
+pub use crate::module::tables::{ModuleTables, Table, TableId, TableKind};
+pub use crate::module::types::ModuleTypes;
 use crate::parse::IndicesToIds;
 use crate::passes;
 use failure::{bail, ResultExt};
@@ -34,6 +36,7 @@ use std::fs;
 use std::path::Path;
 
 pub use self::config::ModuleConfig;
+pub(crate) use self::functions::{DisplayExpr, DotExpr};
 
 /// A wasm module.
 #[derive(Debug, Default)]
@@ -55,17 +58,21 @@ pub struct Module {
     pub start: Option<FunctionId>,
     /// Representation of the eventual custom section, `producers`
     pub producers: ModuleProducers,
-    custom: Vec<CustomSection>,
+    /// Custom sections found in this module.
+    pub custom: Vec<CustomSection>,
     /// The name of this module, used for debugging purposes in the `name`
     /// custom section.
     pub name: Option<String>,
     config: ModuleConfig,
 }
 
+/// A representation of a custom section in a module
 #[derive(Debug)]
-struct CustomSection {
-    name: String,
-    value: Vec<u8>,
+pub struct CustomSection {
+    /// The name of this custom section
+    pub name: String,
+    /// The contents of the custom section
+    pub value: Vec<u8>,
 }
 
 impl Module {
@@ -217,7 +224,7 @@ impl Module {
     /// Emit this module into an in-memory wasm buffer.
     pub fn emit_wasm(&self) -> Result<Vec<u8>> {
         log::debug!("start emit");
-        let roots = self.exports.iter();
+        let roots = self.exports.iter_roots();
         let used = passes::Used::new(self, roots.map(|e| e.id()));
 
         let indices = &mut IdsToIndices::default();

@@ -3,16 +3,10 @@
 //! Currently only does some basic sanity checks, but it's intended that
 //! eventually this is a full typechecking pass!
 
-use crate::const_value::Const;
-use crate::error::Result;
 use crate::ir::*;
-use crate::module::data::DataId;
-use crate::module::functions::{Function, FunctionKind, LocalFunction};
-use crate::module::globals::{Global, GlobalKind};
-use crate::module::memories::{Memory, MemoryId};
-use crate::module::tables::{Table, TableKind};
-use crate::module::Module;
-use crate::ty::ValType;
+use crate::ValType;
+use crate::{DataId, Function, FunctionKind, InitExpr, LocalFunction, Result};
+use crate::{Global, GlobalKind, Memory, MemoryId, Module, Table, TableKind};
 use failure::{bail, ResultExt};
 use rayon::prelude::*;
 use std::collections::HashSet;
@@ -139,10 +133,10 @@ fn validate_exports(module: &Module) -> Result<()> {
 fn validate_global(module: &Module, global: &Global) -> Result<()> {
     match global.kind {
         GlobalKind::Import(_) => return Ok(()),
-        GlobalKind::Local(Const::Value(value)) => {
+        GlobalKind::Local(InitExpr::Value(value)) => {
             validate_value(value, global.ty).context("invalid type on global")?;
         }
-        GlobalKind::Local(Const::Global(other)) => {
+        GlobalKind::Local(InitExpr::Global(other)) => {
             let other = module.globals.get(other);
             match other.kind {
                 GlobalKind::Import(_) => {}

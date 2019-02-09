@@ -1,12 +1,8 @@
 //! Tables within a wasm module.
 
 use crate::emit::{Emit, EmitContext, Section};
-use crate::error::Result;
-use crate::module::functions::FunctionId;
-use crate::module::globals::GlobalId;
-use crate::module::imports::ImportId;
-use crate::module::Module;
 use crate::parse::IndicesToIds;
+use crate::{FunctionId, GlobalId, ImportId, Module, Result};
 use id_arena::{Arena, Id};
 
 /// The id of a table.

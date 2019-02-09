@@ -1,7 +1,5 @@
 use crate::ir::*;
-use crate::module::functions::{FunctionId, LocalFunction};
-use crate::module::Module;
-use crate::ty::{TypeId, ValType};
+use crate::{FunctionId, LocalFunction, Module, TypeId, ValType};
 use id_arena::Arena;
 use std::mem;
 use std::ops::{Deref, DerefMut, Drop};

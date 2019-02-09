@@ -4,5 +4,5 @@
 fn main() {
     env_logger::init();
     let a = std::env::args().nth(1).unwrap();
-    walrus::module::Module::from_file(a).unwrap();
+    walrus::Module::from_file(a).unwrap();
 }

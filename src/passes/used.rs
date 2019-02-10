@@ -1,16 +1,9 @@
-use crate::const_value::Const;
 use crate::ir::*;
 use crate::map::{IdHashMap, IdHashSet};
-use crate::module::data::{Data, DataId};
-use crate::module::elements::Element;
-use crate::module::exports::{ExportId, ExportItem};
-use crate::module::functions::{Function, FunctionId, FunctionKind, LocalFunction};
-use crate::module::globals::{Global, GlobalId, GlobalKind};
-use crate::module::imports::ImportKind;
-use crate::module::memories::{Memory, MemoryId};
-use crate::module::tables::{Table, TableId, TableKind};
-use crate::module::Module;
-use crate::ty::{Type, TypeId};
+use crate::{Data, DataId, Element, ExportId, ExportItem, Function, InitExpr};
+use crate::{FunctionId, FunctionKind, Global, GlobalId, LocalFunction};
+use crate::{GlobalKind, ImportKind, Memory, MemoryId, Table, TableId};
+use crate::{Module, TableKind, Type, TypeId};
 
 /// Finds the things within a module that are used.
 ///
@@ -134,10 +127,10 @@ impl Used {
             while let Some(t) = stack.globals.pop() {
                 match &module.globals.get(t).kind {
                     GlobalKind::Import(_) => {}
-                    GlobalKind::Local(Const::Global(global)) => {
+                    GlobalKind::Local(InitExpr::Global(global)) => {
                         stack.push_global(*global);
                     }
-                    GlobalKind::Local(Const::Value(_)) => {}
+                    GlobalKind::Local(InitExpr::Value(_)) => {}
                 }
             }
 

@@ -1,7 +1,7 @@
 //! Matching expressions.
 
 use super::Expr;
-use crate::module::functions::LocalFunction;
+use crate::LocalFunction;
 
 // Re-export the custom derive-generated impls here, where it makes more sense
 // to expose them.

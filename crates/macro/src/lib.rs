@@ -506,7 +506,7 @@ fn create_visit(variants: &[WalrusVariant]) -> impl quote::ToTokens {
         /// A visitor walks over an IR expression tree.
         pub trait Visitor<'expr>: Sized {
             /// Return the local function we're visiting
-            fn local_function(&self) -> &'expr crate::module::functions::LocalFunction;
+            fn local_function(&self) -> &'expr crate::LocalFunction;
 
             /// Visit `Expr`.
             fn visit_expr(&mut self, expr: &'expr Expr) {
@@ -519,37 +519,37 @@ fn create_visit(variants: &[WalrusVariant]) -> impl quote::ToTokens {
             }
 
             /// Visit `Local`.
-            fn visit_local_id(&mut self, local: &crate::ir::LocalId) {
+            fn visit_local_id(&mut self, local: &crate::LocalId) {
                 // ...
             }
 
             /// Visit `Memory`.
-            fn visit_memory_id(&mut self, memory: &crate::module::memories::MemoryId) {
+            fn visit_memory_id(&mut self, memory: &crate::MemoryId) {
                 // ...
             }
 
             /// Visit `Table`.
-            fn visit_table_id(&mut self, table: &crate::module::tables::TableId) {
+            fn visit_table_id(&mut self, table: &crate::TableId) {
                 // ...
             }
 
             /// Visit `GlobalId`.
-            fn visit_global_id(&mut self, global: &crate::module::globals::GlobalId) {
+            fn visit_global_id(&mut self, global: &crate::GlobalId) {
                 // ...
             }
 
             /// Visit `FunctionId`.
-            fn visit_function_id(&mut self, function: &crate::module::functions::FunctionId) {
+            fn visit_function_id(&mut self, function: &crate::FunctionId) {
                 // ...
             }
 
             /// Visit `DataId`.
-            fn visit_data_id(&mut self, function: &crate::module::data::DataId) {
+            fn visit_data_id(&mut self, function: &crate::DataId) {
                 // ...
             }
 
             /// Visit `TypeId`
-            fn visit_type_id(&mut self, ty: &crate::ty::TypeId) {
+            fn visit_type_id(&mut self, ty: &crate::TypeId) {
                 // ...
             }
 
@@ -564,7 +564,7 @@ fn create_visit(variants: &[WalrusVariant]) -> impl quote::ToTokens {
         /// A visitor walks over a mutable IR expression tree.
         pub trait VisitorMut: Sized {
             /// Return the local function we're visiting
-            fn local_function_mut(&mut self) -> &mut crate::module::functions::LocalFunction;
+            fn local_function_mut(&mut self) -> &mut crate::LocalFunction;
 
             /// Visit `Expr`.
             fn visit_expr_mut(&mut self, expr: &mut Expr) {
@@ -577,37 +577,37 @@ fn create_visit(variants: &[WalrusVariant]) -> impl quote::ToTokens {
             }
 
             /// Visit `Local`.
-            fn visit_local_id_mut(&mut self, local: &mut crate::ir::LocalId) {
+            fn visit_local_id_mut(&mut self, local: &mut crate::LocalId) {
                 // ...
             }
 
             /// Visit `Memory`.
-            fn visit_memory_id_mut(&mut self, memory: &mut crate::module::memories::MemoryId) {
+            fn visit_memory_id_mut(&mut self, memory: &mut crate::MemoryId) {
                 // ...
             }
 
             /// Visit `Table`.
-            fn visit_table_id_mut(&mut self, table: &mut crate::module::tables::TableId) {
+            fn visit_table_id_mut(&mut self, table: &mut crate::TableId) {
                 // ...
             }
 
             /// Visit `GlobalId`.
-            fn visit_global_id_mut(&mut self, global: &mut crate::module::globals::GlobalId) {
+            fn visit_global_id_mut(&mut self, global: &mut crate::GlobalId) {
                 // ...
             }
 
             /// Visit `FunctionId`.
-            fn visit_function_id_mut(&mut self, function: &mut crate::module::functions::FunctionId) {
+            fn visit_function_id_mut(&mut self, function: &mut crate::FunctionId) {
                 // ...
             }
 
             /// Visit `DataId`.
-            fn visit_data_id_mut(&mut self, function: &mut crate::module::data::DataId) {
+            fn visit_data_id_mut(&mut self, function: &mut crate::DataId) {
                 // ...
             }
 
             /// Visit `TypeId`
-            fn visit_type_id_mut(&mut self, ty: &mut crate::ty::TypeId) {
+            fn visit_type_id_mut(&mut self, ty: &mut crate::TypeId) {
                 // ...
             }
 
@@ -767,7 +767,7 @@ fn create_matchers(variants: &[WalrusVariant]) -> impl quote::ToTokens {
     quote! {
         pub(crate) mod generated_matchers {
             use crate::ir::*;
-            use crate::module::functions::LocalFunction;
+            use crate::LocalFunction;
             use super::matcher::Matcher;
 
             #( #matchers )*
@@ -804,8 +804,8 @@ fn create_display(variants: &[WalrusVariant]) -> impl quote::ToTokens {
         });
     }
     quote! {
-        impl<'expr> Visitor<'expr> for crate::module::functions::DisplayExpr<'expr, '_> {
-            fn local_function(&self) -> &'expr crate::module::functions::LocalFunction {
+        impl<'expr> Visitor<'expr> for crate::module::DisplayExpr<'expr, '_> {
+            fn local_function(&self) -> &'expr crate::LocalFunction {
                 self.func
             }
 
@@ -813,31 +813,31 @@ fn create_display(variants: &[WalrusVariant]) -> impl quote::ToTokens {
                 self.expr_id(*expr)
             }
 
-            fn visit_local_id(&mut self, local: &crate::ir::LocalId) {
+            fn visit_local_id(&mut self, local: &crate::LocalId) {
                 self.id(*local);
             }
 
-            fn visit_memory_id(&mut self, memory: &crate::module::memories::MemoryId) {
+            fn visit_memory_id(&mut self, memory: &crate::MemoryId) {
                 self.id(*memory);
             }
 
-            fn visit_table_id(&mut self, table: &crate::module::tables::TableId) {
+            fn visit_table_id(&mut self, table: &crate::TableId) {
                 self.id(*table);
             }
 
-            fn visit_global_id(&mut self, global: &crate::module::globals::GlobalId) {
+            fn visit_global_id(&mut self, global: &crate::GlobalId) {
                 self.id(*global);
             }
 
-            fn visit_function_id(&mut self, function: &crate::module::functions::FunctionId) {
+            fn visit_function_id(&mut self, function: &crate::FunctionId) {
                 self.id(*function);
             }
 
-            fn visit_type_id(&mut self, ty: &crate::ty::TypeId) {
+            fn visit_type_id(&mut self, ty: &crate::TypeId) {
                 self.id(*ty);
             }
 
-            fn visit_data_id(&mut self, data: &crate::module::data::DataId) {
+            fn visit_data_id(&mut self, data: &crate::DataId) {
                 self.id(*data);
             }
 
@@ -892,8 +892,8 @@ fn create_dot(variants: &[WalrusVariant]) -> impl quote::ToTokens {
         });
     }
     quote! {
-        impl<'expr> Visitor<'expr> for crate::module::functions::DotExpr<'_, 'expr> {
-            fn local_function(&self) -> &'expr crate::module::functions::LocalFunction {
+        impl<'expr> Visitor<'expr> for crate::module::DotExpr<'_, 'expr> {
+            fn local_function(&self) -> &'expr crate::LocalFunction {
                 self.func
             }
 
@@ -901,31 +901,31 @@ fn create_dot(variants: &[WalrusVariant]) -> impl quote::ToTokens {
                 self.expr_id(*expr);
             }
 
-            fn visit_local_id(&mut self, local: &crate::ir::LocalId) {
+            fn visit_local_id(&mut self, local: &crate::LocalId) {
                 self.id(*local);
             }
 
-            fn visit_memory_id(&mut self, memory: &crate::module::memories::MemoryId) {
+            fn visit_memory_id(&mut self, memory: &crate::MemoryId) {
                 self.id(*memory);
             }
 
-            fn visit_table_id(&mut self, table: &crate::module::tables::TableId) {
+            fn visit_table_id(&mut self, table: &crate::TableId) {
                 self.id(*table);
             }
 
-            fn visit_global_id(&mut self, global: &crate::module::globals::GlobalId) {
+            fn visit_global_id(&mut self, global: &crate::GlobalId) {
                 self.id(*global);
             }
 
-            fn visit_function_id(&mut self, function: &crate::module::functions::FunctionId) {
+            fn visit_function_id(&mut self, function: &crate::FunctionId) {
                 self.id(*function);
             }
 
-            fn visit_type_id(&mut self, ty: &crate::ty::TypeId) {
+            fn visit_type_id(&mut self, ty: &crate::TypeId) {
                 self.id(*ty);
             }
 
-            fn visit_data_id(&mut self, data: &crate::module::data::DataId) {
+            fn visit_data_id(&mut self, data: &crate::DataId) {
                 self.id(*data);
             }
 

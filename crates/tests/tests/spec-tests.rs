@@ -64,7 +64,7 @@ fn run(wast: &Path) -> Result<(), failure::Error> {
         let path = tempdir.path().join(filename);
         match command["type"].as_str().unwrap() {
             "assert_invalid" | "assert_malformed" => {
-                if walrus::module::Module::from_file(&path).is_ok() {
+                if walrus::Module::from_file(&path).is_ok() {
                     panic!("wasm parsed when it shouldn't (line {})", line);
                 }
             }
@@ -78,7 +78,7 @@ fn run(wast: &Path) -> Result<(), failure::Error> {
                 // much, but that's another bug for another day.
             }
             cmd => {
-                let mut wasm = walrus::module::Module::from_file(&path)
+                let mut wasm = walrus::Module::from_file(&path)
                     .context(format!("error parsing wasm (line {})", line))?;
 
                 // If a module is supposed to be unlinkable we'll often gc out
@@ -107,7 +107,7 @@ fn run(wast: &Path) -> Result<(), failure::Error> {
                     .emit_wasm()
                     .context(format!("error emitting wasm (line {})", line))?;
                 fs::write(&path, &wasm1)?;
-                let wasm2 = walrus::module::Module::from_buffer(&wasm1)
+                let wasm2 = walrus::Module::from_buffer(&wasm1)
                     .and_then(|m| m.emit_wasm())
                     .context(format!("error re-parsing wasm (line {})", line))?;
                 if wasm1 != wasm2 {

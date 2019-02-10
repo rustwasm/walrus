@@ -1,14 +1,10 @@
 //! Memories used in a wasm module.
 
-use crate::const_value::Const;
 use crate::emit::{Emit, EmitContext, Section};
-use crate::error::Result;
 use crate::ir::Value;
-use crate::module::globals::GlobalId;
-use crate::module::imports::ImportId;
-use crate::module::Module;
 use crate::parse::IndicesToIds;
 use crate::passes::Used;
+use crate::{GlobalId, ImportId, InitExpr, Module, Result};
 use id_arena::{Arena, Id};
 
 /// The id of a memory.
@@ -47,17 +43,17 @@ impl Memory {
         self.id
     }
 
-    pub(crate) fn emit_data(&self) -> impl Iterator<Item = (Const, &[u8])> {
+    pub(crate) fn emit_data(&self) -> impl Iterator<Item = (InitExpr, &[u8])> {
         let absolute = self
             .data
             .absolute
             .iter()
-            .map(move |(pos, data)| (Const::Value(Value::I32(*pos as i32)), &data[..]));
+            .map(move |(pos, data)| (InitExpr::Value(Value::I32(*pos as i32)), &data[..]));
         let relative = self
             .data
             .relative
             .iter()
-            .map(move |(id, data)| (Const::Global(*id), &data[..]));
+            .map(move |(id, data)| (InitExpr::Global(*id), &data[..]));
         absolute.chain(relative)
     }
 }
@@ -214,15 +210,15 @@ impl MemoryData {
     }
 
     /// Consumes this data and returns a by-value iterator of each segment
-    pub fn into_iter(self) -> impl Iterator<Item = (Const, Vec<u8>)> {
+    pub fn into_iter(self) -> impl Iterator<Item = (InitExpr, Vec<u8>)> {
         let absolute = self
             .absolute
             .into_iter()
-            .map(move |(pos, data)| (Const::Value(Value::I32(pos as i32)), data));
+            .map(move |(pos, data)| (InitExpr::Value(Value::I32(pos as i32)), data));
         let relative = self
             .relative
             .into_iter()
-            .map(move |(id, data)| (Const::Global(id), data));
+            .map(move |(id, data)| (InitExpr::Global(id), data));
         absolute.chain(relative)
     }
 }

@@ -1,13 +1,10 @@
 //! Data segments within a wasm module.
 
-use crate::const_value::Const;
 use crate::emit::{Emit, EmitContext, Section};
-use crate::error::Result;
 use crate::ir::Value;
-use crate::module::Module;
 use crate::parse::IndicesToIds;
 use crate::passes::Used;
-use crate::ty::ValType;
+use crate::{InitExpr, Module, Result, ValType};
 use failure::{bail, ResultExt};
 use id_arena::{Arena, Id};
 
@@ -154,13 +151,13 @@ impl Module {
                     let value = segment.data.to_vec();
                     let memory = self.memories.get_mut(memory);
 
-                    let offset = Const::eval(&init_expr, ids)
+                    let offset = InitExpr::eval(&init_expr, ids)
                         .with_context(|_e| format!("in segment {}", i))?;
                     match offset {
-                        Const::Value(Value::I32(n)) => {
+                        InitExpr::Value(Value::I32(n)) => {
                             memory.data.add_absolute(n as u32, value);
                         }
-                        Const::Global(global) if self.globals.get(global).ty == ValType::I32 => {
+                        InitExpr::Global(global) if self.globals.get(global).ty == ValType::I32 => {
                             memory.data.add_relative(global, value);
                         }
                         _ => bail!("non-i32 constant in segment {}", i),

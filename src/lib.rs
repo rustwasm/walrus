@@ -4,17 +4,22 @@
 #![deny(missing_docs)]
 
 mod arena_set;
-pub mod const_value;
 pub mod dot;
 mod emit;
 mod encode;
-pub mod error;
+mod error;
 mod function_builder;
+mod init_expr;
 pub mod ir;
 mod map;
-pub mod module;
+mod module;
 mod parse;
 pub mod passes;
-pub mod ty;
+mod ty;
 
+pub use crate::error::{ErrorKind, Result};
 pub use crate::function_builder::FunctionBuilder;
+pub use crate::init_expr::InitExpr;
+pub use crate::ir::{Local, LocalId};
+pub use crate::module::*;
+pub use crate::ty::{Type, TypeId, ValType};

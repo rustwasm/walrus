@@ -1,16 +1,10 @@
 //! A wasm module's imports.
 
-use crate::arena_set::ArenaSet;
 use crate::emit::{Emit, EmitContext, Section};
-use crate::error::Result;
-use crate::module::functions::FunctionId;
-use crate::module::globals::GlobalId;
-use crate::module::memories::MemoryId;
-use crate::module::tables::{FunctionTable, TableId, TableKind};
-use crate::module::Module;
 use crate::parse::IndicesToIds;
-use crate::ty::ValType;
-use id_arena::Id;
+use crate::{FunctionId, FunctionTable, GlobalId, MemoryId, Result, TableId};
+use crate::{Module, TableKind, TypeId, ValType};
+use id_arena::{Id, Arena};
 
 /// The id of an import.
 pub type ImportId = Id<Import>;
@@ -42,7 +36,7 @@ pub enum ImportKind {
 /// The set of imports in a module.
 #[derive(Debug, Default)]
 pub struct ModuleImports {
-    arena: ArenaSet<Import>,
+    arena: Arena<Import>,
 }
 
 impl ModuleImports {
@@ -61,12 +55,17 @@ impl ModuleImports {
         self.arena.iter().map(|(_, f)| f)
     }
 
+    /// Get mutable references to this module's imports.
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut Import> {
+        self.arena.iter_mut().map(|(_, f)| f)
+    }
+
     /// Adds a new import to this module
-    pub fn add(&mut self, module: &str, name: &str, kind: ImportKind) -> ImportId {
-        self.arena.insert(Import {
+    pub fn add(&mut self, module: &str, name: &str, kind: impl Into<ImportKind>) -> ImportId {
+        self.arena.alloc(Import {
             module: module.to_string(),
             name: name.to_string(),
-            kind,
+            kind: kind.into(),
         })
     }
 }
@@ -81,53 +80,101 @@ impl Module {
         log::debug!("parse import section");
         for entry in section {
             let entry = entry?;
-            let import = self.imports.arena.next_id();
-            let kind = match entry.ty {
+            match entry.ty {
                 wasmparser::ImportSectionEntryType::Function(idx) => {
                     let ty = ids.get_type(idx)?;
-                    let id = self.funcs.add_import(ty, import);
+                    let id = self.add_import_func(entry.module, entry.field, ty);
                     ids.push_func(id);
-                    ImportKind::Function(id)
                 }
                 wasmparser::ImportSectionEntryType::Table(t) => {
                     let kind = match t.element_type {
                         wasmparser::Type::AnyFunc => TableKind::Function(FunctionTable::default()),
                         _ => failure::bail!("invalid table type"),
                     };
-                    let id =
-                        self.tables
-                            .add_import(t.limits.initial, t.limits.maximum, kind, import);
+                    let id = self.add_import_table(
+                        entry.module,
+                        entry.field,
+                        t.limits.initial,
+                        t.limits.maximum,
+                        kind,
+                    );
                     ids.push_table(id);
-                    ImportKind::Table(id)
                 }
                 wasmparser::ImportSectionEntryType::Memory(m) => {
-                    let id = self.memories.add_import(
+                    let id = self.add_import_memory(
+                        entry.module,
+                        entry.field,
                         m.shared,
                         m.limits.initial,
                         m.limits.maximum,
-                        import,
                     );
                     ids.push_memory(id);
-                    ImportKind::Memory(id)
                 }
                 wasmparser::ImportSectionEntryType::Global(g) => {
-                    let id = self.globals.add_import(
+                    let id = self.add_import_global(
+                        entry.module,
+                        entry.field,
                         ValType::parse(&g.content_type)?,
                         g.mutable,
-                        import,
                     );
                     ids.push_global(id);
-                    ImportKind::Global(id)
                 }
-            };
-            self.imports.arena.insert(Import {
-                module: entry.module.to_string(),
-                name: entry.field.to_string(),
-                kind,
-            });
+            }
         }
 
         Ok(())
+    }
+
+    /// Add an imported function to this module
+    pub fn add_import_func(&mut self, module: &str, name: &str, ty: TypeId) -> FunctionId {
+        let import = self.imports.arena.next_id();
+        let func = self.funcs.add_import(ty, import);
+        self.imports.add(module, name, func);
+        func
+    }
+
+    /// Add an imported memory to this module
+    pub fn add_import_memory(
+        &mut self,
+        module: &str,
+        name: &str,
+        shared: bool,
+        initial: u32,
+        maximum: Option<u32>,
+    ) -> MemoryId {
+        let import = self.imports.arena.next_id();
+        let mem = self.memories.add_import(shared, initial, maximum, import);
+        self.imports.add(module, name, mem);
+        mem
+    }
+
+    /// Add an imported table to this module
+    pub fn add_import_table(
+        &mut self,
+        module: &str,
+        name: &str,
+        initial: u32,
+        max: Option<u32>,
+        kind: TableKind,
+    ) -> TableId {
+        let import = self.imports.arena.next_id();
+        let table = self.tables.add_import(initial, max, kind, import);
+        self.imports.add(module, name, table);
+        table
+    }
+
+    /// Add an imported global to this module
+    pub fn add_import_global(
+        &mut self,
+        module: &str,
+        name: &str,
+        ty: ValType,
+        mutable: bool,
+    ) -> GlobalId {
+        let import = self.imports.arena.next_id();
+        let global = self.globals.add_import(ty, mutable, import);
+        self.imports.add(module, name, global);
+        global
     }
 }
 
@@ -183,5 +230,29 @@ impl Emit for ModuleImports {
                 }
             }
         }
+    }
+}
+
+impl From<MemoryId> for ImportKind {
+    fn from(id: MemoryId) -> ImportKind {
+        ImportKind::Memory(id)
+    }
+}
+
+impl From<FunctionId> for ImportKind {
+    fn from(id: FunctionId) -> ImportKind {
+        ImportKind::Function(id)
+    }
+}
+
+impl From<GlobalId> for ImportKind {
+    fn from(id: GlobalId) -> ImportKind {
+        ImportKind::Global(id)
+    }
+}
+
+impl From<TableId> for ImportKind {
+    fn from(id: TableId) -> ImportKind {
+        ImportKind::Table(id)
     }
 }

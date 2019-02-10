@@ -6,7 +6,7 @@ use walrus_tests_utils::{wasm2wat, wat2wasm};
 
 fn run(wat_path: &Path) -> Result<(), failure::Error> {
     let wasm = wat2wasm(wat_path);
-    let module = walrus::module::Module::from_buffer(&wasm)?;
+    let module = walrus::Module::from_buffer(&wasm)?;
 
     if env::var("WALRUS_TESTS_DOT").is_ok() {
         for (i, func) in module.functions().enumerate() {

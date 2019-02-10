@@ -72,7 +72,7 @@ impl Config {
     }
 
     fn round_trip_through_walrus(&self, wasm: &[u8]) -> Vec<u8> {
-        walrus::module::Module::from_buffer(&wasm)
+        walrus::Module::from_buffer(&wasm)
             .unwrap()
             .emit_wasm()
             .unwrap()

@@ -1,12 +1,8 @@
 //! Exported items in a wasm module.
 
-use super::globals::GlobalId;
-use super::memories::MemoryId;
-use super::tables::TableId;
+use crate::{GlobalId, MemoryId, FunctionId, TableId, Module, Result};
+use crate::map::IdHashSet;
 use crate::emit::{Emit, EmitContext, Section};
-use crate::error::Result;
-use crate::module::functions::FunctionId;
-use crate::module::Module;
 use crate::parse::IndicesToIds;
 use id_arena::{Arena, Id};
 
@@ -48,6 +44,7 @@ pub enum ExportItem {
 pub struct ModuleExports {
     /// The arena containing this module's exports.
     arena: Arena<Export>,
+    blacklist: IdHashSet<Export>,
 }
 
 impl ModuleExports {
@@ -73,6 +70,20 @@ impl ModuleExports {
             name: name.to_string(),
             item: item.into(),
         })
+    }
+
+    /// Get a shared reference to this module's root export
+    ///
+    /// Exports are "root exports" by default, unless they're blacklisted with
+    /// the `remove_root` method.
+    pub fn iter_roots(&self) -> impl Iterator<Item = &Export> {
+        self.iter().filter(move |e| !self.blacklist.contains(&e.id))
+    }
+
+    /// Removes an `id` from the set of "root exports" returned from
+    /// `iter_roots`.
+    pub fn remove_root(&mut self, id: ExportId) {
+        self.blacklist.insert(id);
     }
 }
 
@@ -111,14 +122,15 @@ impl Emit for ModuleExports {
         // NB: exports are always considered used. They are the roots that the
         // used analysis searches out from.
 
-        if self.arena.len() == 0 {
+        let count = self.iter_roots().count();
+        if count == 0 {
             return;
         }
 
         let mut cx = cx.start_section(Section::Export);
-        cx.encoder.usize(self.arena.len());
+        cx.encoder.usize(count);
 
-        for (_id, export) in self.arena.iter() {
+        for export in self.iter_roots() {
             cx.encoder.str(&export.name);
             match export.item {
                 ExportItem::Function(id) => {

@@ -205,7 +205,9 @@ impl Module {
             .add_processed_by("walrus", env!("CARGO_PKG_VERSION"));
 
         // TODO: probably run this in a different location
-        crate::passes::validate::run(&ret)?;
+        if !ret.config.skip_strict_validate {
+            crate::passes::validate::run(&ret)?;
+        }
 
         log::debug!("parse complete");
         Ok(ret)

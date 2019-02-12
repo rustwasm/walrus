@@ -3,15 +3,20 @@ authors = ["Nick Fitzgerald <fitzgen@gmail.com>"]
 edition = "2018"
 name = "walrus-macro"
 version = "0.1.0"
+license = "MIT/Apache-2.0"
+categories = ["wasm"]
+repository = "https://github.com/rustwasm/walrus/tree/crates/macro"
+homepage = "https://github.com/rustwasm/walrus"
+documentation = "https://docs.rs/walrus-macro"
+description = """
+Internal macros used by the `walrus` crate, not for public consumption.
+"""
 
 [dependencies]
 heck = "0.3.0"
 proc-macro2 = "0.4.20"
 quote = "0.6.8"
-
-[dependencies.syn]
-features = ["extra-traits", "full"]
-version = "0.15.11"
+syn = { version = "0.15.11", features = ['extra-traits'] }
 
 [lib]
 proc_macro = true

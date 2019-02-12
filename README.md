@@ -8,7 +8,7 @@
 [![Travis CI Build Status](https://travis-ci.org/rustwasm/walrus.svg?branch=master)](https://travis-ci.org/rustwasm/walrus)
 
 The `walrus` crate is a Rust library for performing WebAssembly transformations
-in a robust an ergonomic fashion. The crate is still in its early days but is
+in a robust and ergonomic fashion. The crate is still in its early days but is
 currently used to power the [`wasm-bindgen`] CLI tool and its own internal
 transformations.
 

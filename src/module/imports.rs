@@ -4,7 +4,7 @@ use crate::emit::{Emit, EmitContext, Section};
 use crate::parse::IndicesToIds;
 use crate::{FunctionId, FunctionTable, GlobalId, MemoryId, Result, TableId};
 use crate::{Module, TableKind, TypeId, ValType};
-use id_arena::{Id, Arena};
+use id_arena::{Arena, Id};
 
 /// The id of an import.
 pub type ImportId = Id<Import>;

@@ -59,6 +59,16 @@ pub struct FunctionContext<'a> {
 
     /// The control frames stack.
     pub controls: &'a mut ControlStack,
+
+    /// If we're currently parsing an if/else expression, where we're at
+    pub if_else: Vec<IfElseState>,
+}
+
+#[derive(Debug)]
+pub struct IfElseState {
+    pub condition: ExprId,
+    pub consequent: BlockId,
+    pub alternative: Option<BlockId>,
 }
 
 impl<'a> FunctionContext<'a> {
@@ -78,6 +88,7 @@ impl<'a> FunctionContext<'a> {
             func,
             operands,
             controls,
+            if_else: Vec::new(),
         }
     }
 

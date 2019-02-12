@@ -5,24 +5,21 @@ pub mod display;
 mod emit;
 
 use self::context::FunctionContext;
-use super::FunctionId;
 use crate::dot::Dot;
 use crate::emit::IdsToIndices;
 use crate::encode::Encoder;
-use crate::error::{ErrorKind, Result};
 use crate::ir::matcher::{ConstMatcher, Matcher};
 use crate::ir::*;
 use crate::map::{IdHashMap, IdHashSet};
-use crate::module::Module;
 use crate::parse::IndicesToIds;
 use crate::passes::Used;
-use crate::ty::{TypeId, ValType};
-use failure::{bail, Fail, ResultExt};
+use crate::{FunctionId, Module, Result, TypeId, ValType};
+use failure::{bail, ResultExt};
 use id_arena::{Arena, Id};
 use std::collections::BTreeMap;
 use std::fmt;
 use std::mem;
-use wasmparser::{Operator, OperatorsReader};
+use wasmparser::Operator;
 
 /// A function defined locally within the wasm module.
 #[derive(Debug)]
@@ -90,7 +87,13 @@ impl LocalFunction {
 
         let entry = ctx.push_control(BlockKind::FunctionEntry, result.clone(), result);
         ctx.func.entry = Some(entry);
-        validate_expression(&mut ctx, body)?;
+        for inst in body {
+            let inst = inst?;
+            validate_instruction(&mut ctx, inst)?;
+        }
+        if !ctx.controls.is_empty() {
+            bail!("function failed to end with `end`");
+        }
 
         debug_assert_eq!(ctx.operands.len(), result_len);
         debug_assert!(ctx.controls.is_empty());
@@ -320,48 +323,7 @@ impl DotExpr<'_, '_> {
     }
 }
 
-fn validate_instruction_sequence_until_end(
-    ctx: &mut FunctionContext,
-    ops: &mut OperatorsReader,
-) -> Result<()> {
-    validate_instruction_sequence_until(ctx, ops, |i| match i {
-        Operator::End => true,
-        _ => false,
-    })
-}
-
-fn validate_instruction_sequence_until(
-    ctx: &mut FunctionContext,
-    ops: &mut OperatorsReader,
-    mut until: impl FnMut(&Operator) -> bool,
-) -> Result<()> {
-    loop {
-        let inst = ops.read()?;
-        if until(&inst) {
-            return Ok(());
-        }
-        validate_instruction(ctx, inst, ops)?;
-    }
-}
-
-fn validate_expression(ctx: &mut FunctionContext, mut ops: OperatorsReader) -> Result<BlockId> {
-    validate_instruction_sequence_until_end(ctx, &mut ops)?;
-    let block = validate_end(ctx)?;
-    ops.ensure_end()?;
-    Ok(block)
-}
-
-fn validate_end(ctx: &mut FunctionContext) -> Result<BlockId> {
-    let (results, block) = ctx.pop_control()?;
-    ctx.push_operands(&results, block.into());
-    Ok(block)
-}
-
-fn validate_instruction(
-    ctx: &mut FunctionContext,
-    inst: Operator,
-    ops: &mut OperatorsReader,
-) -> Result<()> {
+fn validate_instruction(ctx: &mut FunctionContext, inst: Operator) -> Result<()> {
     use ExtendedLoad::*;
     use ValType::*;
 
@@ -737,55 +699,80 @@ fn validate_instruction(
         Operator::Block { ty } => {
             let results = ValType::from_block_ty(ty)?;
             ctx.push_control(BlockKind::Block, results.clone(), results);
-            validate_instruction_sequence_until_end(ctx, ops)?;
-            validate_end(ctx)?;
         }
         Operator::Loop { ty } => {
             let t = ValType::from_block_ty(ty)?;
             ctx.push_control(BlockKind::Loop, vec![].into_boxed_slice(), t);
-            validate_instruction_sequence_until_end(ctx, ops)?;
-            validate_end(ctx)?;
         }
         Operator::If { ty } => {
             let ty = ValType::from_block_ty(ty)?;
             let (_, condition) = ctx.pop_operand_expected(Some(I32))?;
 
             let consequent = ctx.push_control(BlockKind::IfElse, ty.clone(), ty.clone());
-
-            let mut else_found = false;
-            validate_instruction_sequence_until(ctx, ops, |i| match i {
-                Operator::Else => {
-                    else_found = true;
-                    true
-                }
-                Operator::End => true,
-                _ => false,
-            })?;
-            let (results, _block) = ctx.pop_control()?;
-
-            let alternative = ctx.push_control(BlockKind::IfElse, results.clone(), results);
-
-            if else_found {
-                validate_instruction_sequence_until_end(ctx, ops)?;
-            }
-            let (results, _block) = ctx.pop_control()?;
-
-            let expr = ctx.func.alloc(IfElse {
+            ctx.if_else.push(context::IfElseState {
                 condition,
                 consequent,
-                alternative,
+                alternative: None,
             });
-            ctx.push_operands(&results, expr.into());
         }
         Operator::End => {
-            return Err(ErrorKind::InvalidWasm
-                .context("unexpected `end` instruction")
-                .into());
+            let (results, block) = ctx.pop_control()?;
+
+            let id: ExprId = match ctx.func.block(block).kind {
+                // If we just finished an if/else block then the actual
+                // expression which produces the value will be an `IfElse` node,
+                // not the block itself. Do some postprocessing here to create
+                // such a node.
+                BlockKind::IfElse => {
+                    let context::IfElseState {
+                        condition,
+                        consequent,
+                        alternative,
+                    } = ctx.if_else.pop().unwrap();
+
+                    let alternative = match alternative {
+                        Some(alt) => alt,
+                        None => {
+                            let alternative = ctx.push_control(
+                                BlockKind::IfElse,
+                                results.clone(),
+                                results.clone(),
+                            );
+                            ctx.pop_control()?;
+                            alternative
+                        }
+                    };
+
+                    ctx.func
+                        .alloc(IfElse {
+                            condition,
+                            consequent,
+                            alternative,
+                        })
+                        .into()
+                }
+
+                // Otherwise the expression is the block itself.
+                _ => block.into(),
+            };
+            ctx.push_operands(&results, id);
         }
         Operator::Else => {
-            return Err(ErrorKind::InvalidWasm
-                .context("`else` without a leading `if`")
-                .into());
+            let (results, consequent) = ctx.pop_control()?;
+            // An `else` instruction is only valid immediately inside an if/else
+            // block which is denoted by the `IfElse` block kind. When that's
+            // the case we still need to parse the alternative block, so
+            // allocate the block here to parse.
+            match ctx.func.block(consequent).kind {
+                BlockKind::IfElse => {}
+                _ => bail!("`else` without a leading `if`"),
+            }
+            let alternative = ctx.push_control(BlockKind::IfElse, results.clone(), results);
+            let last = ctx.if_else.last_mut().unwrap();
+            if last.alternative.is_some() {
+                bail!("`else` without a leading `if`")
+            }
+            last.alternative = Some(alternative);
         }
         Operator::Br { relative_depth } => {
             let n = relative_depth as usize;

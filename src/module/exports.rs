@@ -1,9 +1,9 @@
 //! Exported items in a wasm module.
 
-use crate::{GlobalId, MemoryId, FunctionId, TableId, Module, Result};
-use crate::map::IdHashSet;
 use crate::emit::{Emit, EmitContext, Section};
+use crate::map::IdHashSet;
 use crate::parse::IndicesToIds;
+use crate::{FunctionId, GlobalId, MemoryId, Module, Result, TableId};
 use id_arena::{Arena, Id};
 
 /// The id of an export.

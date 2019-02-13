@@ -14,13 +14,14 @@ use std::collections::HashSet;
 /// Validate a wasm module, returning an error if it fails to validate.
 pub fn run(module: &Module) -> Result<()> {
     log::debug!("validating module");
-    // TODO: should a config option be added to lift these restrictions? They're
-    // only here for the spec tests...
-    if module.tables.iter().count() > 1 {
-        bail!("multiple tables not allowed in the wasm spec yet");
-    }
-    if module.memories.iter().count() > 1 {
-        bail!("multiple memories not allowed in the wasm spec yet");
+
+    if module.config.only_stable_features {
+        if module.tables.iter().count() > 1 {
+            bail!("multiple tables not allowed in the wasm spec yet");
+        }
+        if module.memories.iter().count() > 1 {
+            bail!("multiple memories not allowed in the wasm spec yet");
+        }
     }
 
     for memory in module.memories.iter() {
@@ -99,6 +100,7 @@ fn validate_table(t: &Table) -> Result<()> {
     // something.
     match t.kind {
         TableKind::Function(_) => {}
+        TableKind::Anyref(_) => {}
     }
     Ok(())
 }

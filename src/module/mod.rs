@@ -63,7 +63,7 @@ pub struct Module {
     /// The name of this module, used for debugging purposes in the `name`
     /// custom section.
     pub name: Option<String>,
-    config: ModuleConfig,
+    pub(crate) config: ModuleConfig,
 }
 
 /// A representation of a custom section in a module

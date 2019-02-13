@@ -2,7 +2,7 @@
 
 use crate::emit::{Emit, EmitContext, Section};
 use crate::parse::IndicesToIds;
-use crate::{FunctionId, GlobalId, ImportId, Module, Result};
+use crate::{FunctionId, GlobalId, ImportId, Module, Result, ValType};
 use id_arena::{Arena, Id};
 
 /// The id of a table.
@@ -29,6 +29,9 @@ pub enum TableKind {
     ///
     /// Contains the initialization list for this table, if any.
     Function(FunctionTable),
+
+    /// A table of type `anyref` values
+    Anyref(AnyrefTable),
 }
 
 /// Components of a table of functions (`anyfunc` table)
@@ -43,6 +46,12 @@ pub struct FunctionTable {
     pub relative_elements: Vec<(GlobalId, Vec<FunctionId>)>,
 }
 
+/// Components of a table of `anyref`
+#[derive(Debug, Default)]
+pub struct AnyrefTable {
+    // currently intentionally empty
+}
+
 impl Table {
     /// Get this table's id.
     pub fn id(&self) -> TableId {
@@ -55,6 +64,9 @@ impl Emit for Table {
         match self.kind {
             TableKind::Function(_) => {
                 cx.encoder.byte(0x70); // the `anyfunc` type
+            }
+            TableKind::Anyref(_) => {
+                ValType::Anyref.emit(&mut cx.encoder)
             }
         }
         cx.encoder.byte(self.maximum.is_some() as u8);
@@ -137,6 +149,7 @@ impl Module {
                 t.limits.maximum,
                 match t.element_type {
                     wasmparser::Type::AnyFunc => TableKind::Function(FunctionTable::default()),
+                    wasmparser::Type::AnyRef => TableKind::Anyref(AnyrefTable::default()),
                     _ => failure::bail!("invalid table type"),
                 },
             );

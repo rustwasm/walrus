@@ -63,6 +63,9 @@ impl Module {
                     let table = ids.get_table(table_index)?;
                     let table = match &mut self.tables.get_mut(table).kind {
                         TableKind::Function(t) => t,
+                        TableKind::Anyref(_) => {
+                            bail!("active anyref segments not supported yet");
+                        }
                     };
 
                     let offset = InitExpr::eval(&init_expr, ids)
@@ -107,6 +110,7 @@ impl Emit for ModuleElements {
             .filter(|t| cx.used.tables.contains(&t.id()))
             .filter_map(|t| match &t.kind {
                 TableKind::Function(list) => Some((t.id(), list)),
+                TableKind::Anyref(_) => None,
             })
             .collect::<Vec<_>>();
         active.sort_by_key(|pair| pair.0);

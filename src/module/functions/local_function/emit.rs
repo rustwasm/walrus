@@ -547,6 +547,39 @@ impl Emit<'_, '_> {
                 self.encoder.byte(if e.sixty_four { 0x02 } else { 0x01 });
                 self.memarg(e.memory, &e.arg);
             }
+
+            TableGet(e) => {
+                self.visit(e.index);
+                self.encoder.byte(0x25);
+                let idx = self.indices.get_table_index(e.table);
+                self.encoder.u32(idx);
+            }
+            TableSet(e) => {
+                self.visit(e.index);
+                self.visit(e.value);
+                self.encoder.byte(0x26);
+                let idx = self.indices.get_table_index(e.table);
+                self.encoder.u32(idx);
+            }
+            TableGrow(e) => {
+                self.visit(e.amount);
+                self.visit(e.value);
+                self.encoder.raw(&[0xfc, 0x0f]);
+                let idx = self.indices.get_table_index(e.table);
+                self.encoder.u32(idx);
+            }
+            TableSize(e) => {
+                self.encoder.raw(&[0xfc, 0x10]);
+                let idx = self.indices.get_table_index(e.table);
+                self.encoder.u32(idx);
+            }
+            RefNull(_e) => {
+                self.encoder.byte(0xd0);
+            }
+            RefIsNull(e) => {
+                self.visit(e.value);
+                self.encoder.byte(0xd1);
+            }
         }
 
         self.id = old;

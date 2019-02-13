@@ -6,6 +6,7 @@ use crate::module::Module;
 pub struct ModuleConfig {
     pub(crate) generate_dwarf: bool,
     pub(crate) generate_synthetic_names_for_anonymous_items: bool,
+    pub(crate) only_stable_features: bool,
     pub(crate) skip_strict_validate: bool,
     pub(crate) skip_producers_section: bool,
     pub(crate) skip_name_section: bool,
@@ -78,6 +79,20 @@ impl ModuleConfig {
     /// By default this flag is `true`
     pub fn generate_producers_section(&mut self, generate: bool) -> &mut ModuleConfig {
         self.skip_producers_section = !generate;
+        self
+    }
+
+    /// Indicates whether this module is allowed to use only stable WebAssembly
+    /// features or not.
+    ///
+    /// This is currently used to disable some validity checks required by the
+    /// WebAssembly specification. It's not religiously adhered to throughout
+    /// the codebase, even if set to `true` some unstable features may still be
+    /// allowed.
+    ///
+    /// By default this flag is `false`
+    pub fn only_stable_features(&mut self, only: bool) -> &mut ModuleConfig {
+        self.only_stable_features = only;
         self
     }
 

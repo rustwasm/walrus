@@ -88,6 +88,8 @@ pub enum ValType {
     F64,
     /// 128-bit vector.
     V128,
+    /// The `anyref` opaque value type
+    Anyref,
 }
 
 impl ValType {
@@ -107,6 +109,7 @@ impl ValType {
             wasmparser::Type::F32 => Ok(ValType::F32),
             wasmparser::Type::F64 => Ok(ValType::F64),
             wasmparser::Type::V128 => Ok(ValType::V128),
+            wasmparser::Type::AnyRef => Ok(ValType::Anyref),
             _ => failure::bail!("not a value type"),
         }
     }
@@ -118,6 +121,7 @@ impl ValType {
             ValType::F32 => encoder.byte(0x7d),
             ValType::F64 => encoder.byte(0x7c),
             ValType::V128 => encoder.byte(0x7b),
+            ValType::Anyref => encoder.byte(0x6f),
         }
     }
 }
@@ -133,6 +137,7 @@ impl fmt::Display for ValType {
                 ValType::F32 => "f32",
                 ValType::F64 => "f64",
                 ValType::V128 => "v128",
+                ValType::Anyref => "anyref",
             }
         )
     }

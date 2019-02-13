@@ -488,6 +488,50 @@ pub enum Expr {
         /// The stack-neutral, side-effecting operations.
         side_effects: Vec<ExprId>,
     },
+
+    /// table.get
+    TableGet {
+        /// The table we're fetching from
+        table: TableId,
+        /// The table index to get
+        index: ExprId,
+    },
+
+    /// table.set
+    TableSet {
+        /// The table we're storing to
+        table: TableId,
+        /// The table index to set
+        index: ExprId,
+        /// The value we're storing
+        value: ExprId,
+    },
+
+    /// table.grow
+    TableGrow {
+        /// The table we're growing
+        table: TableId,
+        /// The amount we're growing by
+        amount: ExprId,
+        /// The value to store in all new slots
+        value: ExprId,
+    },
+
+    /// table.size
+    TableSize {
+        /// The table we're getting the size of
+        table: TableId,
+    },
+
+    /// ref.null
+    RefNull {
+    },
+
+    /// ref.is_null
+    RefIsNull {
+        /// The reference that we're testing
+        value: ExprId,
+    },
 }
 
 /// Constant values that can show up in WebAssembly
@@ -901,6 +945,12 @@ impl Expr {
             | Expr::AtomicNotify(..)
             | Expr::AtomicWait(..)
             | Expr::WithSideEffects(..)
+            | Expr::TableGet(..)
+            | Expr::TableSet(..)
+            | Expr::TableGrow(..)
+            | Expr::TableSize(..)
+            | Expr::RefNull(..)
+            | Expr::RefIsNull(..)
             | Expr::Drop(..) => false,
         }
     }

@@ -32,6 +32,16 @@ Released YYYY-MM-DD.
 
 --------------------------------------------------------------------------------
 
+## 0.2.1
+
+Released 2019-02-14.
+
+### Added
+
+* Added configuration options for controlling emission of the producers section
+
+--------------------------------------------------------------------------------
+
 ## 0.2.0
 
 Released 2019-02-14.

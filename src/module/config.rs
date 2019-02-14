@@ -4,6 +4,7 @@ use crate::module::Module;
 /// Configuration for a `Module` which currently affects parsing.
 #[derive(Clone, Debug, Default)]
 pub struct ModuleConfig {
+    pub(crate) generate_dwarf: bool,
     pub(crate) generate_names: bool,
     pub(crate) skip_strict_validate: bool,
 }
@@ -12,6 +13,17 @@ impl ModuleConfig {
     /// Creates a fresh new configuration with default settings.
     pub fn new() -> ModuleConfig {
         ModuleConfig::default()
+    }
+
+    /// Sets a flag to whether DWARF debug sections are generated for this
+    /// module.
+    ///
+    /// By default this flag is `false`. Note that any emitted DWARF is
+    /// currently wildly incorrect and buggy, and is also larger than the wasm
+    /// itself!
+    pub fn generate_dwarf(&mut self, generate: bool) -> &mut ModuleConfig {
+        self.generate_dwarf = generate;
+        self
     }
 
     /// Sets a flag to whether debugging names are generated for

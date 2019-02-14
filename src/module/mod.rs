@@ -259,6 +259,11 @@ impl Module {
         emit_name_section(&mut cx);
         self.producers.emit(&mut cx);
         for section in self.custom.iter() {
+            if !self.config.generate_dwarf && section.name.starts_with(".debug") {
+                log::debug!("skipping DWARF custom section {}", section.name);
+                continue;
+            }
+
             log::debug!("emitting custom section {}", section.name);
             cx.custom_section(&section.name).encoder.raw(&section.value);
         }

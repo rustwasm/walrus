@@ -5,6 +5,7 @@ use crate::module::Module;
 #[derive(Clone, Debug, Default)]
 pub struct ModuleConfig {
     pub(crate) generate_dwarf: bool,
+    pub(crate) generate_name_section: bool,
     pub(crate) generate_synthetic_names_for_anonymous_items: bool,
     pub(crate) skip_strict_validate: bool,
 }
@@ -12,7 +13,12 @@ pub struct ModuleConfig {
 impl ModuleConfig {
     /// Creates a fresh new configuration with default settings.
     pub fn new() -> ModuleConfig {
-        ModuleConfig::default()
+        ModuleConfig {
+            generate_dwarf: false,
+            generate_name_section: true,
+            generate_synthetic_names_for_anonymous_items: false,
+            skip_strict_validate: false,
+        }
     }
 
     /// Sets a flag to whether DWARF debug sections are generated for this
@@ -23,6 +29,19 @@ impl ModuleConfig {
     /// itself!
     pub fn generate_dwarf(&mut self, generate: bool) -> &mut ModuleConfig {
         self.generate_dwarf = generate;
+        self
+    }
+
+    /// Sets a flag to whether the custom "name" section is generated for this
+    /// module.
+    ///
+    /// The "name" section contains symbol names for the module, functions, and
+    /// locals. When enabled, stack traces will use these names, instead of
+    /// `wasm-function[123]`.
+    ///
+    /// By default this flag is `true`.
+    pub fn generate_name_section(&mut self, generate: bool) -> &mut ModuleConfig {
+        self.generate_name_section = generate;
         self
     }
 

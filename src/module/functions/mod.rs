@@ -281,7 +281,7 @@ impl Module {
             let id = self.funcs.arena.next_id();
             self.funcs.arena.alloc(Function::new_uninitialized(id, ty));
             let idx = ids.push_func(id);
-            if self.config.generate_names {
+            if self.config.generate_synthetic_names_for_anonymous_items {
                 self.funcs.get_mut(id).name = Some(format!("f{}", idx));
             }
         }
@@ -324,7 +324,7 @@ impl Module {
                 let local_id = self.locals.add(*ty);
                 let idx = indices.push_local(id, local_id);
                 args.push(local_id);
-                if self.config.generate_names {
+                if self.config.generate_synthetic_names_for_anonymous_items {
                     let name = format!("arg{}", idx);
                     self.locals.get_mut(local_id).name = Some(name);
                 }
@@ -349,7 +349,7 @@ impl Module {
                 for _ in 0..count {
                     let local_id = self.locals.add(ty);
                     let idx = indices.push_local(id, local_id);
-                    if self.config.generate_names {
+                    if self.config.generate_synthetic_names_for_anonymous_items {
                         let name = format!("l{}", idx);
                         self.locals.get_mut(local_id).name = Some(name);
                     }

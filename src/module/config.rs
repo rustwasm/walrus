@@ -5,7 +5,7 @@ use crate::module::Module;
 #[derive(Clone, Debug, Default)]
 pub struct ModuleConfig {
     pub(crate) generate_dwarf: bool,
-    pub(crate) generate_names: bool,
+    pub(crate) generate_synthetic_names_for_anonymous_items: bool,
     pub(crate) skip_strict_validate: bool,
 }
 
@@ -26,13 +26,17 @@ impl ModuleConfig {
         self
     }
 
-    /// Sets a flag to whether debugging names are generated for
-    /// locals/functions/etc when parsing and running passes for this module.
+    /// Sets a flag to whether synthetic debugging names are generated for
+    /// anonymous locals/functions/etc when parsing and running passes for this
+    /// module.
     ///
     /// By default this flag is `false`, and it will generate quite a few names
     /// if enabled!
-    pub fn generate_names(&mut self, generate: bool) -> &mut ModuleConfig {
-        self.generate_names = generate;
+    pub fn generate_synthetic_names_for_anonymous_items(
+        &mut self,
+        generate: bool,
+    ) -> &mut ModuleConfig {
+        self.generate_synthetic_names_for_anonymous_items = generate;
         self
     }
 

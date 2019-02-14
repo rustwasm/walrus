@@ -256,10 +256,7 @@ impl Module {
         self.funcs.emit(&mut cx);
         self.data.emit(&mut cx);
 
-        if self.config.generate_names {
-            emit_name_section(&mut cx);
-        }
-
+        emit_name_section(&mut cx);
         self.producers.emit(&mut cx);
         for section in self.custom.iter() {
             if !self.config.generate_dwarf && section.name.starts_with(".debug") {
@@ -311,7 +308,9 @@ impl Module {
                             // names for locals if they aren't specified, so
                             // just ignore empty names which would in theory
                             // make debugging a bit harder.
-                            if self.config.generate_names && naming.name.is_empty() {
+                            if self.config.generate_synthetic_names_for_anonymous_items
+                                && naming.name.is_empty()
+                            {
                                 continue;
                             }
                             let id = indices.get_local(func_id, naming.index)?;

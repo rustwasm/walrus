@@ -3,6 +3,7 @@ name = "walrus-tests"
 version = "0.1.0"
 authors = ["Nick Fitzgerald <fitzgen@gmail.com>"]
 edition = "2018"
+publish = false
 
 [build-dependencies]
 walkdir = "2.2.5"

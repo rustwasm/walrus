@@ -732,7 +732,7 @@ pub enum ExtendedLoad {
 impl LoadKind {
     /// Returns the number of bytes loaded
     pub fn width(&self) -> u32 {
-        use LoadKind::*;
+        use self::LoadKind::*;
         match self {
             I32_8 { .. } | I64_8 { .. } => 1,
             I32_16 { .. } | I64_16 { .. } => 2,
@@ -744,7 +744,7 @@ impl LoadKind {
 
     /// Returns if this is an atomic load
     pub fn atomic(&self) -> bool {
-        use LoadKind::*;
+        use self::LoadKind::*;
         match self {
             I32_8 { kind }
             | I32_16 { kind }
@@ -786,7 +786,7 @@ pub enum StoreKind {
 impl StoreKind {
     /// Returns the number of bytes stored
     pub fn width(&self) -> u32 {
-        use StoreKind::*;
+        use self::StoreKind::*;
         match self {
             I32_8 { .. } | I64_8 { .. } => 1,
             I32_16 { .. } | I64_16 { .. } => 2,
@@ -798,7 +798,7 @@ impl StoreKind {
 
     /// Returns whether this is an atomic store
     pub fn atomic(&self) -> bool {
-        use StoreKind::*;
+        use self::StoreKind::*;
 
         match self {
             I32 { atomic }
@@ -851,7 +851,7 @@ pub enum AtomicWidth {
 impl AtomicWidth {
     /// Returns the size, in bytes, of this atomic operation
     pub fn bytes(&self) -> u32 {
-        use AtomicWidth::*;
+        use self::AtomicWidth::*;
         match self {
             I32_8 | I64_8 => 1,
             I32_16 | I64_16 => 2,

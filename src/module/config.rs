@@ -5,20 +5,16 @@ use crate::module::Module;
 #[derive(Clone, Debug, Default)]
 pub struct ModuleConfig {
     pub(crate) generate_dwarf: bool,
-    pub(crate) generate_name_section: bool,
     pub(crate) generate_synthetic_names_for_anonymous_items: bool,
     pub(crate) skip_strict_validate: bool,
+    pub(crate) skip_producers_section: bool,
+    pub(crate) skip_name_section: bool,
 }
 
 impl ModuleConfig {
     /// Creates a fresh new configuration with default settings.
     pub fn new() -> ModuleConfig {
-        ModuleConfig {
-            generate_dwarf: false,
-            generate_name_section: true,
-            generate_synthetic_names_for_anonymous_items: false,
-            skip_strict_validate: false,
-        }
+        ModuleConfig::default()
     }
 
     /// Sets a flag to whether DWARF debug sections are generated for this
@@ -41,7 +37,7 @@ impl ModuleConfig {
     ///
     /// By default this flag is `true`.
     pub fn generate_name_section(&mut self, generate: bool) -> &mut ModuleConfig {
-        self.generate_name_section = generate;
+        self.skip_name_section = !generate;
         self
     }
 
@@ -70,6 +66,18 @@ impl ModuleConfig {
     /// By default this flag is `true`
     pub fn strict_validate(&mut self, strict: bool) -> &mut ModuleConfig {
         self.skip_strict_validate = !strict;
+        self
+    }
+
+    /// Indicates whether the module will have the "producers" custom section
+    /// which preserves the original producers and also includes `walrus`.
+    ///
+    /// This is generally used for telemetry in browsers, but for otherwise tiny
+    /// wasm binaries can add some size to the binary.
+    ///
+    /// By default this flag is `true`
+    pub fn generate_producers_section(&mut self, generate: bool) -> &mut ModuleConfig {
+        self.skip_producers_section = !generate;
         self
     }
 

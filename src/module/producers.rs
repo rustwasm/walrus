@@ -65,6 +65,11 @@ impl ModuleProducers {
             values: vec![new_value],
         })
     }
+
+    /// Clear the producers section of all keys/values
+    pub fn clear(&mut self) {
+        self.fields.truncate(0);
+    }
 }
 
 impl Module {
@@ -96,7 +101,9 @@ impl Module {
 impl Emit for ModuleProducers {
     fn emit(&self, cx: &mut EmitContext) {
         log::debug!("emit producers section");
-        cx.custom_section("producers").list(&self.fields);
+        if self.fields.len() > 0 {
+            cx.custom_section("producers").list(&self.fields);
+        }
     }
 }
 

@@ -256,11 +256,13 @@ impl Module {
         self.funcs.emit(&mut cx);
         self.data.emit(&mut cx);
 
-        if self.config.generate_name_section {
+        if !self.config.skip_name_section {
             emit_name_section(&mut cx);
         }
+        if !self.config.skip_producers_section {
+            self.producers.emit(&mut cx);
+        }
 
-        self.producers.emit(&mut cx);
         for section in self.custom.iter() {
             if !self.config.generate_dwarf && section.name.starts_with(".debug") {
                 log::debug!("skipping DWARF custom section {}", section.name);

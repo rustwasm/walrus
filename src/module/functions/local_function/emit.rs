@@ -136,7 +136,7 @@ impl Emit<'_, '_> {
             }
 
             Binop(e) => {
-                use BinaryOp::*;
+                use crate::ir::BinaryOp::*;
 
                 self.visit(e.lhs);
                 self.visit(e.rhs);
@@ -229,7 +229,7 @@ impl Emit<'_, '_> {
             }
 
             Unop(e) => {
-                use UnaryOp::*;
+                use crate::ir::UnaryOp::*;
 
                 self.visit(e.expr);
                 let opcode = match e.op {
@@ -381,8 +381,8 @@ impl Emit<'_, '_> {
             }
 
             Load(e) => {
-                use ExtendedLoad::*;
-                use LoadKind::*;
+                use crate::ir::ExtendedLoad::*;
+                use crate::ir::LoadKind::*;
                 self.visit(e.address);
                 match e.kind {
                     I32 { atomic: false } => self.encoder.byte(0x28), // i32.load
@@ -422,7 +422,7 @@ impl Emit<'_, '_> {
             }
 
             Store(e) => {
-                use StoreKind::*;
+                use crate::ir::StoreKind::*;
                 self.visit(e.address);
                 self.visit(e.value);
                 match e.kind {
@@ -448,8 +448,8 @@ impl Emit<'_, '_> {
             }
 
             AtomicRmw(e) => {
-                use AtomicOp::*;
-                use AtomicWidth::*;
+                use crate::ir::AtomicOp::*;
+                use crate::ir::AtomicWidth::*;
 
                 self.visit(e.address);
                 self.visit(e.value);
@@ -509,7 +509,7 @@ impl Emit<'_, '_> {
             }
 
             Cmpxchg(e) => {
-                use AtomicWidth::*;
+                use crate::ir::AtomicWidth::*;
 
                 self.visit(e.address);
                 self.visit(e.expected);

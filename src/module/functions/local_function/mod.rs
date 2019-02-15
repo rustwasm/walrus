@@ -324,8 +324,8 @@ impl DotExpr<'_, '_> {
 }
 
 fn validate_instruction(ctx: &mut FunctionContext, inst: Operator) -> Result<()> {
-    use ExtendedLoad::*;
-    use ValType::*;
+    use crate::ir::ExtendedLoad::*;
+    use crate::ValType::*;
 
     let const_ = |ctx: &mut FunctionContext, ty, value| {
         let expr = ctx.func.alloc(Const { value });

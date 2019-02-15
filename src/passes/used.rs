@@ -77,6 +77,7 @@ impl Used {
                                 stack.push_table(t);
                             }
                         }
+                        TableKind::Anyref(_) => {}
                     }
                 }
                 _ => {}
@@ -121,6 +122,7 @@ impl Used {
                             }
                         }
                     }
+                    TableKind::Anyref(_) => {}
                 }
             }
 

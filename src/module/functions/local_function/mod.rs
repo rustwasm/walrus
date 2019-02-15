@@ -13,7 +13,7 @@ use crate::ir::*;
 use crate::map::{IdHashMap, IdHashSet};
 use crate::parse::IndicesToIds;
 use crate::passes::Used;
-use crate::{FunctionId, Module, Result, TypeId, ValType};
+use crate::{FunctionId, Module, Result, TypeId, ValType, TableKind};
 use failure::{bail, ResultExt};
 use id_arena::{Arena, Id};
 use std::collections::BTreeMap;
@@ -1220,6 +1220,49 @@ fn validate_instruction(ctx: &mut FunctionContext, inst: Operator) -> Result<()>
                 memory,
                 arg: mem_arg(memarg)?,
             });
+            ctx.push_operand(Some(I32), expr);
+        }
+
+        Operator::TableGet { table } => {
+            let table = ctx.indices.get_table(table)?;
+            let (_, index) = ctx.pop_operand_expected(Some(I32))?;
+            let expr = ctx.func.alloc(TableGet { table, index });
+            ctx.push_operand(Some(Anyref), expr);
+        }
+        Operator::TableSet { table } => {
+            let table = ctx.indices.get_table(table)?;
+            let expected_ty = match ctx.module.tables.get(table).kind {
+                TableKind::Anyref(_) => Anyref,
+                TableKind::Function(_) => bail!("cannot set function table yet"),
+            };
+            let (_, value) = ctx.pop_operand_expected(Some(expected_ty))?;
+            let (_, index) = ctx.pop_operand_expected(Some(I32))?;
+            let expr = ctx.func.alloc(TableSet { table, index, value });
+            ctx.add_to_current_frame_block(expr);
+        }
+        Operator::TableGrow { table } => {
+            let table = ctx.indices.get_table(table)?;
+            let expected_ty = match ctx.module.tables.get(table).kind {
+                TableKind::Anyref(_) => Anyref,
+                TableKind::Function(_) => bail!("cannot grow function table yet"),
+            };
+            let (_, value) = ctx.pop_operand_expected(Some(expected_ty))?;
+            let (_, amount) = ctx.pop_operand_expected(Some(I32))?;
+            let expr = ctx.func.alloc(TableGrow { table, amount, value });
+            ctx.push_operand(Some(I32), expr);
+        }
+        Operator::TableSize { table } => {
+            let table = ctx.indices.get_table(table)?;
+            let expr = ctx.func.alloc(TableSize { table });
+            ctx.push_operand(Some(I32), expr);
+        }
+        Operator::RefNull => {
+            let expr = ctx.func.alloc(RefNull { });
+            ctx.push_operand(Some(Anyref), expr);
+        }
+        Operator::RefIsNull => {
+            let (_, value) = ctx.pop_operand_expected(Some(Anyref))?;
+            let expr = ctx.func.alloc(RefIsNull { value });
             ctx.push_operand(Some(I32), expr);
         }
 

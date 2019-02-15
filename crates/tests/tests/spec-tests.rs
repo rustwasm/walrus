@@ -30,8 +30,8 @@ fn run(wast: &Path) -> Result<(), failure::Error> {
         Some("multi-value") => return Ok(()),
 
         // TODO: should get threads working
-        // Some("threads") => &["--enable-threads"],
         Some("threads") => return Ok(()),
+        // Some("threads") => &["--enable-threads"],
 
         Some(other) => panic!("unknown wasm proposal: {}", other),
     };
@@ -62,9 +62,14 @@ fn run(wast: &Path) -> Result<(), failure::Error> {
         };
         let line = &command["line"];
         let path = tempdir.path().join(filename);
+        let mut config = walrus::ModuleConfig::new();
+        if extra_args.len() == 0 {
+            config.only_stable_features(true);
+        }
         match command["type"].as_str().unwrap() {
             "assert_invalid" | "assert_malformed" => {
-                if walrus::Module::from_file(&path).is_ok() {
+                let wasm = fs::read(&path)?;
+                if config.parse(&wasm).is_ok() {
                     panic!("wasm parsed when it shouldn't (line {})", line);
                 }
             }
@@ -78,7 +83,8 @@ fn run(wast: &Path) -> Result<(), failure::Error> {
                 // much, but that's another bug for another day.
             }
             cmd => {
-                let mut wasm = walrus::Module::from_file(&path)
+                let wasm = fs::read(&path)?;
+                let mut wasm = config.parse(&wasm)
                     .context(format!("error parsing wasm (line {})", line))?;
 
                 // If a module is supposed to be unlinkable we'll often gc out
@@ -107,7 +113,7 @@ fn run(wast: &Path) -> Result<(), failure::Error> {
                     .emit_wasm()
                     .context(format!("error emitting wasm (line {})", line))?;
                 fs::write(&path, &wasm1)?;
-                let wasm2 = walrus::Module::from_buffer(&wasm1)
+                let wasm2 = config.parse(&wasm1)
                     .and_then(|m| m.emit_wasm())
                     .context(format!("error re-parsing wasm (line {})", line))?;
                 if wasm1 != wasm2 {

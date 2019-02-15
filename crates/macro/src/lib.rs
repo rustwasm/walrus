@@ -752,7 +752,7 @@ fn create_matchers(variants: &[WalrusVariant]) -> impl quote::ToTokens {
                                 true #(
                                     && #self_args.is_match(
                                         local_func,
-                                        &local_func.exprs[*#args]
+                                        local_func.get(*#args)
                                     )
                                 )*
                             }

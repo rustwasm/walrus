@@ -170,7 +170,7 @@ impl<'a> FunctionContext<'a> {
                 }
             }
 
-            let block = self.func.exprs[frame.block.into()].unwrap_block_mut();
+            let block = self.func.block_mut(frame.block);
             block.exprs.extend(extra_exprs);
             block.exprs.push(expr);
         }
@@ -192,8 +192,7 @@ impl<'a> FunctionContext<'a> {
     where
         E: Into<ExprId>,
     {
-        let block = self.func.exprs[block.into()].unwrap_block_mut();
-        block.exprs.push(expr.into());
+        self.func.block_mut(block).exprs.push(expr.into());
     }
 
     pub fn add_to_frame_block<E>(&mut self, control_frame: usize, expr: E)
@@ -228,8 +227,8 @@ impl<'a> FunctionContext<'a> {
 
     pub fn add_side_effect(&mut self, value: ExprId, side_effect: ExprId) -> ExprId {
         // If we can add it to an existing `WithSideEffects` expr for this value, then do that.
-        if let Some(Expr::WithSideEffects(WithSideEffects { after, .. })) =
-            self.func.exprs.get_mut(value)
+        if let Expr::WithSideEffects(WithSideEffects { after, .. }) =
+            self.func.get_mut(value)
         {
             after.push(side_effect);
             return value;

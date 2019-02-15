@@ -992,7 +992,7 @@ impl<'expr> Visit<'expr> for ExprId {
     where
         V: Visitor<'expr>,
     {
-        visitor.visit_expr(&visitor.local_function().exprs[*self])
+        visitor.visit_expr(&visitor.local_function().get(*self))
     }
 }
 
@@ -1006,11 +1006,11 @@ impl VisitMut for ExprId {
         // use graph traversal instead of a simple tree walk like we have today
         // when that comes about.
         let mut expr = mem::replace(
-            &mut visitor.local_function_mut().exprs[*self],
+            visitor.local_function_mut().get_mut(*self),
             Expr::Unreachable(Unreachable {}),
         );
         visitor.visit_expr_mut(&mut expr);
-        visitor.local_function_mut().exprs[*self] = expr;
+        *visitor.local_function_mut().get_mut(*self) = expr;
     }
 }
 

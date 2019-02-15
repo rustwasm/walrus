@@ -13,9 +13,9 @@ use crate::ir::*;
 use crate::map::{IdHashMap, IdHashSet};
 use crate::parse::IndicesToIds;
 use crate::passes::Used;
-use crate::{FunctionId, Module, Result, TypeId, ValType, TableKind};
+use crate::{FunctionId, Module, Result, TypeId, ValType, FunctionBuilder, TableKind};
 use failure::{bail, ResultExt};
-use id_arena::{Arena, Id};
+use id_arena::Id;
 use std::collections::BTreeMap;
 use std::fmt;
 use std::mem;
@@ -27,8 +27,8 @@ pub struct LocalFunction {
     /// This function's type.
     pub ty: TypeId,
 
-    /// The arena that contains this function's expressions.
-    pub(crate) exprs: Arena<Expr>,
+    /// All of this function's expressions, contained in the arena.
+    exprs: FunctionBuilder,
 
     /// Arguments to this function, and the locals that they're assigned to
     pub args: Vec<LocalId>,
@@ -46,7 +46,7 @@ impl LocalFunction {
     pub(crate) fn new(
         ty: TypeId,
         args: Vec<LocalId>,
-        exprs: Arena<Expr>,
+        exprs: FunctionBuilder,
         entry: BlockId,
     ) -> LocalFunction {
         LocalFunction {
@@ -71,7 +71,7 @@ impl LocalFunction {
     ) -> Result<LocalFunction> {
         let mut func = LocalFunction {
             ty,
-            exprs: Arena::new(),
+            exprs: FunctionBuilder::new(),
             args,
             entry: None,
         };
@@ -101,12 +101,11 @@ impl LocalFunction {
         Ok(func)
     }
 
-    fn alloc<T>(&mut self, val: T) -> T::Id
+    pub(crate) fn alloc<T>(&mut self, val: T) -> T::Id
     where
         T: Ast,
     {
-        let id = self.exprs.alloc(val.into());
-        T::new_id(id)
+        self.exprs.alloc(val)
     }
 
     /// Get the id of this function's entry block.
@@ -116,22 +115,34 @@ impl LocalFunction {
 
     /// Get the block associated with the given id.
     pub fn block(&self, block: BlockId) -> &Block {
-        self.exprs[block.into()].unwrap_block()
+        self.get(block.into()).unwrap_block()
     }
 
     /// Get the block associated with the given id.
     pub fn block_mut(&mut self, block: BlockId) -> &mut Block {
-        self.exprs[block.into()].unwrap_block_mut()
+        self.get_mut(block.into()).unwrap_block_mut()
     }
 
     /// Get the expression associated with the given id
     pub fn get(&self, id: ExprId) -> &Expr {
-        &self.exprs[id]
+        &self.exprs.arena[id]
     }
 
     /// Get the expression associated with the given id
     pub fn get_mut(&mut self, id: ExprId) -> &mut Expr {
-        &mut self.exprs[id]
+        &mut self.exprs.arena[id]
+    }
+
+    /// Get access to a `FunctionBuilder` to continue adding expressions to
+    /// this function.
+    pub fn builder(&self) -> &FunctionBuilder {
+        &self.exprs
+    }
+
+    /// Get access to a `FunctionBuilder` to continue adding expressions to
+    /// this function.
+    pub fn builder_mut(&mut self) -> &mut FunctionBuilder {
+        &mut self.exprs
     }
 
     /// Get the size of this function, in number of expressions.
@@ -163,15 +174,12 @@ impl LocalFunction {
     /// Is this function's body a [constant
     /// expression](https://webassembly.github.io/spec/core/valid/instructions.html#constant-expressions)?
     pub fn is_const(&self) -> bool {
-        let entry = match &self.exprs[self.entry_block().into()] {
-            Expr::Block(b) => b,
-            _ => unreachable!(),
-        };
+        let entry = self.block(self.entry_block());
         let matcher = ConstMatcher::new();
         entry
             .exprs
             .iter()
-            .all(|e| matcher.is_match(self, &self.exprs[*e]))
+            .all(|e| matcher.is_match(self, &self.get(*e)))
     }
 
     /// Emit this function's compact locals declarations.

@@ -8,7 +8,7 @@ use std::ops::{Deref, DerefMut, Drop};
 /// A helpful struct used for building instances of `LocalFunction`
 #[derive(Default, Debug)]
 pub struct FunctionBuilder {
-    arena: Arena<Expr>,
+    pub(crate) arena: Arena<Expr>,
 }
 
 impl FunctionBuilder {
@@ -141,7 +141,7 @@ impl FunctionBuilder {
             results: ty.results().to_vec().into_boxed_slice(),
             exprs,
         });
-        let func = LocalFunction::new(ty_id, args, self.arena, entry);
+        let func = LocalFunction::new(ty_id, args, self, entry);
         funcs.add_local(func)
     }
 }

@@ -18,7 +18,7 @@ pub mod passes;
 mod ty;
 
 pub use crate::error::{ErrorKind, Result};
-pub use crate::function_builder::FunctionBuilder;
+pub use crate::function_builder::{FunctionBuilder, BlockBuilder};
 pub use crate::init_expr::InitExpr;
 pub use crate::ir::{Local, LocalId};
 pub use crate::module::*;

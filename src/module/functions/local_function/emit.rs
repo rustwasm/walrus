@@ -75,8 +75,11 @@ impl Emit<'_, '_> {
             }
 
             WithSideEffects(e) => {
+                for x in e.before.iter() {
+                    self.visit(*x);
+                }
                 self.visit(e.value);
-                for x in e.side_effects.iter() {
+                for x in e.after.iter() {
                     self.visit(*x);
                 }
             }

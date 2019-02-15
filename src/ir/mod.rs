@@ -483,10 +483,12 @@ pub enum Expr {
     ///   (call $f))
     /// ```
     WithSideEffects {
+        /// The stack-neutral, side-effecting operations before `value`
+        before: Vec<ExprId>,
         /// The value.
         value: ExprId,
-        /// The stack-neutral, side-effecting operations.
-        side_effects: Vec<ExprId>,
+        /// The stack-neutral, side-effecting operations after `value`
+        after: Vec<ExprId>,
     },
 }
 

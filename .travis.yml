@@ -46,3 +46,7 @@ matrix:
 script:
   - cargo build --all
   - cargo test --all
+
+notifications:
+  email:
+    on_success: never

@@ -228,18 +228,19 @@ impl<'a> FunctionContext<'a> {
 
     pub fn add_side_effect(&mut self, value: ExprId, side_effect: ExprId) -> ExprId {
         // If we can add it to an existing `WithSideEffects` expr for this value, then do that.
-        if let Some(Expr::WithSideEffects(WithSideEffects { side_effects, .. })) =
+        if let Some(Expr::WithSideEffects(WithSideEffects { after, .. })) =
             self.func.exprs.get_mut(value)
         {
-            side_effects.push(side_effect);
+            after.push(side_effect);
             return value;
         }
 
         // Otherwise, allocate a new `WithSideEffects`.
         self.func
             .alloc(WithSideEffects {
+                before: Vec::new(),
                 value,
-                side_effects: vec![side_effect],
+                after: vec![side_effect],
             })
             .into()
     }

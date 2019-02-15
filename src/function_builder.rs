@@ -1,5 +1,6 @@
 use crate::ir::*;
 use crate::{FunctionId, LocalFunction, Module, TypeId, ValType};
+use crate::{ModuleTypes, ModuleFunctions};
 use id_arena::Arena;
 use std::mem;
 use std::ops::{Deref, DerefMut, Drop};
@@ -114,13 +115,26 @@ impl FunctionBuilder {
     /// Finishes this builder, wrapping it all up and inserting it into the
     /// specified `Module`.
     pub fn finish(
-        mut self,
+        self,
         ty_id: TypeId,
         args: Vec<LocalId>,
         exprs: Vec<ExprId>,
         module: &mut Module,
     ) -> FunctionId {
-        let ty = module.types.get(ty_id);
+        self.finish_parts(ty_id, args, exprs, &mut module.types, &mut module.funcs)
+    }
+
+    /// Finishes this builder, wrapping it all up and inserting it into the
+    /// specified `Module`.
+    pub fn finish_parts(
+        mut self,
+        ty_id: TypeId,
+        args: Vec<LocalId>,
+        exprs: Vec<ExprId>,
+        types: &mut ModuleTypes,
+        funcs: &mut ModuleFunctions,
+    ) -> FunctionId {
+        let ty = types.get(ty_id);
         let entry = self.alloc(Block {
             kind: BlockKind::FunctionEntry,
             params: ty.params().to_vec().into_boxed_slice(),
@@ -128,7 +142,7 @@ impl FunctionBuilder {
             exprs,
         });
         let func = LocalFunction::new(ty_id, args, self.arena, entry);
-        module.funcs.add_local(func)
+        funcs.add_local(func)
     }
 }
 

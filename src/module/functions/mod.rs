@@ -10,7 +10,7 @@ use crate::module::imports::ImportId;
 use crate::module::Module;
 use crate::parse::IndicesToIds;
 use crate::passes::Used;
-use crate::tombstone_arena::{Id, TombstoneArena};
+use crate::tombstone_arena::{Id, Tombstone, TombstoneArena};
 use crate::ty::TypeId;
 use crate::ty::ValType;
 use failure::bail;
@@ -41,6 +41,14 @@ pub struct Function {
 
     /// An optional name associated with this function
     pub name: Option<String>,
+}
+
+impl Tombstone for Function {
+    fn on_delete(&mut self) {
+        let ty = self.ty();
+        self.kind = FunctionKind::Uninitialized(ty);
+        self.name = None;
+    }
 }
 
 impl Function {
@@ -174,6 +182,15 @@ impl ModuleFunctions {
     /// Gets a reference to a function given its id
     pub fn get_mut(&mut self, id: FunctionId) -> &mut Function {
         &mut self.arena[id]
+    }
+
+    /// Removes a function from this module.
+    ///
+    /// It is up to you to ensure that any potential references to the deleted
+    /// function are also removed, eg `call` expressions, exports, table
+    /// elements, etc.
+    pub fn delete(&mut self, id: FunctionId) {
+        self.arena.delete(id);
     }
 
     /// Get a shared reference to this module's functions.

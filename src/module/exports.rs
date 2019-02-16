@@ -62,6 +62,11 @@ impl ModuleExports {
         &mut self.arena[id]
     }
 
+    /// Delete an export entry from this module.
+    pub fn delete(&mut self, id: ExportId) {
+        self.arena.delete(id);
+    }
+
     /// Get a shared reference to this module's exports.
     pub fn iter(&self) -> impl Iterator<Item = &Export> {
         self.arena.iter().map(|(_, f)| f)
@@ -76,9 +81,10 @@ impl ModuleExports {
         })
     }
 
-    /// Removes an exported item.
+    #[doc(hidden)]
+    #[deprecated(note = "Use `ModuleExports::delete` instead")]
     pub fn remove_root(&mut self, id: ExportId) {
-        self.arena.delete(id);
+        self.delete(id);
     }
 }
 

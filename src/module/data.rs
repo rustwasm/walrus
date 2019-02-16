@@ -4,7 +4,7 @@ use crate::emit::{Emit, EmitContext, Section};
 use crate::ir::Value;
 use crate::parse::IndicesToIds;
 use crate::passes::Used;
-use crate::tombstone_arena::{Id, TombstoneArena};
+use crate::tombstone_arena::{Id, Tombstone, TombstoneArena};
 use crate::{InitExpr, Module, Result, ValType};
 use failure::{bail, ResultExt};
 
@@ -27,6 +27,12 @@ pub struct Data {
 
     /// The payload of this passive data segment
     pub value: Vec<u8>,
+}
+
+impl Tombstone for Data {
+    fn on_delete(&mut self) {
+        self.value = Vec::new();
+    }
 }
 
 impl Data {
@@ -52,6 +58,14 @@ impl ModuleData {
     /// Get an element associated with an ID
     pub fn get_mut(&mut self, id: DataId) -> &mut Data {
         &mut self.arena[id]
+    }
+
+    /// Delete a passive data segment from this module.
+    ///
+    /// It is up to you to ensure that all references to the deleted segment are
+    /// removed, eg `memory.init` and `data.drop` expressions.
+    pub fn delete(&mut self, id: DataId) {
+        self.arena.delete(id);
     }
 
     /// Get a shared reference to this module's passive elements.

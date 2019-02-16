@@ -4,7 +4,7 @@ use crate::emit::{Emit, EmitContext, Section};
 use crate::ir::Value;
 use crate::parse::IndicesToIds;
 use crate::passes::Used;
-use crate::tombstone_arena::{Id, TombstoneArena};
+use crate::tombstone_arena::{Id, Tombstone, TombstoneArena};
 use crate::{GlobalId, ImportId, InitExpr, Module, Result};
 
 /// The id of a memory.
@@ -25,6 +25,12 @@ pub struct Memory {
     /// Data that will be used to initialize this memory chunk, with known
     /// static offsets
     pub data: MemoryData,
+}
+
+impl Tombstone for Memory {
+    fn on_delete(&mut self) {
+        self.data = MemoryData::default();
+    }
 }
 
 /// An abstraction for the initialization values of a `Memory`.
@@ -123,6 +129,14 @@ impl ModuleMemories {
     /// Gets a reference to a memory given its id
     pub fn get_mut(&mut self, id: MemoryId) -> &mut Memory {
         &mut self.arena[id]
+    }
+
+    /// Removes a memory from this module.
+    ///
+    /// It is up to you to ensure that any potential references to the deleted
+    /// memory are also removed, eg `mem.load` expressions and exports.
+    pub fn delete(&mut self, id: MemoryId) {
+        self.arena.delete(id);
     }
 
     /// Get a shared reference to this module's memories.

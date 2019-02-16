@@ -1,8 +1,7 @@
 //! Globals within a wasm module.
-
 use crate::emit::{Emit, EmitContext, Section};
 use crate::parse::IndicesToIds;
-use crate::tombstone_arena::{Id, TombstoneArena};
+use crate::tombstone_arena::{Id, Tombstone, TombstoneArena};
 use crate::{ImportId, InitExpr, Module, Result, ValType};
 
 /// The id of a global.
@@ -24,6 +23,8 @@ pub struct Global {
     /// The kind of global this is
     pub kind: GlobalKind,
 }
+
+impl Tombstone for Global {}
 
 /// The different kinds of globals a wasm module can have
 #[derive(Debug)]
@@ -85,6 +86,14 @@ impl ModuleGlobals {
     /// Gets a reference to a memory given its id
     pub fn get_mut(&mut self, id: GlobalId) -> &mut Global {
         &mut self.arena[id]
+    }
+
+    /// Removes a global from this module.
+    ///
+    /// It is up to you to ensure that any potential references to the deleted
+    /// global are also removed, eg `get_global` expressions.
+    pub fn delete(&mut self, id: GlobalId) {
+        self.arena.delete(id);
     }
 
     /// Get a shared reference to this module's globals.

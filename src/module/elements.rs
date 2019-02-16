@@ -3,7 +3,7 @@
 use crate::emit::{Emit, EmitContext, Section};
 use crate::ir::Value;
 use crate::parse::IndicesToIds;
-use crate::tombstone_arena::{Id, TombstoneArena};
+use crate::tombstone_arena::{Id, Tombstone, TombstoneArena};
 use crate::{FunctionId, InitExpr, Module, Result, TableKind, ValType};
 use failure::{bail, ResultExt};
 
@@ -14,6 +14,12 @@ pub type ElementId = Id<Element>;
 #[derive(Debug)]
 pub struct Element {
     members: Vec<FunctionId>,
+}
+
+impl Tombstone for Element {
+    fn on_delete(&mut self) {
+        self.members = Vec::new();
+    }
 }
 
 /// All element segments of a wasm module, used to initialize `anyfunc` tables,
@@ -32,6 +38,14 @@ impl ModuleElements {
     /// Get an element associated with an ID
     pub fn get_mut(&mut self, id: ElementId) -> &mut Element {
         &mut self.arena[id]
+    }
+
+    /// Delete an elements entry from this module.
+    ///
+    /// It is up to you to ensure that all references to this deleted element
+    /// are removed.
+    pub fn delete(&mut self, id: ElementId) {
+        self.arena.delete(id);
     }
 
     /// Get a shared reference to this module's passive elements.

@@ -2,8 +2,8 @@
 
 use crate::emit::{Emit, EmitContext, Section};
 use crate::parse::IndicesToIds;
+use crate::tombstone_arena::{Id, TombstoneArena};
 use crate::{ImportId, InitExpr, Module, Result, ValType};
-use id_arena::{Arena, Id};
 
 /// The id of a global.
 pub type GlobalId = Id<Global>;
@@ -52,14 +52,13 @@ impl Emit for Global {
 #[derive(Debug, Default)]
 pub struct ModuleGlobals {
     /// The arena where the globals are stored.
-    arena: Arena<Global>,
+    arena: TombstoneArena<Global>,
 }
 
 impl ModuleGlobals {
     /// Adds a new imported global to this list.
     pub fn add_import(&mut self, ty: ValType, mutable: bool, import_id: ImportId) -> GlobalId {
-        let id = self.arena.next_id();
-        self.arena.alloc(Global {
+        self.arena.alloc_with_id(|id| Global {
             id,
             ty,
             mutable,
@@ -70,8 +69,7 @@ impl ModuleGlobals {
     /// Construct a new global, that does not originate from any of the input
     /// wasm globals.
     pub fn add_local(&mut self, ty: ValType, mutable: bool, init: InitExpr) -> GlobalId {
-        let id = self.arena.next_id();
-        self.arena.alloc(Global {
+        self.arena.alloc_with_id(|id| Global {
             id,
             ty,
             mutable,

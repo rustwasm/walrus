@@ -226,7 +226,7 @@ impl Module {
     /// Emit this module into an in-memory wasm buffer.
     pub fn emit_wasm(&self) -> Result<Vec<u8>> {
         log::debug!("start emit");
-        let roots = self.exports.iter_roots();
+        let roots = self.exports.iter();
         let used = passes::Used::new(self, roots.map(|e| e.id()));
 
         let indices = &mut IdsToIndices::default();

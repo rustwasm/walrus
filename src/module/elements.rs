@@ -3,9 +3,9 @@
 use crate::emit::{Emit, EmitContext, Section};
 use crate::ir::Value;
 use crate::parse::IndicesToIds;
+use crate::tombstone_arena::{Id, TombstoneArena};
 use crate::{FunctionId, InitExpr, Module, Result, TableKind, ValType};
 use failure::{bail, ResultExt};
-use id_arena::{Arena, Id};
 
 /// A passive element segment identifier
 pub type ElementId = Id<Element>;
@@ -20,7 +20,7 @@ pub struct Element {
 /// used as function pointers.
 #[derive(Debug, Default)]
 pub struct ModuleElements {
-    arena: Arena<Element>,
+    arena: TombstoneArena<Element>,
 }
 
 impl ModuleElements {

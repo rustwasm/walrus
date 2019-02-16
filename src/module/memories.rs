@@ -4,8 +4,8 @@ use crate::emit::{Emit, EmitContext, Section};
 use crate::ir::Value;
 use crate::parse::IndicesToIds;
 use crate::passes::Used;
+use crate::tombstone_arena::{Id, TombstoneArena};
 use crate::{GlobalId, ImportId, InitExpr, Module, Result};
-use id_arena::{Arena, Id};
 
 /// The id of a memory.
 pub type MemoryId = Id<Memory>;
@@ -74,7 +74,7 @@ impl Emit for Memory {
 /// The set of memories in this module.
 #[derive(Debug, Default)]
 pub struct ModuleMemories {
-    arena: Arena<Memory>,
+    arena: TombstoneArena<Memory>,
 }
 
 impl ModuleMemories {

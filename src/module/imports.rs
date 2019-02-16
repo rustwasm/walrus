@@ -2,9 +2,9 @@
 
 use crate::emit::{Emit, EmitContext, Section};
 use crate::parse::IndicesToIds;
+use crate::tombstone_arena::{Id, TombstoneArena};
 use crate::{FunctionId, FunctionTable, GlobalId, MemoryId, Result, TableId};
 use crate::{Module, TableKind, TypeId, ValType};
-use id_arena::{Arena, Id};
 
 /// The id of an import.
 pub type ImportId = Id<Import>;
@@ -36,7 +36,7 @@ pub enum ImportKind {
 /// The set of imports in a module.
 #[derive(Debug, Default)]
 pub struct ModuleImports {
-    arena: Arena<Import>,
+    arena: TombstoneArena<Import>,
 }
 
 impl ModuleImports {

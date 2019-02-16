@@ -1,10 +1,9 @@
 //! Exported items in a wasm module.
 
 use crate::emit::{Emit, EmitContext, Section};
-use crate::map::IdHashSet;
 use crate::parse::IndicesToIds;
+use crate::tombstone_arena::{Id, Tombstone, TombstoneArena};
 use crate::{FunctionId, GlobalId, MemoryId, Module, Result, TableId};
-use id_arena::{Arena, Id};
 
 /// The id of an export.
 pub type ExportId = Id<Export>;
@@ -17,6 +16,12 @@ pub struct Export {
     pub name: String,
     /// The item being exported.
     pub item: ExportItem,
+}
+
+impl Tombstone for Export {
+    fn on_delete(&mut self) {
+        self.name = String::new();
+    }
 }
 
 impl Export {
@@ -43,8 +48,7 @@ pub enum ExportItem {
 #[derive(Debug, Default)]
 pub struct ModuleExports {
     /// The arena containing this module's exports.
-    arena: Arena<Export>,
-    blacklist: IdHashSet<Export>,
+    arena: TombstoneArena<Export>,
 }
 
 impl ModuleExports {
@@ -72,18 +76,9 @@ impl ModuleExports {
         })
     }
 
-    /// Get a shared reference to this module's root export
-    ///
-    /// Exports are "root exports" by default, unless they're blacklisted with
-    /// the `remove_root` method.
-    pub fn iter_roots(&self) -> impl Iterator<Item = &Export> {
-        self.iter().filter(move |e| !self.blacklist.contains(&e.id))
-    }
-
-    /// Removes an `id` from the set of "root exports" returned from
-    /// `iter_roots`.
+    /// Removes an exported item.
     pub fn remove_root(&mut self, id: ExportId) {
-        self.blacklist.insert(id);
+        self.arena.delete(id);
     }
 }
 
@@ -105,8 +100,7 @@ impl Module {
                 Memory => ExportItem::Memory(ids.get_memory(entry.index)?),
                 Global => ExportItem::Global(ids.get_global(entry.index)?),
             };
-            let id = self.exports.arena.next_id();
-            self.exports.arena.alloc(Export {
+            self.exports.arena.alloc_with_id(|id| Export {
                 id,
                 name: entry.field.to_string(),
                 item,
@@ -122,7 +116,7 @@ impl Emit for ModuleExports {
         // NB: exports are always considered used. They are the roots that the
         // used analysis searches out from.
 
-        let count = self.iter_roots().count();
+        let count = self.iter().count();
         if count == 0 {
             return;
         }
@@ -130,7 +124,7 @@ impl Emit for ModuleExports {
         let mut cx = cx.start_section(Section::Export);
         cx.encoder.usize(count);
 
-        for export in self.iter_roots() {
+        for export in self.iter() {
             cx.encoder.str(&export.name);
             match export.item {
                 ExportItem::Function(id) => {

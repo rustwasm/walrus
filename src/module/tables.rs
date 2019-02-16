@@ -2,8 +2,8 @@
 
 use crate::emit::{Emit, EmitContext, Section};
 use crate::parse::IndicesToIds;
+use crate::tombstone_arena::{Id, TombstoneArena};
 use crate::{FunctionId, GlobalId, ImportId, Module, Result, ValType};
-use id_arena::{Arena, Id};
 
 /// The id of a table.
 pub type TableId = Id<Table>;
@@ -65,9 +65,7 @@ impl Emit for Table {
             TableKind::Function(_) => {
                 cx.encoder.byte(0x70); // the `anyfunc` type
             }
-            TableKind::Anyref(_) => {
-                ValType::Anyref.emit(&mut cx.encoder)
-            }
+            TableKind::Anyref(_) => ValType::Anyref.emit(&mut cx.encoder),
         }
         cx.encoder.byte(self.maximum.is_some() as u8);
         cx.encoder.u32(self.initial);
@@ -81,7 +79,7 @@ impl Emit for Table {
 #[derive(Debug, Default)]
 pub struct ModuleTables {
     /// The arena containing this module's tables.
-    arena: Arena<Table>,
+    arena: TombstoneArena<Table>,
 }
 
 impl ModuleTables {

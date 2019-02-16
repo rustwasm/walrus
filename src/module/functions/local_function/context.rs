@@ -227,9 +227,7 @@ impl<'a> FunctionContext<'a> {
 
     pub fn add_side_effect(&mut self, value: ExprId, side_effect: ExprId) -> ExprId {
         // If we can add it to an existing `WithSideEffects` expr for this value, then do that.
-        if let Expr::WithSideEffects(WithSideEffects { after, .. }) =
-            self.func.get_mut(value)
-        {
+        if let Expr::WithSideEffects(WithSideEffects { after, .. }) = self.func.get_mut(value) {
             after.push(side_effect);
             return value;
         }

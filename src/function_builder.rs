@@ -1,14 +1,14 @@
 use crate::ir::*;
+use crate::tombstone_arena::TombstoneArena;
 use crate::{FunctionId, LocalFunction, Module, TypeId, ValType};
-use crate::{ModuleTypes, ModuleFunctions};
-use id_arena::Arena;
+use crate::{ModuleFunctions, ModuleTypes};
 use std::mem;
 use std::ops::{Deref, DerefMut, Drop};
 
 /// A helpful struct used for building instances of `LocalFunction`
 #[derive(Default, Debug)]
 pub struct FunctionBuilder {
-    pub(crate) arena: Arena<Expr>,
+    pub(crate) arena: TombstoneArena<Expr>,
 }
 
 impl FunctionBuilder {

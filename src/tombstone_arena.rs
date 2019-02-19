@@ -125,6 +125,7 @@ impl<T> IndexMut<Id<T>> for TombstoneArena<T> {
     }
 }
 
+#[derive(Debug)]
 pub struct IterMut<'a, T: 'a> {
     dead: &'a IdHashSet<T>,
     inner: id_arena::IterMut<'a, T, id_arena::DefaultArenaBehavior<T>>,
@@ -143,6 +144,7 @@ impl<'a, T: 'a> Iterator for IterMut<'a, T> {
     }
 }
 
+#[derive(Debug)]
 pub struct ParIterMut<'a, T: 'a + Send + Sync> {
     dead: &'a IdHashSet<T>,
     inner: id_arena::ParIterMut<'a, T, id_arena::DefaultArenaBehavior<T>>,

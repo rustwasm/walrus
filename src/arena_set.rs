@@ -1,4 +1,5 @@
-use id_arena::{Arena, Id};
+use crate::tombstone_arena::{Tombstone, TombstoneArena};
+use id_arena::Id;
 use std::collections::HashMap;
 use std::hash::Hash;
 use std::ops;
@@ -6,7 +7,7 @@ use std::ops;
 /// A set of unique `T`s that are backed by an arena.
 #[derive(Debug)]
 pub struct ArenaSet<T: Clone + Eq + Hash> {
-    arena: Arena<T>,
+    arena: TombstoneArena<T>,
     already_in_arena: HashMap<T, Id<T>>,
 }
 
@@ -14,17 +15,8 @@ impl<T: Clone + Eq + Hash> ArenaSet<T> {
     /// Construct a new set.
     pub fn new() -> ArenaSet<T> {
         ArenaSet {
-            arena: Arena::new(),
+            arena: TombstoneArena::default(),
             already_in_arena: HashMap::new(),
-        }
-    }
-
-    /// Construct a new set with the given capacity.
-    #[allow(unused)]
-    pub fn with_capacity(capacity: usize) -> ArenaSet<T> {
-        ArenaSet {
-            arena: Arena::with_capacity(capacity),
-            already_in_arena: HashMap::with_capacity(capacity),
         }
     }
 
@@ -44,15 +36,17 @@ impl<T: Clone + Eq + Hash> ArenaSet<T> {
         self.arena.next_id()
     }
 
-    /// Get a shared reference to the item associated with the given id if it is
-    /// in the set.
-    #[allow(unused)]
-    pub fn get(&self, id: Id<T>) -> Option<&T> {
-        self.arena.get(id)
+    /// Remove an item from this set
+    pub fn remove(&mut self, id: Id<T>)
+    where
+        T: Tombstone,
+    {
+        self.already_in_arena.remove(&self.arena[id]);
+        self.arena.delete(id);
     }
 
     /// Iterate over the items in this arena and their ids.
-    pub fn iter(&self) -> id_arena::Iter<T, id_arena::DefaultArenaBehavior<T>> {
+    pub fn iter(&self) -> impl Iterator<Item = (Id<T>, &T)> {
         self.arena.iter()
     }
 }

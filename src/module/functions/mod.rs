@@ -9,7 +9,6 @@ use crate::error::Result;
 use crate::module::imports::ImportId;
 use crate::module::Module;
 use crate::parse::IndicesToIds;
-use crate::passes::Used;
 use crate::tombstone_arena::{Id, Tombstone, TombstoneArena};
 use crate::ty::TypeId;
 use crate::ty::ValType;
@@ -253,13 +252,6 @@ impl ModuleFunctions {
         })
     }
 
-    pub(crate) fn iter_used<'a>(
-        &'a self,
-        used: &'a Used,
-    ) -> impl Iterator<Item = &'a Function> + 'a {
-        self.iter().filter(move |f| used.funcs.contains(&f.id))
-    }
-
     pub(crate) fn emit_func_section(&self, cx: &mut EmitContext) {
         log::debug!("emit function section");
         let functions = used_local_functions(cx);
@@ -403,12 +395,9 @@ fn used_local_functions<'a>(cx: &mut EmitContext<'a>) -> Vec<(FunctionId, &'a Lo
     // function. Sort imported functions in order so that we can get their
     // index in the function index space.
     let mut functions = Vec::new();
-    for (id, f) in cx.module.funcs.arena.iter() {
-        if !cx.used.funcs.contains(&id) {
-            continue;
-        }
+    for f in cx.module.funcs.iter() {
         match &f.kind {
-            FunctionKind::Local(l) => functions.push((id, l, l.size())),
+            FunctionKind::Local(l) => functions.push((f.id(), l, l.size())),
             FunctionKind::Import(_) => {}
             FunctionKind::Uninitialized(_) => unreachable!(),
         }
@@ -444,16 +433,17 @@ impl Emit for ModuleFunctions {
                 log::debug!("emit function {:?} {:?}", id, cx.module.funcs.get(id).name);
                 let mut wasm = Vec::new();
                 let mut encoder = Encoder::new(&mut wasm);
-                let local_indices = func.emit_locals(id, cx.module, cx.used, &mut encoder);
+                let (used_locals, local_indices) = func.emit_locals(cx.module, &mut encoder);
                 func.emit_instructions(cx.indices, &local_indices, &mut encoder);
-                (wasm, id, local_indices)
+                (wasm, id, used_locals, local_indices)
             })
             .collect::<Vec<_>>();
 
         cx.indices.locals.reserve(bytes.len());
-        for (wasm, id, local_indices) in bytes {
+        for (wasm, id, used_locals, local_indices) in bytes {
             cx.encoder.bytes(&wasm);
             cx.indices.locals.insert(id, local_indices);
+            cx.locals.insert(id, used_locals);
         }
     }
 }

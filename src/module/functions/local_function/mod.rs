@@ -12,7 +12,6 @@ use crate::ir::matcher::{ConstMatcher, Matcher};
 use crate::ir::*;
 use crate::map::{IdHashMap, IdHashSet};
 use crate::parse::IndicesToIds;
-use crate::passes::Used;
 use crate::{FunctionBuilder, FunctionId, Module, Result, TableKind, TypeId, ValType};
 use failure::{bail, ResultExt};
 use id_arena::Id;
@@ -182,21 +181,40 @@ impl LocalFunction {
             .all(|e| matcher.is_match(self, &self.get(*e)))
     }
 
+    fn used_locals(&self) -> IdHashSet<Local> {
+        struct Used<'a> {
+            func: &'a LocalFunction,
+            locals: IdHashSet<Local>,
+        }
+        let mut locals = Used {
+            func: self,
+            locals: Default::default(),
+        };
+        locals.visit_block_id(&self.entry_block());
+        return locals.locals;
+
+        impl<'a> Visitor<'a> for Used<'a> {
+            fn local_function(&self) -> &'a LocalFunction {
+                self.func
+            }
+
+            fn visit_local_id(&mut self, id: &LocalId) {
+                self.locals.insert(*id);
+            }
+        }
+    }
+
     /// Emit this function's compact locals declarations.
     pub(crate) fn emit_locals(
         &self,
-        id: FunctionId,
         module: &Module,
-        used: &Used,
         encoder: &mut Encoder,
-    ) -> IdHashMap<Local, u32> {
-        let mut used_locals = Vec::new();
-        if let Some(locals) = used.locals.get(&id) {
-            used_locals = locals.iter().cloned().collect();
-            // Sort to ensure we assign local indexes deterministically, and
-            // everything is distinct so we can use a faster unstable sort.
-            used_locals.sort_unstable();
-        }
+    ) -> (IdHashSet<Local>, IdHashMap<Local, u32>) {
+        let used_set = self.used_locals();
+        let mut used_locals = used_set.iter().cloned().collect::<Vec<_>>();
+        // Sort to ensure we assign local indexes deterministically, and
+        // everything is distinct so we can use a faster unstable sort.
+        used_locals.sort_unstable();
 
         // NB: Use `BTreeMap` to make compilation deterministic by emitting
         // types in the same order
@@ -239,7 +257,7 @@ impl LocalFunction {
             ty.emit(encoder);
         }
 
-        local_map
+        (used_set, local_map)
     }
 
     /// Emit this function's instruction sequence.

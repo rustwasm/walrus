@@ -3,6 +3,7 @@
 use crate::emit::{Emit, EmitContext};
 use crate::encode::Encoder;
 use crate::error::Result;
+use crate::tombstone_arena::Tombstone;
 use id_arena::Id;
 use std::fmt;
 use std::hash;
@@ -34,6 +35,13 @@ impl hash::Hash for Type {
         // Do not hash id.
         self.params.hash(h);
         self.results.hash(h)
+    }
+}
+
+impl Tombstone for Type {
+    fn on_delete(&mut self) {
+        self.params = Box::new([]);
+        self.results = Box::new([]);
     }
 }
 

@@ -4,8 +4,7 @@
 
 use crate::encode::{Encoder, MAX_U32_LENGTH};
 use crate::ir::Local;
-use crate::map::IdHashMap;
-use crate::passes::Used;
+use crate::map::{IdHashMap, IdHashSet};
 use crate::{Data, DataId, Element, ElementId, Function, FunctionId};
 use crate::{Global, GlobalId, Memory, MemoryId, Module, Table, TableId};
 use crate::{Type, TypeId};
@@ -13,9 +12,9 @@ use std::ops::{Deref, DerefMut};
 
 pub struct EmitContext<'a> {
     pub module: &'a Module,
-    pub used: &'a Used,
     pub indices: &'a mut IdsToIndices,
     pub encoder: Encoder<'a>,
+    pub locals: IdHashMap<Function, IdHashSet<Local>>,
 }
 
 pub struct SubContext<'a, 'cx> {

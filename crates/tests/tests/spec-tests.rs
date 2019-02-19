@@ -48,23 +48,20 @@ fn run(wast: &Path) -> Result<(), failure::Error> {
 
     let contents = fs::read_to_string(&json).context("failed to read file")?;
     let test: Test = serde_json::from_str(&contents).context("failed to parse file")?;
-    let prev_len = test.commands.len();
-    let mut new_commands = Vec::new();
+    let mut files = Vec::new();
+
+    let mut config = walrus::ModuleConfig::new();
+    if extra_args.len() == 0 {
+        config.only_stable_features(true);
+    }
 
     for command in test.commands {
         let filename = match command.get("filename") {
             Some(name) => name.as_str().unwrap().to_string(),
-            None => {
-                new_commands.push(command);
-                continue;
-            }
+            None => continue,
         };
         let line = &command["line"];
         let path = tempdir.path().join(filename);
-        let mut config = walrus::ModuleConfig::new();
-        if extra_args.len() == 0 {
-            config.only_stable_features(true);
-        }
         match command["type"].as_str().unwrap() {
             "assert_invalid" | "assert_malformed" => {
                 let wasm = fs::read(&path)?;
@@ -83,32 +80,9 @@ fn run(wast: &Path) -> Result<(), failure::Error> {
             }
             cmd => {
                 let wasm = fs::read(&path)?;
-                let mut wasm = config
+                let wasm = config
                     .parse(&wasm)
                     .context(format!("error parsing wasm (line {})", line))?;
-
-                // If a module is supposed to be unlinkable we'll often gc out
-                // items which would have otherwise made it unlinkable, so make
-                // sure that everything is exported.
-                if cmd == "assert_unlinkable" {
-                    for (i, memory) in wasm.memories.iter().enumerate() {
-                        let name = format!("__memory_{}", i);
-                        wasm.exports.add(&name, memory.id());
-                    }
-                    for (i, table) in wasm.tables.iter().enumerate() {
-                        let name = format!("__table_{}", i);
-                        wasm.exports.add(&name, table.id());
-                    }
-                    for (i, func) in wasm.funcs.iter().enumerate() {
-                        let name = format!("__function_{}", i);
-                        wasm.exports.add(&name, func.id());
-                    }
-                    for (i, global) in wasm.globals.iter().enumerate() {
-                        let name = format!("__global_{}", i);
-                        wasm.exports.add(&name, global.id());
-                    }
-                }
-
                 let wasm1 = wasm
                     .emit_wasm()
                     .context(format!("error emitting wasm (line {})", line))?;
@@ -120,27 +94,42 @@ fn run(wast: &Path) -> Result<(), failure::Error> {
                 if wasm1 != wasm2 {
                     panic!("wasm module at line {} isn't deterministic", line);
                 }
-                new_commands.push(command);
+                files.push((cmd.to_string(), path.to_path_buf()));
                 continue;
             }
         }
     }
 
-    // The JSON parser in `spectest-interp` seems like it doesn't really parse
-    // JSON as it bails on valid json that serde emits. Work around this by just
-    // not rewriting the json file if we didn't actually filter out any
-    // commands, which is needed to get a spec test working.
-    if prev_len != new_commands.len() {
-        let contents = serde_json::to_string_pretty(&Test {
-            source_filename: test.source_filename,
-            commands: new_commands,
-        })
-        .context("error creating json")?;
-        fs::write(json, contents).context("error writing json")?;
+    // First up run the spec-tests as-is after we round-tripped through walrus.
+    // This should for sure work correctly
+    run_spectest_interp(tempdir.path(), extra_args)?;
+
+    // Next run the same spec tests with semantics-preserving passes implemented
+    // in walrus. Everything should continue to pass.
+    for (cmd, file) in files.iter() {
+        let wasm = fs::read(file)?;
+        let mut module = config.parse(&wasm)?;
+
+        // Tests which assert that they're not linkable tend to not work with
+        // the gc pass because it removes things which would cause a module to
+        // become unlinkable. This doesn't matter too much in the real world
+        // (hopefully), so just don't gc assert_unlinkable modules.
+        if cmd != "assert_unlinkable" {
+            walrus::passes::gc::run(&mut module);
+        }
+
+        let wasm = module.emit_wasm()?;
+        fs::write(&file, wasm)?;
     }
 
+    run_spectest_interp(tempdir.path(), extra_args)?;
+
+    Ok(())
+}
+
+fn run_spectest_interp(cwd: &Path, extra_args: &[&str]) -> Result<(), failure::Error> {
     let output = Command::new("spectest-interp")
-        .current_dir(tempdir.path())
+        .current_dir(cwd)
         .arg("foo.json")
         .args(extra_args)
         .output()

@@ -3,7 +3,6 @@
 use crate::emit::{Emit, EmitContext, Section};
 use crate::ir::Value;
 use crate::parse::IndicesToIds;
-use crate::passes::Used;
 use crate::tombstone_arena::{Id, Tombstone, TombstoneArena};
 use crate::{GlobalId, ImportId, InitExpr, Module, Result};
 
@@ -148,10 +147,6 @@ impl ModuleMemories {
     pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut Memory> {
         self.arena.iter_mut().map(|(_, f)| f)
     }
-
-    pub(crate) fn iter_used<'a>(&'a self, used: &'a Used) -> impl Iterator<Item = &'a Memory> + 'a {
-        self.iter().filter(move |m| used.memories.contains(&m.id))
-    }
 }
 
 impl Module {
@@ -176,28 +171,17 @@ impl Module {
 impl Emit for ModuleMemories {
     fn emit(&self, cx: &mut EmitContext) {
         log::debug!("emit memory section");
-        let emitted = |cx: &EmitContext, memory: &Memory| {
-            // If it's imported we already emitted this in the import section
-            cx.used.memories.contains(&memory.id) && memory.import.is_none()
-        };
-
-        let memories = self
-            .arena
-            .iter()
-            .filter(|(_id, memory)| emitted(cx, memory))
-            .count();
-
+        // imported memories are emitted earlier
+        let memories = self.iter().filter(|m| m.import.is_none()).count();
         if memories == 0 {
             return;
         }
 
         let mut cx = cx.start_section(Section::Memory);
         cx.encoder.usize(memories);
-        for (id, memory) in self.arena.iter() {
-            if emitted(&cx, memory) {
-                cx.indices.push_memory(id);
-                memory.emit(&mut cx);
-            }
+        for memory in self.iter().filter(|m| m.import.is_none()) {
+            cx.indices.push_memory(memory.id());
+            memory.emit(&mut cx);
         }
     }
 }

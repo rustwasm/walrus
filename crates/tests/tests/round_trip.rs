@@ -6,7 +6,7 @@ use walrus_tests_utils::{wasm2wat, wat2wasm};
 
 fn run(wat_path: &Path) -> Result<(), failure::Error> {
     let wasm = wat2wasm(wat_path);
-    let module = walrus::Module::from_buffer(&wasm)?;
+    let mut module = walrus::Module::from_buffer(&wasm)?;
 
     if env::var("WALRUS_TESTS_DOT").is_ok() {
         for (i, func) in module.functions().enumerate() {
@@ -17,6 +17,7 @@ fn run(wat_path: &Path) -> Result<(), failure::Error> {
     }
 
     let out_wasm_file = wat_path.with_extension("out.wasm");
+    walrus::passes::gc::run(&mut module);
     module.emit_wasm_file(&out_wasm_file)?;
 
     let out_wat = wasm2wat(&out_wasm_file);

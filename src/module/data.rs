@@ -3,7 +3,6 @@
 use crate::emit::{Emit, EmitContext, Section};
 use crate::ir::Value;
 use crate::parse::IndicesToIds;
-use crate::passes::Used;
 use crate::tombstone_arena::{Id, Tombstone, TombstoneArena};
 use crate::{InitExpr, Module, Result, ValType};
 use failure::{bail, ResultExt};
@@ -82,10 +81,6 @@ impl ModuleData {
         })
     }
 
-    pub(crate) fn iter_used<'a>(&'a self, used: &'a Used) -> impl Iterator<Item = &'a Data> + 'a {
-        self.iter().filter(move |data| used.data.contains(&data.id))
-    }
-
     // Note that this is inaccordance with the upstream bulk memory proposal to
     // WebAssembly and isn't currently part of the WebAssembly standard.
     pub(crate) fn emit_data_count(&self, cx: &mut EmitContext) {
@@ -94,14 +89,14 @@ impl ModuleData {
         // The first elements in the index space will be active segments, so
         // count all those first. Here we push an "invalid id", or one we know
         // isn't ever used, as the low data segments.
-        for mem in cx.module.memories.iter_used(cx.used) {
+        for mem in cx.module.memories.iter() {
             count += mem.emit_data().count();
         }
 
         // After the active data segments, assign indices to the passive data
         // segments.
         let mut any_passive = false;
-        for data in self.iter_used(cx.used) {
+        for data in self.iter() {
             cx.indices.set_data_index(data.id(), count as u32);
             count += 1;
             any_passive = true;
@@ -188,11 +183,11 @@ impl Emit for ModuleData {
         let mut active = cx
             .module
             .memories
-            .iter_used(cx.used)
+            .iter()
             .flat_map(|memory| memory.emit_data().map(move |data| (memory.id(), data)))
             .collect::<Vec<_>>();
         active.sort_by_key(|pair| pair.0);
-        let passive = self.iter_used(cx.used).count();
+        let passive = self.iter().count();
 
         if active.len() == 0 && passive == 0 {
             return;
@@ -220,7 +215,7 @@ impl Emit for ModuleData {
         // may want to sort this more intelligently in the future. Otherwise
         // emitting a segment here is in general much simpler than above as we
         // know there are no holes.
-        for data in self.iter_used(cx.used) {
+        for data in self.iter() {
             cx.encoder.byte(0x01);
             cx.encoder.bytes(&data.value);
         }

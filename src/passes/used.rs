@@ -1,5 +1,5 @@
 use crate::ir::*;
-use crate::map::{IdHashMap, IdHashSet};
+use crate::map::IdHashSet;
 use crate::{Data, DataId, Element, ExportId, ExportItem, Function, InitExpr};
 use crate::{FunctionId, FunctionKind, Global, GlobalId, LocalFunction};
 use crate::{GlobalKind, ImportKind, Memory, MemoryId, Table, TableId};
@@ -26,8 +26,6 @@ pub struct Used {
     pub elements: IdHashSet<Element>,
     /// The module's used passive data segments.
     pub data: IdHashSet<Data>,
-    /// Locals used within functions
-    pub locals: IdHashMap<Function, IdHashSet<Local>>,
 }
 
 impl Used {
@@ -99,7 +97,6 @@ impl Used {
                         func.entry_block().visit(&mut UsedVisitor {
                             func,
                             stack: &mut stack,
-                            id: f,
                         });
                     }
                     FunctionKind::Import(_) => {}
@@ -184,7 +181,6 @@ impl UsedStack<'_> {
 struct UsedVisitor<'a, 'b> {
     func: &'a LocalFunction,
     stack: &'a mut UsedStack<'b>,
-    id: FunctionId,
 }
 
 impl<'expr> Visitor<'expr> for UsedVisitor<'expr, '_> {
@@ -214,14 +210,5 @@ impl<'expr> Visitor<'expr> for UsedVisitor<'expr, '_> {
 
     fn visit_data_id(&mut self, &t: &DataId) {
         self.stack.used.data.insert(t);
-    }
-
-    fn visit_local_id(&mut self, &l: &LocalId) {
-        self.stack
-            .used
-            .locals
-            .entry(self.id)
-            .or_insert_with(IdHashSet::default)
-            .insert(l);
     }
 }

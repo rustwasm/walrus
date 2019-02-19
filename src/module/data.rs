@@ -4,9 +4,9 @@ use crate::emit::{Emit, EmitContext, Section};
 use crate::ir::Value;
 use crate::parse::IndicesToIds;
 use crate::passes::Used;
+use crate::tombstone_arena::{Id, Tombstone, TombstoneArena};
 use crate::{InitExpr, Module, Result, ValType};
 use failure::{bail, ResultExt};
-use id_arena::{Arena, Id};
 
 /// A passive element segment identifier
 pub type DataId = Id<Data>;
@@ -29,6 +29,12 @@ pub struct Data {
     pub value: Vec<u8>,
 }
 
+impl Tombstone for Data {
+    fn on_delete(&mut self) {
+        self.value = Vec::new();
+    }
+}
+
 impl Data {
     /// Returns the id of this passive data segment
     pub fn id(&self) -> DataId {
@@ -40,7 +46,7 @@ impl Data {
 /// various instructions.
 #[derive(Debug, Default)]
 pub struct ModuleData {
-    arena: Arena<Data>,
+    arena: TombstoneArena<Data>,
 }
 
 impl ModuleData {
@@ -54,6 +60,14 @@ impl ModuleData {
         &mut self.arena[id]
     }
 
+    /// Delete a passive data segment from this module.
+    ///
+    /// It is up to you to ensure that all references to the deleted segment are
+    /// removed, eg `memory.init` and `data.drop` expressions.
+    pub fn delete(&mut self, id: DataId) {
+        self.arena.delete(id);
+    }
+
     /// Get a shared reference to this module's passive elements.
     pub fn iter(&self) -> impl Iterator<Item = &Data> {
         self.arena.iter().map(|(_, f)| f)
@@ -61,11 +75,10 @@ impl ModuleData {
 
     /// Adds a new passive data segment with the specified contents
     pub fn add(&mut self, value: Vec<u8>) -> DataId {
-        let id = self.arena.next_id();
-        self.arena.alloc(Data {
-            passive: true,
-            value,
+        self.arena.alloc_with_id(|id| Data {
             id,
+            value,
+            passive: true,
         })
     }
 
@@ -110,13 +123,11 @@ impl Module {
     /// validation.
     pub(crate) fn reserve_data(&mut self, count: u32, ids: &mut IndicesToIds) {
         for _ in 0..count {
-            let id = self.data.arena.next_id();
-            self.data.arena.alloc(Data {
+            ids.push_data(self.data.arena.alloc_with_id(|id| Data {
                 id,
                 passive: false, // this'll get set to `true` when parsing data
                 value: Vec::new(),
-            });
-            ids.push_data(id);
+            }));
         }
     }
 

@@ -13,7 +13,7 @@ use crate::ir::*;
 use crate::map::{IdHashMap, IdHashSet};
 use crate::parse::IndicesToIds;
 use crate::passes::Used;
-use crate::{FunctionId, Module, Result, TypeId, ValType, FunctionBuilder, TableKind};
+use crate::{FunctionBuilder, FunctionId, Module, Result, TableKind, TypeId, ValType};
 use failure::{bail, ResultExt};
 use id_arena::Id;
 use std::collections::BTreeMap;
@@ -1245,7 +1245,11 @@ fn validate_instruction(ctx: &mut FunctionContext, inst: Operator) -> Result<()>
             };
             let (_, value) = ctx.pop_operand_expected(Some(expected_ty))?;
             let (_, index) = ctx.pop_operand_expected(Some(I32))?;
-            let expr = ctx.func.alloc(TableSet { table, index, value });
+            let expr = ctx.func.alloc(TableSet {
+                table,
+                index,
+                value,
+            });
             ctx.add_to_current_frame_block(expr);
         }
         Operator::TableGrow { table } => {
@@ -1256,7 +1260,11 @@ fn validate_instruction(ctx: &mut FunctionContext, inst: Operator) -> Result<()>
             };
             let (_, value) = ctx.pop_operand_expected(Some(expected_ty))?;
             let (_, amount) = ctx.pop_operand_expected(Some(I32))?;
-            let expr = ctx.func.alloc(TableGrow { table, amount, value });
+            let expr = ctx.func.alloc(TableGrow {
+                table,
+                amount,
+                value,
+            });
             ctx.push_operand(Some(I32), expr);
         }
         Operator::TableSize { table } => {
@@ -1265,7 +1273,7 @@ fn validate_instruction(ctx: &mut FunctionContext, inst: Operator) -> Result<()>
             ctx.push_operand(Some(I32), expr);
         }
         Operator::RefNull => {
-            let expr = ctx.func.alloc(RefNull { });
+            let expr = ctx.func.alloc(RefNull {});
             ctx.push_operand(Some(Anyref), expr);
         }
         Operator::RefIsNull => {

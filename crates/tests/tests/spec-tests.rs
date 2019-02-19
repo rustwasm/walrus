@@ -32,7 +32,6 @@ fn run(wast: &Path) -> Result<(), failure::Error> {
         // TODO: should get threads working
         Some("threads") => return Ok(()),
         // Some("threads") => &["--enable-threads"],
-
         Some(other) => panic!("unknown wasm proposal: {}", other),
     };
 
@@ -84,7 +83,8 @@ fn run(wast: &Path) -> Result<(), failure::Error> {
             }
             cmd => {
                 let wasm = fs::read(&path)?;
-                let mut wasm = config.parse(&wasm)
+                let mut wasm = config
+                    .parse(&wasm)
                     .context(format!("error parsing wasm (line {})", line))?;
 
                 // If a module is supposed to be unlinkable we'll often gc out
@@ -113,7 +113,8 @@ fn run(wast: &Path) -> Result<(), failure::Error> {
                     .emit_wasm()
                     .context(format!("error emitting wasm (line {})", line))?;
                 fs::write(&path, &wasm1)?;
-                let wasm2 = config.parse(&wasm1)
+                let wasm2 = config
+                    .parse(&wasm1)
                     .and_then(|m| m.emit_wasm())
                     .context(format!("error re-parsing wasm (line {})", line))?;
                 if wasm1 != wasm2 {

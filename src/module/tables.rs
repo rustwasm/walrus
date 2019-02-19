@@ -2,8 +2,8 @@
 
 use crate::emit::{Emit, EmitContext, Section};
 use crate::parse::IndicesToIds;
+use crate::tombstone_arena::{Id, Tombstone, TombstoneArena};
 use crate::{FunctionId, GlobalId, ImportId, Module, Result, ValType};
-use id_arena::{Arena, Id};
 
 /// The id of a table.
 pub type TableId = Id<Table>;
@@ -21,6 +21,8 @@ pub struct Table {
     /// Whether or not this table is imported, and if so what imports it.
     pub import: Option<ImportId>,
 }
+
+impl Tombstone for Table {}
 
 /// The kinds of tables that can exist
 #[derive(Debug)]
@@ -65,9 +67,7 @@ impl Emit for Table {
             TableKind::Function(_) => {
                 cx.encoder.byte(0x70); // the `anyfunc` type
             }
-            TableKind::Anyref(_) => {
-                ValType::Anyref.emit(&mut cx.encoder)
-            }
+            TableKind::Anyref(_) => ValType::Anyref.emit(&mut cx.encoder),
         }
         cx.encoder.byte(self.maximum.is_some() as u8);
         cx.encoder.u32(self.initial);
@@ -81,7 +81,7 @@ impl Emit for Table {
 #[derive(Debug, Default)]
 pub struct ModuleTables {
     /// The arena containing this module's tables.
-    arena: Arena<Table>,
+    arena: TombstoneArena<Table>,
 }
 
 impl ModuleTables {
@@ -126,6 +126,14 @@ impl ModuleTables {
     /// Returns the actual table associated with an ID
     pub fn get_mut(&mut self, table: TableId) -> &mut Table {
         &mut self.arena[table]
+    }
+
+    /// Removes a table from this module.
+    ///
+    /// It is up to you to ensure that any potential references to the deleted
+    /// table are also removed, eg `call_indirect` expressions and exports, etc.
+    pub fn delete(&mut self, id: TableId) {
+        self.arena.delete(id);
     }
 
     /// Iterates over all tables in this section.

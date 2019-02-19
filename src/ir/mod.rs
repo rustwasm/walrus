@@ -526,8 +526,7 @@ pub enum Expr {
     },
 
     /// ref.null
-    RefNull {
-    },
+    RefNull {},
 
     /// ref.is_null
     RefIsNull {

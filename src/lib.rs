@@ -15,10 +15,11 @@ mod map;
 mod module;
 mod parse;
 pub mod passes;
+mod tombstone_arena;
 mod ty;
 
 pub use crate::error::{ErrorKind, Result};
-pub use crate::function_builder::{FunctionBuilder, BlockBuilder};
+pub use crate::function_builder::{BlockBuilder, FunctionBuilder};
 pub use crate::init_expr::InitExpr;
 pub use crate::ir::{Local, LocalId};
 pub use crate::module::*;

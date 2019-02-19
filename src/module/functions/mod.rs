@@ -10,10 +10,10 @@ use crate::module::imports::ImportId;
 use crate::module::Module;
 use crate::parse::IndicesToIds;
 use crate::passes::Used;
+use crate::tombstone_arena::{Id, Tombstone, TombstoneArena};
 use crate::ty::TypeId;
 use crate::ty::ValType;
 use failure::bail;
-use id_arena::{Arena, Id};
 use rayon::prelude::*;
 use std::cmp;
 use std::fmt;
@@ -41,6 +41,14 @@ pub struct Function {
 
     /// An optional name associated with this function
     pub name: Option<String>,
+}
+
+impl Tombstone for Function {
+    fn on_delete(&mut self) {
+        let ty = self.ty();
+        self.kind = FunctionKind::Uninitialized(ty);
+        self.name = None;
+    }
 }
 
 impl Function {
@@ -139,7 +147,7 @@ impl fmt::Display for ImportedFunction {
 #[derive(Debug, Default)]
 pub struct ModuleFunctions {
     /// The arena containing this module's functions.
-    arena: Arena<Function>,
+    arena: TombstoneArena<Function>,
 }
 
 impl ModuleFunctions {
@@ -150,8 +158,7 @@ impl ModuleFunctions {
 
     /// Create a new externally defined, imported function.
     pub fn add_import(&mut self, ty: TypeId, import: ImportId) -> FunctionId {
-        let id = self.arena.next_id();
-        self.arena.alloc(Function {
+        self.arena.alloc_with_id(|id| Function {
             id,
             kind: FunctionKind::Import(ImportedFunction { import, ty }),
             name: None,
@@ -160,8 +167,7 @@ impl ModuleFunctions {
 
     /// Create a new internally defined function
     pub fn add_local(&mut self, func: LocalFunction) -> FunctionId {
-        let id = self.arena.next_id();
-        self.arena.alloc(Function {
+        self.arena.alloc_with_id(|id| Function {
             id,
             kind: FunctionKind::Local(func),
             name: None,
@@ -176,6 +182,15 @@ impl ModuleFunctions {
     /// Gets a reference to a function given its id
     pub fn get_mut(&mut self, id: FunctionId) -> &mut Function {
         &mut self.arena[id]
+    }
+
+    /// Removes a function from this module.
+    ///
+    /// It is up to you to ensure that any potential references to the deleted
+    /// function are also removed, eg `call` expressions, exports, table
+    /// elements, etc.
+    pub fn delete(&mut self, id: FunctionId) {
+        self.arena.delete(id);
     }
 
     /// Get a shared reference to this module's functions.
@@ -278,8 +293,10 @@ impl Module {
         log::debug!("parse function section");
         for func in section {
             let ty = ids.get_type(func?)?;
-            let id = self.funcs.arena.next_id();
-            self.funcs.arena.alloc(Function::new_uninitialized(id, ty));
+            let id = self
+                .funcs
+                .arena
+                .alloc_with_id(|id| Function::new_uninitialized(id, ty));
             let idx = ids.push_func(id);
             if self.config.generate_synthetic_names_for_anonymous_items {
                 self.funcs.get_mut(id).name = Some(format!("f{}", idx));
@@ -386,7 +403,7 @@ fn used_local_functions<'a>(cx: &mut EmitContext<'a>) -> Vec<(FunctionId, &'a Lo
     // function. Sort imported functions in order so that we can get their
     // index in the function index space.
     let mut functions = Vec::new();
-    for (id, f) in &cx.module.funcs.arena {
+    for (id, f) in cx.module.funcs.arena.iter() {
         if !cx.used.funcs.contains(&id) {
             continue;
         }

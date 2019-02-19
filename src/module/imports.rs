@@ -2,9 +2,9 @@
 
 use crate::emit::{Emit, EmitContext, Section};
 use crate::parse::IndicesToIds;
+use crate::tombstone_arena::{Id, Tombstone, TombstoneArena};
 use crate::{FunctionId, FunctionTable, GlobalId, MemoryId, Result, TableId};
 use crate::{Module, TableKind, TypeId, ValType};
-use id_arena::{Arena, Id};
 
 /// The id of an import.
 pub type ImportId = Id<Import>;
@@ -18,6 +18,13 @@ pub struct Import {
     pub name: String,
     /// The kind of item being imported.
     pub kind: ImportKind,
+}
+
+impl Tombstone for Import {
+    fn on_delete(&mut self) {
+        self.module = String::new();
+        self.name = String::new();
+    }
 }
 
 /// An imported item.
@@ -36,7 +43,7 @@ pub enum ImportKind {
 /// The set of imports in a module.
 #[derive(Debug, Default)]
 pub struct ModuleImports {
-    arena: Arena<Import>,
+    arena: TombstoneArena<Import>,
 }
 
 impl ModuleImports {
@@ -48,6 +55,14 @@ impl ModuleImports {
     /// Gets a reference to an import given its id
     pub fn get_mut(&mut self, id: ImportId) -> &mut Import {
         &mut self.arena[id]
+    }
+
+    /// Removes an import from this module.
+    ///
+    /// It is up to you to ensure that any potential references to the deleted
+    /// import are also removed, eg `get_global` expressions.
+    pub fn delete(&mut self, id: ImportId) {
+        self.arena.delete(id);
     }
 
     /// Get a shared reference to this module's imports.

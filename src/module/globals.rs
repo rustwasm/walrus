@@ -1,9 +1,8 @@
 //! Globals within a wasm module.
-
 use crate::emit::{Emit, EmitContext, Section};
 use crate::parse::IndicesToIds;
+use crate::tombstone_arena::{Id, Tombstone, TombstoneArena};
 use crate::{ImportId, InitExpr, Module, Result, ValType};
-use id_arena::{Arena, Id};
 
 /// The id of a global.
 pub type GlobalId = Id<Global>;
@@ -24,6 +23,8 @@ pub struct Global {
     /// The kind of global this is
     pub kind: GlobalKind,
 }
+
+impl Tombstone for Global {}
 
 /// The different kinds of globals a wasm module can have
 #[derive(Debug)]
@@ -52,14 +53,13 @@ impl Emit for Global {
 #[derive(Debug, Default)]
 pub struct ModuleGlobals {
     /// The arena where the globals are stored.
-    arena: Arena<Global>,
+    arena: TombstoneArena<Global>,
 }
 
 impl ModuleGlobals {
     /// Adds a new imported global to this list.
     pub fn add_import(&mut self, ty: ValType, mutable: bool, import_id: ImportId) -> GlobalId {
-        let id = self.arena.next_id();
-        self.arena.alloc(Global {
+        self.arena.alloc_with_id(|id| Global {
             id,
             ty,
             mutable,
@@ -70,8 +70,7 @@ impl ModuleGlobals {
     /// Construct a new global, that does not originate from any of the input
     /// wasm globals.
     pub fn add_local(&mut self, ty: ValType, mutable: bool, init: InitExpr) -> GlobalId {
-        let id = self.arena.next_id();
-        self.arena.alloc(Global {
+        self.arena.alloc_with_id(|id| Global {
             id,
             ty,
             mutable,
@@ -87,6 +86,14 @@ impl ModuleGlobals {
     /// Gets a reference to a memory given its id
     pub fn get_mut(&mut self, id: GlobalId) -> &mut Global {
         &mut self.arena[id]
+    }
+
+    /// Removes a global from this module.
+    ///
+    /// It is up to you to ensure that any potential references to the deleted
+    /// global are also removed, eg `get_global` expressions.
+    pub fn delete(&mut self, id: GlobalId) {
+        self.arena.delete(id);
     }
 
     /// Get a shared reference to this module's globals.

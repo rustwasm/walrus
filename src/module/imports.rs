@@ -205,28 +205,15 @@ impl Module {
 impl Emit for ModuleImports {
     fn emit(&self, cx: &mut EmitContext) {
         log::debug!("emit import section");
-        let mut imports = Vec::new();
-
-        for (_id, import) in self.arena.iter() {
-            let used = match import.kind {
-                ImportKind::Function(id) => cx.used.funcs.contains(&id),
-                ImportKind::Global(id) => cx.used.globals.contains(&id),
-                ImportKind::Memory(id) => cx.used.memories.contains(&id),
-                ImportKind::Table(id) => cx.used.tables.contains(&id),
-            };
-            if !used {
-                continue;
-            }
-            imports.push(import);
-        }
-        if imports.len() == 0 {
+        let count = self.iter().count();
+        if count == 0 {
             return;
         }
 
         let mut cx = cx.start_section(Section::Import);
-        cx.encoder.usize(imports.len());
+        cx.encoder.usize(count);
 
-        for import in imports {
+        for import in self.iter() {
             cx.encoder.str(&import.module);
             cx.encoder.str(&import.name);
             match import.kind {

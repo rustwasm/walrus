@@ -126,35 +126,26 @@ impl Module {
 impl Emit for ModuleGlobals {
     fn emit(&self, cx: &mut EmitContext) {
         log::debug!("emit global section");
-        fn get_local<'a>(cx: &EmitContext, global: &'a Global) -> Option<&'a InitExpr> {
-            // If it's imported we already emitted this in the import section
-            if !cx.used.globals.contains(&global.id) {
-                return None;
-            }
+        fn get_local(global: &Global) -> Option<(&Global, &InitExpr)> {
             match &global.kind {
                 GlobalKind::Import(_) => None,
-                GlobalKind::Local(local) => Some(local),
+                GlobalKind::Local(local) => Some((global, local)),
             }
         }
 
-        let globals = self
-            .arena
-            .iter()
-            .filter(|(_id, global)| get_local(cx, global).is_some())
-            .count();
-
+        // All imported globals emitted earlier during the import section, so
+        // filter those out.
+        let globals = self.iter().filter_map(get_local).count();
         if globals == 0 {
             return;
         }
 
         let mut cx = cx.start_section(Section::Global);
         cx.encoder.usize(globals);
-        for (id, global) in self.arena.iter() {
-            if let Some(local) = get_local(&cx, global) {
-                cx.indices.push_global(id);
-                global.emit(&mut cx);
-                local.emit(&mut cx);
-            }
+        for (global, local) in self.iter().filter_map(get_local) {
+            cx.indices.push_global(global.id());
+            global.emit(&mut cx);
+            local.emit(&mut cx);
         }
     }
 }

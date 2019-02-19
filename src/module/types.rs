@@ -29,6 +29,15 @@ impl ModuleTypes {
         self.arena.iter().map(|(_, f)| f)
     }
 
+    /// Removes a type from this module.
+    ///
+    /// It is up to you to ensure that any potential references to the deleted
+    /// type are also removed, eg `call_indirect` expressions, function types,
+    /// etc.
+    pub fn delete(&mut self, ty: TypeId) {
+        self.arena.remove(ty);
+    }
+
     /// Add a new type to this module, and return its `Id`
     pub fn add(&mut self, params: &[ValType], results: &[ValType]) -> TypeId {
         let id = self.arena.next_id();
@@ -74,7 +83,7 @@ impl Module {
 impl Emit for ModuleTypes {
     fn emit(&self, cx: &mut EmitContext) {
         log::debug!("emitting type section");
-        let ntypes = cx.used.types.len();
+        let ntypes = self.iter().count();
         if ntypes == 0 {
             return;
         }
@@ -82,9 +91,6 @@ impl Emit for ModuleTypes {
         cx.encoder.usize(ntypes);
 
         for (id, ty) in self.arena.iter() {
-            if !cx.used.types.contains(&id) {
-                continue;
-            }
             cx.indices.push_type(id);
             ty.emit(&mut cx);
         }

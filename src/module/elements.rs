@@ -13,7 +13,15 @@ pub type ElementId = Id<Element>;
 /// A passive segment which contains a list of functions
 #[derive(Debug)]
 pub struct Element {
+    id: Id<Element>,
     members: Vec<FunctionId>,
+}
+
+impl Element {
+    /// Get this segment's id
+    pub fn id(&self) -> Id<Element> {
+        self.id
+    }
 }
 
 impl Tombstone for Element {
@@ -121,7 +129,6 @@ impl Emit for ModuleElements {
             .module
             .tables
             .iter()
-            .filter(|t| cx.used.tables.contains(&t.id()))
             .filter_map(|t| match &t.kind {
                 TableKind::Function(list) => Some((t.id(), list)),
                 TableKind::Anyref(_) => None,
@@ -155,11 +162,7 @@ impl Emit for ModuleElements {
             }
         }
 
-        let passive = self
-            .arena
-            .iter()
-            .filter(|(id, _)| cx.used.elements.contains(id))
-            .count();
+        let passive = self.iter().count();
         let relative = active
             .iter()
             .map(|(_, table)| table.relative_elements.len())
@@ -218,9 +221,6 @@ impl Emit for ModuleElements {
         // emitting a segment here is in general much simpler than above as we
         // know there are no holes.
         for (id, segment) in self.arena.iter() {
-            if !cx.used.elements.contains(&id) {
-                continue;
-            }
             cx.indices.push_element(id);
             drop((id, segment));
             // TODO: sync this with the upstream spec

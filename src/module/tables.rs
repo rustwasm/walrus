@@ -200,28 +200,17 @@ impl Module {
 impl Emit for ModuleTables {
     fn emit(&self, cx: &mut EmitContext) {
         log::debug!("emit table section");
-        let emitted = |cx: &EmitContext, table: &Table| {
-            // If it's imported we already emitted this in the import section
-            cx.used.tables.contains(&table.id) && table.import.is_none()
-        };
-
-        let tables = self
-            .arena
-            .iter()
-            .filter(|(_id, table)| emitted(cx, table))
-            .count();
-
+        // Skip imported tables because those are emitted in the import section.
+        let tables = self.iter().filter(|t| t.import.is_none()).count();
         if tables == 0 {
             return;
         }
 
         let mut cx = cx.start_section(Section::Table);
         cx.encoder.usize(tables);
-        for (id, table) in self.arena.iter() {
-            if emitted(&cx, table) {
-                cx.indices.push_table(id);
-                table.emit(&mut cx);
-            }
+        for table in self.iter().filter(|t| t.import.is_none()) {
+            cx.indices.push_table(table.id());
+            table.emit(&mut cx);
         }
     }
 }

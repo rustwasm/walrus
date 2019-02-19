@@ -30,7 +30,6 @@ pub use crate::module::tables::FunctionTable;
 pub use crate::module::tables::{ModuleTables, Table, TableId, TableKind};
 pub use crate::module::types::ModuleTypes;
 use crate::parse::IndicesToIds;
-use crate::passes;
 use failure::{bail, ResultExt};
 use std::fs;
 use std::path::Path;
@@ -226,8 +225,6 @@ impl Module {
     /// Emit this module into an in-memory wasm buffer.
     pub fn emit_wasm(&self) -> Result<Vec<u8>> {
         log::debug!("start emit");
-        let roots = self.exports.iter();
-        let used = passes::Used::new(self, roots.map(|e| e.id()));
 
         let indices = &mut IdsToIndices::default();
         let mut wasm = Vec::new();
@@ -237,8 +234,8 @@ impl Module {
         let mut cx = EmitContext {
             module: self,
             indices,
-            used: &used,
             encoder: Encoder::new(&mut wasm),
+            locals: Default::default(),
         };
         self.types.emit(&mut cx);
         self.imports.emit(&mut cx);
@@ -334,7 +331,7 @@ fn emit_name_section(cx: &mut EmitContext) {
     let mut funcs = cx
         .module
         .funcs
-        .iter_used(cx.used)
+        .iter()
         .filter_map(|func| func.name.as_ref().map(|name| (func, name)))
         .map(|(func, name)| (cx.indices.get_func_index(func.id()), name))
         .collect::<Vec<_>>();
@@ -343,8 +340,8 @@ fn emit_name_section(cx: &mut EmitContext) {
     let mut locals = cx
         .module
         .funcs
-        .iter_used(cx.used)
-        .filter_map(|func| cx.used.locals.get(&func.id()).map(|l| (func, l)))
+        .iter()
+        .filter_map(|func| cx.locals.get(&func.id()).map(|l| (func, l)))
         .filter_map(|(func, locals)| {
             let local_names = locals
                 .iter()

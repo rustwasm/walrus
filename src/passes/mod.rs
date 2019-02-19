@@ -1,5 +1,6 @@
 //! Passes over whole modules or individual functions.
 
+pub mod gc;
 mod used;
-pub use self::used::Used;
 pub mod validate;
+pub use self::used::Used;

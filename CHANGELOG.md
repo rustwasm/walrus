@@ -32,6 +32,43 @@ Released YYYY-MM-DD.
 
 --------------------------------------------------------------------------------
 
+## 0.3.0
+
+Released 2019-02-19.
+
+### Added
+
+* Added support for the [reference
+  types](https://github.com/WebAssembly/reference-types/blob/master/proposals/reference-types/Overview.md)
+  wasm proposal. [#50](https://github.com/rustwasm/walrus/pull/50)
+* Can finish a `FunctionBuilder` with the relevant `&mut` parts of a module,
+  rather than a whole `&mut Module`. This is useful when some parts of the
+  module are mutably borrowed
+  elsewhere. [#56](https://github.com/rustwasm/walrus/pull/56)
+* Can get a `FunctionBuilder` from an existing `LocalFunction` so you can build
+  new expressions for the
+  function. [#54](https://github.com/rustwasm/walrus/pull/54)
+* Added the ability to delete functions, imports, exports, etc. Usually it is
+  easier to just let the builtin GCing emit only the necessary bits of the wasm
+  binary, but manually deleting will remove the item from iterators over the
+  module's parts. If you delete a thing, you are responsible for ensuring that
+  nothing else is referencing it (eg there are no remaining calls to a function
+  that you are deleting, etc). [#58](https://github.com/rustwasm/walrus/pull/58)
+* Added an `id` getter for
+  `Import`s. [#59](https://github.com/rustwasm/walrus/pull/59)
+* Added a mutable iterator for tables in a
+  module. [#59](https://github.com/rustwasm/walrus/pull/59)
+* Added a convenience function for getting the main function table for a
+  module. [#57](https://github.com/rustwasm/walrus/pull/57)
+
+### Changed
+
+* The `WithSideEffects` expression variant can have arbitrary stack-neutral side
+  effects before its value now, in addition to after its
+  value. [#55](https://github.com/rustwasm/walrus/pull/55)
+
+--------------------------------------------------------------------------------
+
 ## 0.2.1
 
 Released 2019-02-14.

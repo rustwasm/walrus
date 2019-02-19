@@ -165,6 +165,11 @@ impl ModuleTables {
         }
         Ok(Some(id))
     }
+
+    /// Iterates over all tables in this section.
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut Table> {
+        self.arena.iter_mut().map(|p| p.1)
+    }
 }
 
 impl Module {

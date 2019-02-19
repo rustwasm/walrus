@@ -2,7 +2,7 @@
 authors = ["Nick Fitzgerald <fitzgen@gmail.com>"]
 edition = "2018"
 name = "walrus"
-version = "0.3.0"
+version = "0.4.0"
 license = "MIT/Apache-2.0"
 readme = "README.md"
 categories = ["wasm"]
@@ -19,7 +19,7 @@ id-arena = { version = "2.2.1", features = ['rayon'] }
 leb128 = "0.2.3"
 log = "0.4"
 rayon = "1.0.3"
-walrus-macro = { path = './crates/macro', version = '=0.3.0' }
+walrus-macro = { path = './crates/macro', version = '=0.4.0' }
 wasmparser = "0.29"
 
 [dev-dependencies]

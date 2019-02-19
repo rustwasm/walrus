@@ -56,7 +56,7 @@ impl Emit<'_, '_> {
         let old = self.id;
         self.id = id;
 
-        match &self.func.get(id) {
+        match self.func.get(id) {
             Const(e) => e.value.emit(self.encoder),
             Block(e) => self.visit_block(e),
             BrTable(e) => self.visit_br_table(e),

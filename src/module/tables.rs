@@ -132,6 +132,31 @@ impl ModuleTables {
     pub fn iter(&self) -> impl Iterator<Item = &Table> {
         self.arena.iter().map(|p| p.1)
     }
+
+    /// Finds a unique function table in a module.
+    ///
+    /// Modules produced by compilers like LLVM typically have one function
+    /// table for indirect function calls. This function will look for a single
+    /// function table inside this module, and return that if found. If no
+    /// function tables are present `None` will be returned
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if there are two function tables in this module
+    pub fn main_function_table(&self) -> Result<Option<TableId>> {
+        let mut tables = self.iter().filter_map(|t| match t.kind {
+            TableKind::Function(_) => Some(t.id()),
+            _ => None,
+        });
+        let id = match tables.next() {
+            Some(id) => id,
+            None => return Ok(None),
+        };
+        if tables.next().is_some() {
+            failure::bail!("module contains more than one function table");
+        }
+        Ok(Some(id))
+    }
 }
 
 impl Module {

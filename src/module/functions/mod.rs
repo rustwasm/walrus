@@ -424,6 +424,7 @@ impl Emit for ModuleFunctions {
         let bytes = functions
             .into_par_iter()
             .map(|(id, func, _size)| {
+                log::debug!("emit function {:?} {:?}", id, cx.module.funcs.get(id).name);
                 let mut wasm = Vec::new();
                 let mut encoder = Encoder::new(&mut wasm);
                 let local_indices = func.emit_locals(id, cx.module, cx.used, &mut encoder);

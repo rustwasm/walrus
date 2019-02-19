@@ -200,7 +200,7 @@ impl Module {
 impl Emit for ModuleTables {
     fn emit(&self, cx: &mut EmitContext) {
         log::debug!("emit table section");
-        // Skip imported tables because those are emitted elsewhere
+        // Skip imported tables because those are emitted in the import section.
         let tables = self.iter().filter(|t| t.import.is_none()).count();
         if tables == 0 {
             return;

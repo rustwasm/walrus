@@ -29,7 +29,11 @@ impl ModuleTypes {
         self.arena.iter().map(|(_, f)| f)
     }
 
-    /// Delete a type from this module
+    /// Removes a type from this module.
+    ///
+    /// It is up to you to ensure that any potential references to the deleted
+    /// type are also removed, eg `call_indirect` expressions, function types,
+    /// etc.
     pub fn delete(&mut self, ty: TypeId) {
         self.arena.remove(ty);
     }

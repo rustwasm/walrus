@@ -12,6 +12,7 @@ pub type ImportId = Id<Import>;
 /// A named item imported into the wasm.
 #[derive(Clone, Debug, Hash, Eq, PartialEq)]
 pub struct Import {
+    id: ImportId,
     /// The module name of this import.
     pub module: String,
     /// The name of this import.
@@ -24,6 +25,13 @@ impl Tombstone for Import {
     fn on_delete(&mut self) {
         self.module = String::new();
         self.name = String::new();
+    }
+}
+
+impl Import {
+    /// Get this import's identifier.
+    pub fn id(&self) -> ImportId {
+        self.id
     }
 }
 
@@ -77,7 +85,8 @@ impl ModuleImports {
 
     /// Adds a new import to this module
     pub fn add(&mut self, module: &str, name: &str, kind: impl Into<ImportKind>) -> ImportId {
-        self.arena.alloc(Import {
+        self.arena.alloc_with_id(|id| Import {
+            id,
             module: module.to_string(),
             name: name.to_string(),
             kind: kind.into(),

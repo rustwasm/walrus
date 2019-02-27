@@ -4,7 +4,7 @@ mod context;
 pub mod display;
 mod emit;
 
-use self::context::FunctionContext;
+use self::context::ValidationContext;
 use crate::dot::Dot;
 use crate::emit::IdsToIndices;
 use crate::encode::Encoder;
@@ -82,7 +82,7 @@ impl LocalFunction {
         let operands = &mut context::OperandStack::new();
         let controls = &mut context::ControlStack::new();
 
-        let mut ctx = FunctionContext::new(module, indices, id, &mut func, operands, controls);
+        let mut ctx = ValidationContext::new(module, indices, id, &mut func, operands, controls);
 
         let entry = ctx.push_control(BlockKind::FunctionEntry, result.clone(), result);
         ctx.func.entry = Some(entry);
@@ -349,22 +349,22 @@ impl DotExpr<'_, '_> {
     }
 }
 
-fn validate_instruction(ctx: &mut FunctionContext, inst: Operator) -> Result<()> {
+fn validate_instruction(ctx: &mut ValidationContext, inst: Operator) -> Result<()> {
     use crate::ir::ExtendedLoad::*;
     use crate::ValType::*;
 
-    let const_ = |ctx: &mut FunctionContext, ty, value| {
+    let const_ = |ctx: &mut ValidationContext, ty, value| {
         let expr = ctx.func.alloc(Const { value });
         ctx.push_operand(Some(ty), expr);
     };
 
-    let one_op = |ctx: &mut FunctionContext, input, output, op| -> Result<()> {
+    let one_op = |ctx: &mut ValidationContext, input, output, op| -> Result<()> {
         let (_, expr) = ctx.pop_operand_expected(Some(input))?;
         let expr = ctx.func.alloc(Unop { op, expr });
         ctx.push_operand(Some(output), expr);
         Ok(())
     };
-    let two_ops = |ctx: &mut FunctionContext, input, output, op| -> Result<()> {
+    let two_ops = |ctx: &mut ValidationContext, input, output, op| -> Result<()> {
         let (_, rhs) = ctx.pop_operand_expected(Some(input))?;
         let (_, lhs) = ctx.pop_operand_expected(Some(input))?;
         let expr = ctx.func.alloc(Binop { op, lhs, rhs });
@@ -387,7 +387,7 @@ fn validate_instruction(ctx: &mut FunctionContext, inst: Operator) -> Result<()>
         })
     };
 
-    let load = |ctx: &mut FunctionContext, arg, ty, kind| -> Result<()> {
+    let load = |ctx: &mut ValidationContext, arg, ty, kind| -> Result<()> {
         let (_, address) = ctx.pop_operand_expected(Some(I32))?;
         let memory = ctx.indices.get_memory(0)?;
         let arg = mem_arg(&arg)?;
@@ -401,7 +401,7 @@ fn validate_instruction(ctx: &mut FunctionContext, inst: Operator) -> Result<()>
         Ok(())
     };
 
-    let store = |ctx: &mut FunctionContext, arg, ty, kind| -> Result<()> {
+    let store = |ctx: &mut ValidationContext, arg, ty, kind| -> Result<()> {
         let (_, value) = ctx.pop_operand_expected(Some(ty))?;
         let (_, address) = ctx.pop_operand_expected(Some(I32))?;
         let memory = ctx.indices.get_memory(0)?;
@@ -417,7 +417,7 @@ fn validate_instruction(ctx: &mut FunctionContext, inst: Operator) -> Result<()>
         Ok(())
     };
 
-    let atomicrmw = |ctx: &mut FunctionContext, arg, ty, op, width| -> Result<()> {
+    let atomicrmw = |ctx: &mut ValidationContext, arg, ty, op, width| -> Result<()> {
         let (_, value) = ctx.pop_operand_expected(Some(ty))?;
         let (_, address) = ctx.pop_operand_expected(Some(I32))?;
         let memory = ctx.indices.get_memory(0)?;
@@ -434,7 +434,7 @@ fn validate_instruction(ctx: &mut FunctionContext, inst: Operator) -> Result<()>
         Ok(())
     };
 
-    let cmpxchg = |ctx: &mut FunctionContext, arg, ty, width| -> Result<()> {
+    let cmpxchg = |ctx: &mut ValidationContext, arg, ty, width| -> Result<()> {
         let (_, replacement) = ctx.pop_operand_expected(Some(ty))?;
         let (_, expected) = ctx.pop_operand_expected(Some(ty))?;
         let (_, address) = ctx.pop_operand_expected(Some(I32))?;

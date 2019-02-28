@@ -4,5 +4,5 @@
   )
 
 ;; CHECK: (module
-;; NEXT:    (import "" "" (table (;0;) 1 anyfunc))
+;; NEXT:    (import "" "" (table (;0;) 1 funcref))
 ;; NEXT:    (export "b" (table 0)))

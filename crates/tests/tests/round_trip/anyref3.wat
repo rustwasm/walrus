@@ -17,7 +17,7 @@
       call_indirect (type 0)
       local.get 0
       table.get 1)
-    (table (;0;) 1 anyfunc)
+    (table (;0;) 1 funcref)
     (table (;1;) 1 anyref)
     (export "a" (func 0)))
 ;)

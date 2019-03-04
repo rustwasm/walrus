@@ -41,7 +41,7 @@ pub type OperandStack = Vec<(Option<ValType>, ExprId)>;
 pub type ControlStack = Vec<ControlFrame>;
 
 #[derive(Debug)]
-pub struct FunctionContext<'a> {
+pub struct ValidationContext<'a> {
     /// The module that we're adding a function for.
     pub module: &'a Module,
 
@@ -71,7 +71,7 @@ pub struct IfElseState {
     pub alternative: Option<BlockId>,
 }
 
-impl<'a> FunctionContext<'a> {
+impl<'a> ValidationContext<'a> {
     /// Create a new function context.
     pub fn new(
         module: &'a Module,
@@ -80,8 +80,8 @@ impl<'a> FunctionContext<'a> {
         func: &'a mut LocalFunction,
         operands: &'a mut OperandStack,
         controls: &'a mut ControlStack,
-    ) -> FunctionContext<'a> {
-        FunctionContext {
+    ) -> ValidationContext<'a> {
+        ValidationContext {
             module,
             indices,
             func_id,

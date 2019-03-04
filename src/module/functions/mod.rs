@@ -37,16 +37,12 @@ pub struct Function {
 
     /// The kind of function this is.
     pub kind: FunctionKind,
-
-    /// An optional name associated with this function
-    pub name: Option<String>,
 }
 
 impl Tombstone for Function {
     fn on_delete(&mut self) {
         let ty = self.ty();
         self.kind = FunctionKind::Uninitialized(ty);
-        self.name = None;
     }
 }
 
@@ -55,7 +51,6 @@ impl Function {
         Function {
             id,
             kind: FunctionKind::Uninitialized(ty),
-            name: None,
         }
     }
 
@@ -71,6 +66,11 @@ impl Function {
             FunctionKind::Import(i) => i.ty,
             FunctionKind::Uninitialized(t) => *t,
         }
+    }
+
+    /// Get this function's name.
+    pub fn name(&self) -> Option<String> {
+        None
     }
 }
 
@@ -160,7 +160,6 @@ impl ModuleFunctions {
         self.arena.alloc_with_id(|id| Function {
             id,
             kind: FunctionKind::Import(ImportedFunction { import, ty }),
-            name: None,
         })
     }
 
@@ -169,7 +168,6 @@ impl ModuleFunctions {
         self.arena.alloc_with_id(|id| Function {
             id,
             kind: FunctionKind::Local(func),
-            name: None,
         })
     }
 

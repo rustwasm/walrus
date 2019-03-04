@@ -9,6 +9,9 @@ use std::ops::{Deref, DerefMut, Drop};
 #[derive(Default, Debug)]
 pub struct FunctionBuilder {
     pub(crate) arena: TombstoneArena<Expr>,
+
+    /// An optional name associated with this function
+    name: Option<String>,
 }
 
 impl FunctionBuilder {
@@ -143,6 +146,11 @@ impl FunctionBuilder {
         });
         let func = LocalFunction::new(ty_id, args, self, entry);
         funcs.add_local(func)
+    }
+
+    /// Sets the function name.
+    pub fn set_name(mut self, name: String) {
+        self.name = Some(name);
     }
 }
 

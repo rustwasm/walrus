@@ -764,6 +764,19 @@ impl Emit<'_, '_> {
                 self.visit(e.value);
                 self.encoder.byte(0xd1);
             }
+
+            V128Bitselect(e) => {
+                self.visit(e.v1);
+                self.visit(e.v2);
+                self.visit(e.mask);
+                self.simd(0x50);
+            }
+            V128Shuffle(e) => {
+                self.visit(e.lo);
+                self.visit(e.hi);
+                self.simd(0x03);
+                self.encoder.raw(&e.indices);
+            }
         }
 
         self.id = old;

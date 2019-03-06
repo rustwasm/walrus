@@ -1300,6 +1300,13 @@ fn validate_instruction(ctx: &mut ValidationContext, inst: Operator) -> Result<(
             ctx.push_operand(Some(I32), expr);
         }
 
+        Operator::V8x16Shuffle { lines } => {
+            let (_, hi) = ctx.pop_operand_expected(Some(V128))?;
+            let (_, lo) = ctx.pop_operand_expected(Some(V128))?;
+            let expr = ctx.func.alloc(V128Shuffle { indices: lines, lo, hi });
+            ctx.push_operand(Some(V128), expr);
+        }
+
         Operator::I8x16Splat => one_op(ctx, I32, V128, UnaryOp::I8x16Splat)?,
         Operator::I8x16ExtractLaneS { line: idx } => {
             one_op(ctx, V128, I32, UnaryOp::I8x16ExtractLaneS { idx })?
@@ -1397,6 +1404,14 @@ fn validate_instruction(ctx: &mut ValidationContext, inst: Operator) -> Result<(
         Operator::V128Or => binop(ctx, V128, BinaryOp::V128Or)?,
         Operator::V128Xor => binop(ctx, V128, BinaryOp::V128Xor)?,
 
+        Operator::V128Bitselect => {
+            let (_, mask) = ctx.pop_operand_expected(Some(V128))?;
+            let (_, v2) = ctx.pop_operand_expected(Some(V128))?;
+            let (_, v1) = ctx.pop_operand_expected(Some(V128))?;
+            let expr = ctx.func.alloc(V128Bitselect { mask, v1, v2 });
+            ctx.push_operand(Some(V128), expr);
+        }
+
         Operator::I8x16Neg => unop(ctx, V128, UnaryOp::I8x16Neg)?,
         Operator::I8x16AnyTrue => one_op(ctx, V128, I32, UnaryOp::I8x16AnyTrue)?,
         Operator::I8x16AllTrue => one_op(ctx, V128, I32, UnaryOp::I8x16AllTrue)?,
@@ -1482,7 +1497,11 @@ fn validate_instruction(ctx: &mut ValidationContext, inst: Operator) -> Result<(
         Operator::I64TruncSSatF64 => one_op(ctx, F64, I64, UnaryOp::I64TruncSSatF64)?,
         Operator::I64TruncUSatF64 => one_op(ctx, F64, I64, UnaryOp::I64TruncUSatF64)?,
 
-        op => bail!("Have not implemented support for opcode yet: {:?}", op),
+        op @ Operator::TableInit { .. }
+        | op @ Operator::ElemDrop { .. }
+        | op @ Operator::TableCopy => {
+            bail!("Have not implemented support for opcode yet: {:?}", op)
+        }
     }
     Ok(())
 }

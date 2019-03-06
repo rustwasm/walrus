@@ -534,8 +534,31 @@ pub enum Expr {
         value: ExprId,
     },
 
-    // TODO: v128.bitselect
+    /// `v128.bitselect`
+    V128Bitselect {
+        /// The bit mask selecting bits from the two operands.
+        mask: ExprId,
+        /// Operand where bits are selected from if the `mask` bit is 1
+        v1: ExprId,
+        /// Operand where bits are selected from if the `mask` bit is 0c:w
+        v2: ExprId,
+    },
+
+    /// `v128.shuffle`
+    V128Shuffle {
+        /// The indices that are used to create the final vector of this
+        /// expression
+        #[walrus(skip_visit)]
+        indices: ShuffleIndices,
+        /// The first 16 bytes to be indxed (with indices 0..15)
+        lo: ExprId,
+        /// The second 16 bytes to be indxed (with indices 16..31)
+        hi: ExprId,
+    },
 }
+
+/// Argument in `V128Shuffle` of lane indices to select
+pub type ShuffleIndices = [u8; 16];
 
 /// Constant values that can show up in WebAssembly
 #[derive(Debug, Clone, Copy)]
@@ -1112,6 +1135,8 @@ impl Expr {
             | Expr::TableSize(..)
             | Expr::RefNull(..)
             | Expr::RefIsNull(..)
+            | Expr::V128Bitselect(..)
+            | Expr::V128Shuffle(..)
             | Expr::Drop(..) => false,
         }
     }

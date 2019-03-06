@@ -1473,6 +1473,15 @@ fn validate_instruction(ctx: &mut ValidationContext, inst: Operator) -> Result<(
         Operator::F64x2ConvertSI64x2 => unop(ctx, V128, UnaryOp::F64x2ConvertSI64x2)?,
         Operator::F64x2ConvertUI64x2 => unop(ctx, V128, UnaryOp::F64x2ConvertUI64x2)?,
 
+        Operator::I32TruncSSatF32 => one_op(ctx, F32, I32, UnaryOp::I32TruncSSatF32)?,
+        Operator::I32TruncUSatF32 => one_op(ctx, F32, I32, UnaryOp::I32TruncUSatF32)?,
+        Operator::I32TruncSSatF64 => one_op(ctx, F64, I32, UnaryOp::I32TruncSSatF64)?,
+        Operator::I32TruncUSatF64 => one_op(ctx, F64, I32, UnaryOp::I32TruncUSatF64)?,
+        Operator::I64TruncSSatF32 => one_op(ctx, F32, I64, UnaryOp::I64TruncSSatF32)?,
+        Operator::I64TruncUSatF32 => one_op(ctx, F32, I64, UnaryOp::I64TruncUSatF32)?,
+        Operator::I64TruncSSatF64 => one_op(ctx, F64, I64, UnaryOp::I64TruncSSatF64)?,
+        Operator::I64TruncUSatF64 => one_op(ctx, F64, I64, UnaryOp::I64TruncUSatF64)?,
+
         op => bail!("Have not implemented support for opcode yet: {:?}", op),
     }
     Ok(())

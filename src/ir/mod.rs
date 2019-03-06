@@ -894,6 +894,15 @@ pub enum UnaryOp {
     F32x4ConvertUI32x4,
     F64x2ConvertSI64x2,
     F64x2ConvertUI64x2,
+
+    I32TruncSSatF32,
+    I32TruncUSatF32,
+    I32TruncSSatF64,
+    I32TruncUSatF64,
+    I64TruncSSatF32,
+    I64TruncUSatF32,
+    I64TruncSSatF64,
+    I64TruncUSatF64,
 }
 
 /// The different kinds of load instructions that are part of a `Load` IR node

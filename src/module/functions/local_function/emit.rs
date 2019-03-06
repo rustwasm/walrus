@@ -468,6 +468,15 @@ impl Emit<'_, '_> {
                     F32x4ConvertUI32x4 => self.simd(0xb0),
                     F64x2ConvertSI64x2 => self.simd(0xb1),
                     F64x2ConvertUI64x2 => self.simd(0xb2),
+
+                    I32TruncSSatF32 => self.encoder.raw(&[0xfc, 0x00]),
+                    I32TruncUSatF32 => self.encoder.raw(&[0xfc, 0x01]),
+                    I32TruncSSatF64 => self.encoder.raw(&[0xfc, 0x02]),
+                    I32TruncUSatF64 => self.encoder.raw(&[0xfc, 0x03]),
+                    I64TruncSSatF32 => self.encoder.raw(&[0xfc, 0x04]),
+                    I64TruncUSatF32 => self.encoder.raw(&[0xfc, 0x05]),
+                    I64TruncSSatF64 => self.encoder.raw(&[0xfc, 0x06]),
+                    I64TruncUSatF64 => self.encoder.raw(&[0xfc, 0x07]),
                 }
             }
 

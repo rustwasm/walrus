@@ -364,18 +364,18 @@ fn validate_instruction(ctx: &mut ValidationContext, inst: Operator) -> Result<(
         ctx.push_operand(Some(output), expr);
         Ok(())
     };
-    let two_ops = |ctx: &mut ValidationContext, input, output, op| -> Result<()> {
-        let (_, rhs) = ctx.pop_operand_expected(Some(input))?;
-        let (_, lhs) = ctx.pop_operand_expected(Some(input))?;
+    let two_ops = |ctx: &mut ValidationContext, lhs, rhs, output, op| -> Result<()> {
+        let (_, rhs) = ctx.pop_operand_expected(Some(rhs))?;
+        let (_, lhs) = ctx.pop_operand_expected(Some(lhs))?;
         let expr = ctx.func.alloc(Binop { op, lhs, rhs });
         ctx.push_operand(Some(output), expr);
         Ok(())
     };
 
-    let binop = |ctx, ty, op| two_ops(ctx, ty, ty, op);
+    let binop = |ctx, ty, op| two_ops(ctx, ty, ty, ty, op);
     let unop = |ctx, ty, op| one_op(ctx, ty, ty, op);
     let testop = |ctx, ty, op| one_op(ctx, ty, I32, op);
-    let relop = |ctx, ty, op| two_ops(ctx, ty, I32, op);
+    let relop = |ctx, ty, op| two_ops(ctx, ty, ty, I32, op);
 
     let mem_arg = |arg: &wasmparser::MemoryImmediate| -> Result<MemArg> {
         if arg.flags >= 32 {
@@ -1299,6 +1299,179 @@ fn validate_instruction(ctx: &mut ValidationContext, inst: Operator) -> Result<(
             let expr = ctx.func.alloc(RefIsNull { value });
             ctx.push_operand(Some(I32), expr);
         }
+
+        Operator::I8x16Splat => one_op(ctx, I32, V128, UnaryOp::I8x16Splat)?,
+        Operator::I8x16ExtractLaneS { line: idx } => {
+            one_op(ctx, V128, I32, UnaryOp::I8x16ExtractLaneS { idx })?
+        }
+        Operator::I8x16ExtractLaneU { line: idx } => {
+            one_op(ctx, V128, I32, UnaryOp::I8x16ExtractLaneU { idx })?
+        }
+        Operator::I8x16ReplaceLane { line: idx } => {
+            two_ops(ctx, V128, I32, V128, BinaryOp::I8x16ReplaceLane { idx })?
+        }
+        Operator::I16x8Splat => one_op(ctx, I32, V128, UnaryOp::I16x8Splat)?,
+        Operator::I16x8ExtractLaneS { line: idx } => {
+            one_op(ctx, V128, I32, UnaryOp::I16x8ExtractLaneS { idx })?
+        }
+        Operator::I16x8ExtractLaneU { line: idx } => {
+            one_op(ctx, V128, I32, UnaryOp::I16x8ExtractLaneU { idx })?
+        }
+        Operator::I16x8ReplaceLane { line: idx } => {
+            two_ops(ctx, V128, I32, V128, BinaryOp::I16x8ReplaceLane { idx })?
+        }
+        Operator::I32x4Splat => one_op(ctx, I32, V128, UnaryOp::I32x4Splat)?,
+        Operator::I32x4ExtractLane { line: idx } => {
+            one_op(ctx, V128, I32, UnaryOp::I32x4ExtractLane { idx })?
+        }
+        Operator::I32x4ReplaceLane { line: idx } => {
+            two_ops(ctx, V128, I32, V128, BinaryOp::I32x4ReplaceLane { idx })?
+        }
+        Operator::I64x2Splat => one_op(ctx, I64, V128, UnaryOp::I64x2Splat)?,
+        Operator::I64x2ExtractLane { line: idx } => {
+            one_op(ctx, V128, I64, UnaryOp::I64x2ExtractLane { idx })?
+        }
+        Operator::I64x2ReplaceLane { line: idx } => {
+            two_ops(ctx, V128, I64, V128, BinaryOp::I64x2ReplaceLane { idx })?
+        }
+        Operator::F32x4Splat => one_op(ctx, F32, V128, UnaryOp::F32x4Splat)?,
+        Operator::F32x4ExtractLane { line: idx } => {
+            one_op(ctx, V128, F32, UnaryOp::F32x4ExtractLane { idx })?
+        }
+        Operator::F32x4ReplaceLane { line: idx } => {
+            two_ops(ctx, V128, F32, V128, BinaryOp::F32x4ReplaceLane { idx })?
+        }
+        Operator::F64x2Splat => one_op(ctx, F64, V128, UnaryOp::F64x2Splat)?,
+        Operator::F64x2ExtractLane { line: idx } => {
+            one_op(ctx, V128, F64, UnaryOp::F64x2ExtractLane { idx })?
+        }
+        Operator::F64x2ReplaceLane { line: idx } => {
+            two_ops(ctx, V128, F64, V128, BinaryOp::F64x2ReplaceLane { idx })?
+        }
+
+        Operator::I8x16Eq => binop(ctx, V128, BinaryOp::I8x16Eq)?,
+        Operator::I8x16Ne => binop(ctx, V128, BinaryOp::I8x16Ne)?,
+        Operator::I8x16LtS => binop(ctx, V128, BinaryOp::I8x16LtS)?,
+        Operator::I8x16LtU => binop(ctx, V128, BinaryOp::I8x16LtU)?,
+        Operator::I8x16GtS => binop(ctx, V128, BinaryOp::I8x16GtS)?,
+        Operator::I8x16GtU => binop(ctx, V128, BinaryOp::I8x16GtU)?,
+        Operator::I8x16LeS => binop(ctx, V128, BinaryOp::I8x16LeS)?,
+        Operator::I8x16LeU => binop(ctx, V128, BinaryOp::I8x16LeU)?,
+        Operator::I8x16GeS => binop(ctx, V128, BinaryOp::I8x16GeS)?,
+        Operator::I8x16GeU => binop(ctx, V128, BinaryOp::I8x16GeU)?,
+        Operator::I16x8Eq => binop(ctx, V128, BinaryOp::I16x8Eq)?,
+        Operator::I16x8Ne => binop(ctx, V128, BinaryOp::I16x8Ne)?,
+        Operator::I16x8LtS => binop(ctx, V128, BinaryOp::I16x8LtS)?,
+        Operator::I16x8LtU => binop(ctx, V128, BinaryOp::I16x8LtU)?,
+        Operator::I16x8GtS => binop(ctx, V128, BinaryOp::I16x8GtS)?,
+        Operator::I16x8GtU => binop(ctx, V128, BinaryOp::I16x8GtU)?,
+        Operator::I16x8LeS => binop(ctx, V128, BinaryOp::I16x8LeS)?,
+        Operator::I16x8LeU => binop(ctx, V128, BinaryOp::I16x8LeU)?,
+        Operator::I16x8GeS => binop(ctx, V128, BinaryOp::I16x8GeS)?,
+        Operator::I16x8GeU => binop(ctx, V128, BinaryOp::I16x8GeU)?,
+        Operator::I32x4Eq => binop(ctx, V128, BinaryOp::I32x4Eq)?,
+        Operator::I32x4Ne => binop(ctx, V128, BinaryOp::I32x4Ne)?,
+        Operator::I32x4LtS => binop(ctx, V128, BinaryOp::I32x4LtS)?,
+        Operator::I32x4LtU => binop(ctx, V128, BinaryOp::I32x4LtU)?,
+        Operator::I32x4GtS => binop(ctx, V128, BinaryOp::I32x4GtS)?,
+        Operator::I32x4GtU => binop(ctx, V128, BinaryOp::I32x4GtU)?,
+        Operator::I32x4LeS => binop(ctx, V128, BinaryOp::I32x4LeS)?,
+        Operator::I32x4LeU => binop(ctx, V128, BinaryOp::I32x4LeU)?,
+        Operator::I32x4GeS => binop(ctx, V128, BinaryOp::I32x4GeS)?,
+        Operator::I32x4GeU => binop(ctx, V128, BinaryOp::I32x4GeU)?,
+        Operator::F32x4Eq => binop(ctx, V128, BinaryOp::F32x4Eq)?,
+        Operator::F32x4Ne => binop(ctx, V128, BinaryOp::F32x4Ne)?,
+        Operator::F32x4Lt => binop(ctx, V128, BinaryOp::F32x4Lt)?,
+        Operator::F32x4Gt => binop(ctx, V128, BinaryOp::F32x4Gt)?,
+        Operator::F32x4Le => binop(ctx, V128, BinaryOp::F32x4Le)?,
+        Operator::F32x4Ge => binop(ctx, V128, BinaryOp::F32x4Ge)?,
+        Operator::F64x2Eq => binop(ctx, V128, BinaryOp::F64x2Eq)?,
+        Operator::F64x2Ne => binop(ctx, V128, BinaryOp::F64x2Ne)?,
+        Operator::F64x2Lt => binop(ctx, V128, BinaryOp::F64x2Lt)?,
+        Operator::F64x2Gt => binop(ctx, V128, BinaryOp::F64x2Gt)?,
+        Operator::F64x2Le => binop(ctx, V128, BinaryOp::F64x2Le)?,
+        Operator::F64x2Ge => binop(ctx, V128, BinaryOp::F64x2Ge)?,
+
+        Operator::V128Not => unop(ctx, V128, UnaryOp::V128Not)?,
+        Operator::V128And => binop(ctx, V128, BinaryOp::V128And)?,
+        Operator::V128Or => binop(ctx, V128, BinaryOp::V128Or)?,
+        Operator::V128Xor => binop(ctx, V128, BinaryOp::V128Xor)?,
+
+        Operator::I8x16Neg => unop(ctx, V128, UnaryOp::I8x16Neg)?,
+        Operator::I8x16AnyTrue => one_op(ctx, V128, I32, UnaryOp::I8x16AnyTrue)?,
+        Operator::I8x16AllTrue => one_op(ctx, V128, I32, UnaryOp::I8x16AllTrue)?,
+        Operator::I8x16Shl => two_ops(ctx, V128, I32, V128, BinaryOp::I8x16Shl)?,
+        Operator::I8x16ShrS => two_ops(ctx, V128, I32, V128, BinaryOp::I8x16ShrS)?,
+        Operator::I8x16ShrU => two_ops(ctx, V128, I32, V128, BinaryOp::I8x16ShrU)?,
+        Operator::I8x16Add => binop(ctx, V128, BinaryOp::I8x16Add)?,
+        Operator::I8x16AddSaturateS => binop(ctx, V128, BinaryOp::I8x16AddSaturateS)?,
+        Operator::I8x16AddSaturateU => binop(ctx, V128, BinaryOp::I8x16AddSaturateU)?,
+        Operator::I8x16Sub => binop(ctx, V128, BinaryOp::I8x16Sub)?,
+        Operator::I8x16SubSaturateS => binop(ctx, V128, BinaryOp::I8x16SubSaturateS)?,
+        Operator::I8x16SubSaturateU => binop(ctx, V128, BinaryOp::I8x16SubSaturateU)?,
+        Operator::I8x16Mul => binop(ctx, V128, BinaryOp::I8x16Mul)?,
+
+        Operator::I16x8Neg => unop(ctx, V128, UnaryOp::I16x8Neg)?,
+        Operator::I16x8AnyTrue => one_op(ctx, V128, I32, UnaryOp::I16x8AnyTrue)?,
+        Operator::I16x8AllTrue => one_op(ctx, V128, I32, UnaryOp::I16x8AllTrue)?,
+        Operator::I16x8Shl => two_ops(ctx, V128, I32, V128, BinaryOp::I16x8Shl)?,
+        Operator::I16x8ShrS => two_ops(ctx, V128, I32, V128, BinaryOp::I16x8ShrS)?,
+        Operator::I16x8ShrU => two_ops(ctx, V128, I32, V128, BinaryOp::I16x8ShrU)?,
+        Operator::I16x8Add => binop(ctx, V128, BinaryOp::I16x8Add)?,
+        Operator::I16x8AddSaturateS => binop(ctx, V128, BinaryOp::I16x8AddSaturateS)?,
+        Operator::I16x8AddSaturateU => binop(ctx, V128, BinaryOp::I16x8AddSaturateU)?,
+        Operator::I16x8Sub => binop(ctx, V128, BinaryOp::I16x8Sub)?,
+        Operator::I16x8SubSaturateS => binop(ctx, V128, BinaryOp::I16x8SubSaturateS)?,
+        Operator::I16x8SubSaturateU => binop(ctx, V128, BinaryOp::I16x8SubSaturateU)?,
+        Operator::I16x8Mul => binop(ctx, V128, BinaryOp::I16x8Mul)?,
+
+        Operator::I32x4Neg => unop(ctx, V128, UnaryOp::I32x4Neg)?,
+        Operator::I32x4AnyTrue => one_op(ctx, V128, I32, UnaryOp::I32x4AnyTrue)?,
+        Operator::I32x4AllTrue => one_op(ctx, V128, I32, UnaryOp::I32x4AllTrue)?,
+        Operator::I32x4Shl => two_ops(ctx, V128, I32, V128, BinaryOp::I32x4Shl)?,
+        Operator::I32x4ShrS => two_ops(ctx, V128, I32, V128, BinaryOp::I32x4ShrS)?,
+        Operator::I32x4ShrU => two_ops(ctx, V128, I32, V128, BinaryOp::I32x4ShrU)?,
+        Operator::I32x4Add => binop(ctx, V128, BinaryOp::I32x4Add)?,
+        Operator::I32x4Sub => binop(ctx, V128, BinaryOp::I32x4Sub)?,
+        Operator::I32x4Mul => binop(ctx, V128, BinaryOp::I32x4Mul)?,
+
+        Operator::I64x2Neg => unop(ctx, V128, UnaryOp::I64x2Neg)?,
+        Operator::I64x2AnyTrue => one_op(ctx, V128, I32, UnaryOp::I64x2AnyTrue)?,
+        Operator::I64x2AllTrue => one_op(ctx, V128, I32, UnaryOp::I64x2AllTrue)?,
+        Operator::I64x2Shl => two_ops(ctx, V128, I32, V128, BinaryOp::I64x2Shl)?,
+        Operator::I64x2ShrS => two_ops(ctx, V128, I32, V128, BinaryOp::I64x2ShrS)?,
+        Operator::I64x2ShrU => two_ops(ctx, V128, I32, V128, BinaryOp::I64x2ShrU)?,
+        Operator::I64x2Add => binop(ctx, V128, BinaryOp::I64x2Add)?,
+        Operator::I64x2Sub => binop(ctx, V128, BinaryOp::I64x2Sub)?,
+
+        Operator::F32x4Abs => unop(ctx, V128, UnaryOp::F32x4Abs)?,
+        Operator::F32x4Neg => unop(ctx, V128, UnaryOp::F32x4Neg)?,
+        Operator::F32x4Sqrt => unop(ctx, V128, UnaryOp::F32x4Sqrt)?,
+        Operator::F32x4Add => binop(ctx, V128, BinaryOp::F32x4Add)?,
+        Operator::F32x4Sub => binop(ctx, V128, BinaryOp::F32x4Sub)?,
+        Operator::F32x4Mul => binop(ctx, V128, BinaryOp::F32x4Mul)?,
+        Operator::F32x4Div => binop(ctx, V128, BinaryOp::F32x4Div)?,
+        Operator::F32x4Min => binop(ctx, V128, BinaryOp::F32x4Min)?,
+        Operator::F32x4Max => binop(ctx, V128, BinaryOp::F32x4Max)?,
+
+        Operator::F64x2Abs => unop(ctx, V128, UnaryOp::F64x2Abs)?,
+        Operator::F64x2Neg => unop(ctx, V128, UnaryOp::F64x2Neg)?,
+        Operator::F64x2Sqrt => unop(ctx, V128, UnaryOp::F64x2Sqrt)?,
+        Operator::F64x2Add => binop(ctx, V128, BinaryOp::F64x2Add)?,
+        Operator::F64x2Sub => binop(ctx, V128, BinaryOp::F64x2Sub)?,
+        Operator::F64x2Mul => binop(ctx, V128, BinaryOp::F64x2Mul)?,
+        Operator::F64x2Div => binop(ctx, V128, BinaryOp::F64x2Div)?,
+        Operator::F64x2Min => binop(ctx, V128, BinaryOp::F64x2Min)?,
+        Operator::F64x2Max => binop(ctx, V128, BinaryOp::F64x2Max)?,
+
+        Operator::I32x4TruncSF32x4Sat => unop(ctx, V128, UnaryOp::I32x4TruncSF32x4Sat)?,
+        Operator::I32x4TruncUF32x4Sat => unop(ctx, V128, UnaryOp::I32x4TruncUF32x4Sat)?,
+        Operator::I64x2TruncSF64x2Sat => unop(ctx, V128, UnaryOp::I64x2TruncSF64x2Sat)?,
+        Operator::I64x2TruncUF64x2Sat => unop(ctx, V128, UnaryOp::I64x2TruncUF64x2Sat)?,
+        Operator::F32x4ConvertSI32x4 => unop(ctx, V128, UnaryOp::F32x4ConvertSI32x4)?,
+        Operator::F32x4ConvertUI32x4 => unop(ctx, V128, UnaryOp::F32x4ConvertUI32x4)?,
+        Operator::F64x2ConvertSI64x2 => unop(ctx, V128, UnaryOp::F64x2ConvertSI64x2)?,
+        Operator::F64x2ConvertUI64x2 => unop(ctx, V128, UnaryOp::F64x2ConvertUI64x2)?,
 
         op => bail!("Have not implemented support for opcode yet: {:?}", op),
     }

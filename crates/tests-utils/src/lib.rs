@@ -7,6 +7,7 @@ pub const FEATURES: &[&str] = &[
     "--enable-threads",
     "--enable-bulk-memory",
     "--enable-reference-types",
+    "--enable-simd",
 ];
 
 fn require_wat2wasm() {

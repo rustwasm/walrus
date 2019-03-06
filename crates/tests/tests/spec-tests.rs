@@ -21,10 +21,7 @@ fn run(wast: &Path) -> Result<(), failure::Error> {
         None => &[],
         Some("mutable-global") => &[],
         Some("sign-extension-ops") => &["--enable-sign-extension"],
-
-        // TODO: requires support in parity-wasm it looks like
-        // Some("nontrapping-float-to-int-conversions") => &["--enable-saturating-float-to-int"],
-        Some("nontrapping-float-to-int-conversions") => return Ok(()),
+        Some("nontrapping-float-to-int-conversions") => &["--enable-saturating-float-to-int"],
 
         // TODO: we should actually implement this proposal!
         Some("multi-value") => return Ok(()),

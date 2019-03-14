@@ -19,7 +19,7 @@
   (func $v128.shuffle (export "v128.shuffle") (param v128 v128) (result v128)
     local.get 0
     local.get 1
-    v8x16.shuffle 0x01020304 0x05060708 0x090a0b0c 0x00000000)
+    v8x16.shuffle 16 1 18 3 20 5 22 7 24 9 26 11 28 13 30 15)
 
    (func $i8x16.splat (export "i8x16.splat") (param i32) (result v128)
      local.get 0
@@ -552,7 +552,7 @@
     (func $v128.shuffle (type 3) (param v128 v128) (result v128)
       local.get 0
       local.get 1
-      v8x16.shuffle  0x01020304 0x05060708 0x090a0b0c 0x00000000 )
+      v8x16.shuffle  16  1  18  3  20  5  22  7  24  9  26  11  28  13  30  15 )
     (func $i8x16.replace_lane (type 5) (param v128 i32) (result v128)
       local.get 0
       local.get 1

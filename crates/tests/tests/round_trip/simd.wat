@@ -2,7 +2,7 @@
   (memory 0)
 
   (func $v128.const (export "v128.const") (result v128)
-    v128.const i32 1 2 3 4
+    v128.const i32x4 1 2 3 4
   )
 
   (func $v128.load (export "v128.load") (param i32) (result v128)
@@ -1036,7 +1036,7 @@
       local.get 0
       f64x2.convert_i64x2_u)
     (func $v128.const (type 0) (result v128)
-      v128.const i32 0x00000001 0x00000002 0x00000003 0x00000004)
+      v128.const i32x4 0x00000001 0x00000002 0x00000003 0x00000004)
     (memory (;0;) 0)
     (export "v128.const" (func $v128.const))
     (export "v128.load" (func $v128.load))

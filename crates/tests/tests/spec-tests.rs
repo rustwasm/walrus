@@ -23,6 +23,13 @@ fn run(wast: &Path) -> Result<(), failure::Error> {
         Some("sign-extension-ops") => &["--enable-sign-extension"],
         Some("nontrapping-float-to-int-conversions") => &["--enable-saturating-float-to-int"],
 
+        // Currently wabt doesn't have support for `ref.host` which is used in
+        // these tests.
+        Some("reference-types") => return Ok(()),
+
+        // Currently wabt has broken support for `ref.func` initializers
+        Some("bulk-memory-operations") => return Ok(()),
+
         // TODO: we should actually implement this proposal!
         Some("multi-value") => return Ok(()),
 

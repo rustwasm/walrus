@@ -1,5 +1,6 @@
 use crate::error::Result;
 use crate::module::Module;
+use std::path::Path;
 
 /// Configuration for a `Module` which currently affects parsing.
 #[derive(Clone, Debug, Default)]
@@ -100,5 +101,13 @@ impl ModuleConfig {
     /// configuration.
     pub fn parse(&self, wasm: &[u8]) -> Result<Module> {
         Module::parse(wasm, self)
+    }
+
+    /// Parses a WebAssembly file into a `Module` using this configuration.
+    pub fn parse_file<P>(&self, path: P) -> Result<Module>
+    where
+        P: AsRef<Path>,
+    {
+        Module::from_file_with_config(path, self)
     }
 }

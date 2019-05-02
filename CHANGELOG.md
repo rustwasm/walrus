@@ -32,6 +32,30 @@ Released YYYY-MM-DD.
 
 --------------------------------------------------------------------------------
 
+## 0.6.0
+
+Released 2019-05-02.
+
+### Added
+
+* `ModuleConfig::parse_file` and `Module::parse_file_with_config` helper
+  functions to easily parse a Wasm file from disk with a given configuration.
+
+### Changed
+
+* `ModuleConfig::parse` takes `&self` instead of `&mut self` now. This was just
+  an oversight / copy-past error before.
+
+--------------------------------------------------------------------------------
+
+## 0.5.0
+
+--------------------------------------------------------------------------------
+
+## 0.4.0
+
+--------------------------------------------------------------------------------
+
 ## 0.3.0
 
 Released 2019-02-19.

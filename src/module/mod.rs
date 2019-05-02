@@ -75,7 +75,8 @@ pub struct CustomSection {
 }
 
 impl Module {
-    /// Construct a new module.
+    /// Construct a new module from the given path with the default
+    /// configuration.
     pub fn from_file<P>(path: P) -> Result<Module>
     where
         P: AsRef<Path>,
@@ -83,7 +84,16 @@ impl Module {
         Module::from_buffer(&fs::read(path)?)
     }
 
-    /// Construct a new module.
+    /// Construct a new module from the given path and configuration.
+    pub fn from_file_with_config<P>(path: P, config: &ModuleConfig) -> Result<Module>
+    where
+        P: AsRef<Path>,
+    {
+        config.parse(&fs::read(path)?)
+    }
+
+    /// Construct a new module from the in-memory wasm buffer with the default
+    /// configuration.
     pub fn from_buffer(wasm: &[u8]) -> Result<Module> {
         ModuleConfig::new().parse(wasm)
     }

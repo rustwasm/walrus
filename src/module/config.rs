@@ -98,7 +98,7 @@ impl ModuleConfig {
 
     /// Parses an in-memory WebAssembly file into a `Module` using this
     /// configuration.
-    pub fn parse(&mut self, wasm: &[u8]) -> Result<Module> {
+    pub fn parse(&self, wasm: &[u8]) -> Result<Module> {
         Module::parse(wasm, self)
     }
 }

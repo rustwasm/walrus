@@ -30,6 +30,11 @@ matrix:
     - name: "test (nightly)"
       rust: nightly
 
+    - name: "check benches"
+      rust: stable
+      script:
+        - cargo check --benches
+
     - name: "master doc to gh-pages"
       rust: nightly
       install: true

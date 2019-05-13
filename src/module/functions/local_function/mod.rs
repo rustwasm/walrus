@@ -1276,8 +1276,8 @@ fn validate_instruction(ctx: &mut ValidationContext, inst: Operator) -> Result<(
                 TableKind::Anyref(_) => Anyref,
                 TableKind::Function(_) => bail!("cannot grow function table yet"),
             };
-            let (_, value) = ctx.pop_operand_expected(Some(expected_ty))?;
             let (_, amount) = ctx.pop_operand_expected(Some(I32))?;
+            let (_, value) = ctx.pop_operand_expected(Some(expected_ty))?;
             let expr = ctx.func.alloc(TableGrow {
                 table,
                 amount,

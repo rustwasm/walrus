@@ -21,13 +21,13 @@
     table.get 1
     table.set 0
 
-    i32.const 0
     ref.null
+    i32.const 0
     table.grow 0
     drop
 
-    i32.const 0
     ref.null
+    i32.const 0
     table.grow 1
     drop
 
@@ -64,12 +64,12 @@
       i32.const 0
       table.get 1
       table.set 0
-      i32.const 0
       ref.null
+      i32.const 0
       table.grow 0
       drop
-      i32.const 0
       ref.null
+      i32.const 0
       table.grow 1
       drop
       ref.null

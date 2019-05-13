@@ -746,8 +746,8 @@ impl Emit<'_, '_> {
                 self.encoder.u32(idx);
             }
             TableGrow(e) => {
-                self.visit(e.amount);
                 self.visit(e.value);
+                self.visit(e.amount);
                 self.encoder.raw(&[0xfc, 0x0f]);
                 let idx = self.indices.get_table_index(e.table);
                 self.encoder.u32(idx);

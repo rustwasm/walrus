@@ -64,6 +64,22 @@ impl<T> TombstoneArena<T> {
         self.alloc(f(id))
     }
 
+    pub fn get(&self, id: Id<T>) -> Option<&T> {
+        if self.dead.contains(&id) {
+            None
+        } else {
+            self.inner.get(id)
+        }
+    }
+
+    pub fn get_mut(&mut self, id: Id<T>) -> Option<&mut T> {
+        if self.dead.contains(&id) {
+            None
+        } else {
+            self.inner.get_mut(id)
+        }
+    }
+
     pub fn next_id(&self) -> Id<T> {
         self.inner.next_id()
     }

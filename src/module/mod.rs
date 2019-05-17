@@ -1,6 +1,7 @@
 //! A high-level API for manipulating wasm modules.
 
 mod config;
+mod custom;
 mod data;
 mod elements;
 mod exports;
@@ -16,6 +17,9 @@ mod types;
 use crate::emit::{Emit, EmitContext, IdsToIndices, Section};
 use crate::encode::Encoder;
 use crate::error::Result;
+pub use crate::module::custom::{
+    CustomSection, CustomSectionId, ModuleCustomSections, RawCustomSection, TypedCustomSectionId,
+};
 pub use crate::module::data::{Data, DataId, ModuleData};
 pub use crate::module::elements::{Element, ElementId, ModuleElements};
 pub use crate::module::exports::{Export, ExportId, ExportItem, ModuleExports};
@@ -58,23 +62,22 @@ pub struct Module {
     /// Representation of the eventual custom section, `producers`
     pub producers: ModuleProducers,
     /// Custom sections found in this module.
-    pub custom: Vec<CustomSection>,
+    pub customs: ModuleCustomSections,
     /// The name of this module, used for debugging purposes in the `name`
     /// custom section.
     pub name: Option<String>,
     pub(crate) config: ModuleConfig,
 }
 
-/// A representation of a custom section in a module
-#[derive(Debug)]
-pub struct CustomSection {
-    /// The name of this custom section
-    pub name: String,
-    /// The contents of the custom section
-    pub value: Vec<u8>,
-}
-
 impl Module {
+    /// Create a default, empty module that uses the given configuration.
+    pub fn with_config(config: ModuleConfig) -> Self {
+        Module {
+            config,
+            ..Default::default()
+        }
+    }
+
     /// Construct a new module from the given path with the default
     /// configuration.
     pub fn from_file<P>(path: P) -> Result<Module>
@@ -192,9 +195,9 @@ impl Module {
                             let mut reader = section.get_binary_reader();
                             let len = reader.bytes_remaining();
                             let payload = reader.read_bytes(len)?;
-                            ret.custom.push(CustomSection {
+                            ret.customs.add(RawCustomSection {
                                 name: name.to_string(),
-                                value: payload.to_vec(),
+                                data: payload.to_vec(),
                             });
                             continue;
                         }
@@ -270,14 +273,16 @@ impl Module {
             self.producers.emit(&mut cx);
         }
 
-        for section in self.custom.iter() {
-            if !self.config.generate_dwarf && section.name.starts_with(".debug") {
-                log::debug!("skipping DWARF custom section {}", section.name);
+        for (_id, section) in self.customs.iter() {
+            if !self.config.generate_dwarf && section.name().starts_with(".debug") {
+                log::debug!("skipping DWARF custom section {}", section.name());
                 continue;
             }
 
-            log::debug!("emitting custom section {}", section.name);
-            cx.custom_section(&section.name).encoder.raw(&section.value);
+            log::debug!("emitting custom section {}", section.name());
+            cx.custom_section(&section.name())
+                .encoder
+                .raw(&section.data());
         }
 
         log::debug!("emission finished");

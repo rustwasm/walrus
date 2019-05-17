@@ -20,6 +20,11 @@ just as nice as debugging the intermediate module.
 
 Stay tuned for more information in the future!
 
+## Examples
+
+* Check out the [`wasm-snip`](https://github.com/rustwasm/wasm-snip) project for
+  a relatively simple and self-contained example of using `walrus`.
+
 ## License
 
 This project is licensed under either of

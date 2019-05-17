@@ -32,6 +32,29 @@ Released YYYY-MM-DD.
 
 --------------------------------------------------------------------------------
 
+## 0.7.0
+
+Released 2019-05-17.
+
+### Added
+
+* Added the `walrus::ModuleCustomSections` API for working with arbitrary custom
+  sections, including and especially custom sections that `walrus` itself has no
+  special knowledge of. This is exposed as the `customs` field of a
+  `walrus::Module`.
+
+* Added the `Module::with_config` constructor method to create a default, empty
+  module that uses the given configuration.
+
+### Removed
+
+* The `walrus::Module::custom` vector of raw custom modules has been removed and
+  is superceded by the new `walrus::ModuleCustomSections` API. If you were using
+  this and the old `CustomSection` type, switch to use the `RawCustomSection`
+  type with `ModuleCustomSections`.
+
+--------------------------------------------------------------------------------
+
 ## 0.6.0
 
 Released 2019-05-02.

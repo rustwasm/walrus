@@ -70,6 +70,14 @@ pub struct Module {
 }
 
 impl Module {
+    /// Create a default, empty module that uses the given configuration.
+    pub fn with_config(config: ModuleConfig) -> Self {
+        Module {
+            config,
+            ..Default::default()
+        }
+    }
+
     /// Construct a new module from the given path with the default
     /// configuration.
     pub fn from_file<P>(path: P) -> Result<Module>

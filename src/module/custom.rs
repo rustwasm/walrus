@@ -3,7 +3,8 @@
 use crate::tombstone_arena::{Id, Tombstone, TombstoneArena};
 use std::any::Any;
 use std::borrow::Cow;
-use std::fmt::Debug;
+use std::fmt::{self, Debug};
+use std::hash::{Hash, Hasher};
 use std::marker::PhantomData;
 
 // ModuleCustomSections
@@ -31,8 +32,10 @@ pub trait CustomSection: Any + Debug + Send + Sync {
 
 // We have to have this so that we can convert `CustomSection` trait objects
 // into `Any` trait objects.
-trait CustomSectionAny: Any + CustomSection {
+#[doc(hidden)]
+pub trait CustomSectionAny: Any + CustomSection {
     fn impl_as_custom_section(&self) -> &dyn CustomSection;
+    fn impl_as_custom_section_mut(&mut self) -> &mut dyn CustomSection;
     fn impl_into_any(self: Box<Self>) -> Box<dyn Any + 'static>;
     fn impl_as_any(&self) -> &dyn Any;
     fn impl_as_any_mut(&mut self) -> &mut dyn Any;
@@ -43,6 +46,10 @@ where
     T: CustomSection,
 {
     fn impl_as_custom_section(&self) -> &dyn CustomSection {
+        self
+    }
+
+    fn impl_as_custom_section_mut(&mut self) -> &mut dyn CustomSection {
         self
     }
 
@@ -91,19 +98,122 @@ impl CustomSection for RawCustomSection {
     }
 }
 
+/// A common trait for custom section identifiers.
+///
+/// Used in the `ModuleCustomSections::get` family of methods to perform type
+/// conversions from `dyn CustomSection` trait objects into the concrete
+/// `Self::CustomSection` type instance.
+///
+/// You shouldn't implement this yourself. Instead use `TypedCustomSectionId<T>`
+/// or `UntypedCustomSectionId`.
+pub trait CustomSectionId {
+    /// The concrete custom section type that this id gets out of a
+    /// `ModuleCustomSections`.
+    type CustomSection: ?Sized;
+
+    #[doc(hidden)]
+    fn into_inner_id(self) -> Id<Option<Box<dyn CustomSectionAny>>>;
+    #[doc(hidden)]
+    fn section(s: &dyn CustomSectionAny) -> Option<&Self::CustomSection>;
+    #[doc(hidden)]
+    fn section_mut(s: &mut dyn CustomSectionAny) -> Option<&mut Self::CustomSection>;
+}
+
 /// The id of some `CustomSection` instance in a `ModuleCustomSections`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct CustomSectionId(Id<Option<Box<dyn CustomSectionAny>>>);
+pub struct UntypedCustomSectionId(Id<Option<Box<dyn CustomSectionAny>>>);
+
+impl CustomSectionId for UntypedCustomSectionId {
+    type CustomSection = dyn CustomSection;
+
+    fn into_inner_id(self) -> Id<Option<Box<dyn CustomSectionAny>>> {
+        self.0
+    }
+
+    fn section(s: &dyn CustomSectionAny) -> Option<&dyn CustomSection> {
+        Some(s.impl_as_custom_section())
+    }
+
+    fn section_mut(s: &mut dyn CustomSectionAny) -> Option<&mut dyn CustomSection> {
+        Some(s.impl_as_custom_section_mut())
+    }
+}
 
 /// The id of a `CustomSection` instance with a statically-known type in a
 /// `ModuleCustomSections`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct TypedCustomSectionId<T: CustomSection> {
-    id: CustomSectionId,
+pub struct TypedCustomSectionId<T>
+where
+    T: CustomSection,
+{
+    id: UntypedCustomSectionId,
     _phantom: PhantomData<T>,
 }
 
-impl<T> From<TypedCustomSectionId<T>> for CustomSectionId
+impl<T> Debug for TypedCustomSectionId<T>
+where
+    T: CustomSection,
+{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.debug_tuple("TypedCustomSectionId")
+            .field(&self.id)
+            .finish()
+    }
+}
+
+impl<T> Clone for TypedCustomSectionId<T>
+where
+    T: CustomSection,
+{
+    fn clone(&self) -> Self {
+        TypedCustomSectionId {
+            id: self.id,
+            _phantom: PhantomData,
+        }
+    }
+}
+
+impl<T> Copy for TypedCustomSectionId<T> where T: CustomSection {}
+
+impl<T> PartialEq for TypedCustomSectionId<T>
+where
+    T: CustomSection,
+{
+    fn eq(&self, rhs: &Self) -> bool {
+        self.id == rhs.id
+    }
+}
+
+impl<T> Eq for TypedCustomSectionId<T> where T: CustomSection {}
+
+impl<T> Hash for TypedCustomSectionId<T>
+where
+    T: CustomSection,
+{
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.id.hash(state);
+    }
+}
+
+impl<T> CustomSectionId for TypedCustomSectionId<T>
+where
+    T: CustomSection,
+{
+    type CustomSection = T;
+
+    fn into_inner_id(self) -> Id<Option<Box<dyn CustomSectionAny>>> {
+        self.id.0
+    }
+
+    fn section(s: &dyn CustomSectionAny) -> Option<&T> {
+        s.as_any().downcast_ref::<T>()
+    }
+
+    fn section_mut(s: &mut dyn CustomSectionAny) -> Option<&mut T> {
+        s.as_any_mut().downcast_mut::<T>()
+    }
+}
+
+impl<T> From<TypedCustomSectionId<T>> for UntypedCustomSectionId
 where
     T: CustomSection,
 {
@@ -156,7 +266,7 @@ impl ModuleCustomSections {
             .arena
             .alloc(Some(Box::new(custom_section) as Box<dyn CustomSectionAny>));
         TypedCustomSectionId {
-            id: CustomSectionId(id),
+            id: UntypedCustomSectionId(id),
             _phantom: PhantomData,
         }
     }
@@ -164,14 +274,14 @@ impl ModuleCustomSections {
     /// Remove a custom section from the module.
     pub fn delete<I>(&mut self, id: I)
     where
-        I: Into<CustomSectionId>,
+        I: Into<UntypedCustomSectionId>,
     {
         let id = id.into().0;
         self.arena.delete(id);
     }
 
     /// Take a raw, unparsed custom section out of this module.
-    pub fn take_raw(&mut self, name: &str) -> Option<RawCustomSection> {
+    pub fn remove_raw(&mut self, name: &str) -> Option<RawCustomSection> {
         let id = self
             .arena
             .iter()
@@ -190,87 +300,41 @@ impl ModuleCustomSections {
         Some(*raw)
     }
 
-    /// Get a shared reference to a custom section that is in this
-    /// `ModuleCustomSections`.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the custom section associated with the given `id` has been
-    /// deleted or taken.
-    pub fn get<T>(&self, id: TypedCustomSectionId<T>) -> &T
-    where
-        T: CustomSection,
-    {
-        self.try_get(id.into()).unwrap()
-    }
-
     /// Try and get a shared reference to a custom section that is in this
     /// `ModuleCustomSections`.
     ///
     /// Returns `None` if the section associated with the given `id` has been
-    /// taken or deleted, or if it is present but not an instance of `T`.
-    pub fn try_get<T>(&self, id: CustomSectionId) -> Option<&T>
+    /// taken or deleted, or if it is present but not an instance of
+    /// `T::CustomSection`.
+    pub fn get<T>(&self, id: T) -> Option<&T::CustomSection>
     where
-        T: CustomSection,
+        T: CustomSectionId,
     {
         self.arena
-            .get(id.0)
-            .and_then(|s| s.as_ref().unwrap().as_any().downcast_ref::<T>())
-    }
-
-    /// Get an exclusive reference to a custom section that is in this
-    /// `ModuleCustomSections`.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the custom section associated with the given `id` has been
-    /// deleted or taken.
-    pub fn get_mut<T>(&mut self, id: TypedCustomSectionId<T>) -> &mut T
-    where
-        T: CustomSection,
-    {
-        self.try_get_mut(id.into()).unwrap()
+            .get(id.into_inner_id())
+            .and_then(|s| T::section(&**s.as_ref().unwrap()))
     }
 
     /// Try and get an exclusive reference to a custom section that is in this
     /// `ModuleCustomSections`.
     ///
     /// Returns `None` if the section associated with the given `id` has been
-    /// taken or deleted, or if it is present but not an instance of `T`.
-    pub fn try_get_mut<T>(&mut self, id: CustomSectionId) -> Option<&mut T>
+    /// taken or deleted, or if it is present but not an instance of
+    /// `T::CustomSection`.
+    pub fn get_mut<T>(&mut self, id: T) -> Option<&mut T::CustomSection>
     where
-        T: CustomSection,
+        T: CustomSectionId,
     {
         self.arena
-            .get_mut(id.0)
-            .and_then(|s| s.as_mut().unwrap().as_any_mut().downcast_mut::<T>())
-    }
-
-    /// Get an untyped, shared reference to a custom section that is in this
-    /// `ModuleCustomSections`.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the custom section associated with the given `id` has been
-    /// deleted or taken.
-    pub fn get_untyped(&self, id: CustomSectionId) -> &dyn CustomSection {
-        self.try_get_untyped(id).unwrap()
-    }
-
-    /// Get an untyped, shared reference to a custom section that is in this
-    /// `ModuleCustomSections`, or return `None` if the section has been deleted
-    /// or taken.
-    pub fn try_get_untyped(&self, id: CustomSectionId) -> Option<&dyn CustomSection> {
-        self.arena
-            .get(id.0)
-            .map(|s| s.as_ref().unwrap().impl_as_custom_section())
+            .get_mut(id.into_inner_id())
+            .and_then(|s| T::section_mut(&mut **s.as_mut().unwrap()))
     }
 
     /// Iterate over custom sections.
-    pub fn iter(&self) -> impl Iterator<Item = (CustomSectionId, &dyn CustomSection)> {
+    pub fn iter(&self) -> impl Iterator<Item = (UntypedCustomSectionId, &dyn CustomSection)> {
         self.arena.iter().flat_map(|(id, s)| {
             if let Some(s) = s.as_ref() {
-                Some((CustomSectionId(id), s.impl_as_custom_section()))
+                Some((UntypedCustomSectionId(id), s.impl_as_custom_section()))
             } else {
                 None
             }

@@ -50,52 +50,63 @@ pub struct IdsToIndices {
     memories: IdHashMap<Memory, u32>,
     elements: IdHashMap<Element, u32>,
     data: IdHashMap<Data, u32>,
-    pub locals: IdHashMap<Function, IdHashMap<Local, u32>>,
+    pub(crate) locals: IdHashMap<Function, IdHashMap<Local, u32>>,
 }
 
 macro_rules! define_get_index {
-    ( $get_name:ident, $id_ty:ty, $member:ident ) => {
+    ( $(
+        $get_name:ident, $id_ty:ty, $member:ident;
+    )* ) => {
         impl IdsToIndices {
-            /// Get the index for the given identifier.
-            #[inline]
-            #[allow(dead_code)] // not everything is used just yet
-            pub fn $get_name(&self, id: $id_ty) -> u32 {
-                self.$member.get(&id).cloned().expect(
-                    "Should never try and get the index for an identifier that has not already had \
-                     its index set. This means that either we are attempting to get the index of \
-                     an unused identifier, or that we are emitting sections in the wrong order."
-                )
-            }
+            $(
+                /// Get the index for the given identifier.
+                #[inline]
+                pub fn $get_name(&self, id: $id_ty) -> u32 {
+                    self.$member.get(&id).cloned().expect(
+                        "Should never try and get the index for an identifier that has not already had \
+                         its index set. This means that either we are attempting to get the index of \
+                         an unused identifier, or that we are emitting sections in the wrong order."
+                    )
+                }
+            )*
         }
     };
 }
 
 macro_rules! define_get_push_index {
-    ( $get_name:ident, $push_name:ident, $id_ty:ty, $member:ident ) => {
-        define_get_index!($get_name, $id_ty, $member);
+    ( $(
+        $get_name:ident, $push_name:ident, $id_ty:ty, $member:ident;
+    )* ) => {
+        define_get_index!( $( $get_name, $id_ty, $member; )* );
         impl IdsToIndices {
-            /// Adds the given identifier to this set, assigning it the next
-            /// available index.
-            #[inline]
-            pub fn $push_name(&mut self, id: $id_ty) {
-                let idx = self.$member.len() as u32;
-                self.$member.insert(id, idx);
-            }
+            $(
+                /// Adds the given identifier to this set, assigning it the next
+                /// available index.
+                #[inline]
+                pub(crate) fn $push_name(&mut self, id: $id_ty) {
+                    let idx = self.$member.len() as u32;
+                    self.$member.insert(id, idx);
+                }
+            )*
         }
     };
 }
 
-define_get_push_index!(get_table_index, push_table, TableId, tables);
-define_get_push_index!(get_type_index, push_type, TypeId, types);
-define_get_push_index!(get_func_index, push_func, FunctionId, funcs);
-define_get_push_index!(get_global_index, push_global, GlobalId, globals);
-define_get_push_index!(get_memory_index, push_memory, MemoryId, memories);
-define_get_push_index!(get_element_index, push_element, ElementId, elements);
-define_get_index!(get_data_index, DataId, data);
+define_get_push_index! {
+    get_table_index, push_table, TableId, tables;
+    get_type_index, push_type, TypeId, types;
+    get_func_index, push_func, FunctionId, funcs;
+    get_global_index, push_global, GlobalId, globals;
+    get_memory_index, push_memory, MemoryId, memories;
+    get_element_index, push_element, ElementId, elements;
+}
+define_get_index! {
+    get_data_index, DataId, data;
+}
 
 impl IdsToIndices {
     /// Sets the data index to the specified value
-    pub fn set_data_index(&mut self, id: DataId, idx: u32) {
+    pub(crate) fn set_data_index(&mut self, id: DataId, idx: u32) {
         self.data.insert(id, idx);
     }
 }

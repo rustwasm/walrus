@@ -1,13 +1,12 @@
 //! Working with custom sections.
 
 use crate::tombstone_arena::{Id, Tombstone, TombstoneArena};
+use crate::IdsToIndices;
 use std::any::Any;
 use std::borrow::Cow;
 use std::fmt::{self, Debug};
 use std::hash::{Hash, Hasher};
 use std::marker::PhantomData;
-
-// ModuleCustomSections
 
 /// A trait for implementing [custom
 /// sections](https://webassembly.github.io/spec/core/binary/modules.html#binary-customsec).
@@ -27,7 +26,7 @@ pub trait CustomSection: Any + Debug + Send + Sync {
     /// This should *not* include the section header with id=0, the custom
     /// section's name, or the count of how many bytes are in the
     /// payload. `walrus` will handle these for you.
-    fn data(&self) -> Cow<[u8]>;
+    fn data(&self, ids_to_indices: &IdsToIndices) -> Cow<[u8]>;
 }
 
 // We have to have this so that we can convert `CustomSection` trait objects
@@ -93,7 +92,7 @@ impl CustomSection for RawCustomSection {
         &self.name
     }
 
-    fn data(&self) -> Cow<[u8]> {
+    fn data(&self, _: &IdsToIndices) -> Cow<[u8]> {
         self.data.as_slice().into()
     }
 }

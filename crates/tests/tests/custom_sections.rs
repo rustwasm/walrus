@@ -1,7 +1,7 @@
 //! Tests for working with custom sections that `walrus` doesn't know about.
 
 use std::borrow::Cow;
-use walrus::{CustomSection, Module, ModuleConfig};
+use walrus::{CustomSection, IdsToIndices, Module, ModuleConfig};
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 struct HelloCustomSection(String);
@@ -22,7 +22,7 @@ impl CustomSection for HelloCustomSection {
         "hello"
     }
 
-    fn data(&self) -> Cow<[u8]> {
+    fn data(&self, _: &IdsToIndices) -> Cow<[u8]> {
         let data = format!("Hello, {}!", self.0);
         data.into_bytes().into()
     }
@@ -32,6 +32,8 @@ impl CustomSection for HelloCustomSection {
 fn round_trip_unkown_custom_sections() {
     let mut config = ModuleConfig::new();
     config.generate_producers_section(false);
+
+    let indices = IdsToIndices::default();
 
     let mut module = Module::with_config(config.clone());
 
@@ -43,19 +45,19 @@ fn round_trip_unkown_custom_sections() {
         module
             .customs
             .iter()
-            .map(|(id, s)| (id, s.data()))
+            .map(|(id, s)| (id, s.data(&indices)))
             .collect::<Vec<_>>(),
-        [(world_id.into(), world.data())]
+        [(world_id.into(), world.data(&indices))]
     );
 
     let wasm = module.emit_wasm().unwrap();
     let mut module = config.parse(&wasm).unwrap();
 
     let world_round_tripped = module.customs.remove_raw("hello").unwrap();
-    assert_eq!(world_round_tripped.data(), world.data());
+    assert_eq!(world_round_tripped.data(&indices), world.data(&indices));
 
-    let new_world = HelloCustomSection::parse(&world.data()).unwrap();
-    assert_eq!(new_world.data(), world.data());
+    let new_world = HelloCustomSection::parse(&world.data(&indices)).unwrap();
+    assert_eq!(new_world.data(&indices), world.data(&indices));
     module.customs.add(new_world);
 
     let new_wasm = module.emit_wasm().unwrap();

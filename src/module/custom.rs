@@ -330,11 +330,24 @@ impl ModuleCustomSections {
             .and_then(|s| T::section_mut(&mut **s.as_mut().unwrap()))
     }
 
-    /// Iterate over custom sections.
+    /// Iterate over shared references to custom sections and their ids.
     pub fn iter(&self) -> impl Iterator<Item = (UntypedCustomSectionId, &dyn CustomSection)> {
         self.arena.iter().flat_map(|(id, s)| {
             if let Some(s) = s.as_ref() {
                 Some((UntypedCustomSectionId(id), s.impl_as_custom_section()))
+            } else {
+                None
+            }
+        })
+    }
+
+    /// Iterate over exclusive references to custom sections and their ids.
+    pub fn iter_mut(
+        &mut self,
+    ) -> impl Iterator<Item = (UntypedCustomSectionId, &mut dyn CustomSection)> {
+        self.arena.iter_mut().flat_map(|(id, s)| {
+            if let Some(s) = s.as_mut() {
+                Some((UntypedCustomSectionId(id), s.impl_as_custom_section_mut()))
             } else {
                 None
             }

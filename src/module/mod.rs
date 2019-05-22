@@ -36,6 +36,7 @@ pub use crate::module::types::ModuleTypes;
 use crate::parse::IndicesToIds;
 use failure::{bail, ResultExt};
 use std::fs;
+use std::mem;
 use std::path::Path;
 
 pub use self::config::ModuleConfig;
@@ -273,6 +274,8 @@ impl Module {
             self.producers.emit(&mut cx);
         }
 
+        let indices = mem::replace(cx.indices, Default::default());
+
         for (_id, section) in self.customs.iter() {
             if !self.config.generate_dwarf && section.name().starts_with(".debug") {
                 log::debug!("skipping DWARF custom section {}", section.name());
@@ -282,7 +285,7 @@ impl Module {
             log::debug!("emitting custom section {}", section.name());
             cx.custom_section(&section.name())
                 .encoder
-                .raw(&section.data());
+                .raw(&section.data(&indices));
         }
 
         log::debug!("emission finished");

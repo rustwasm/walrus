@@ -50,7 +50,7 @@ pub struct IdsToIndices {
     memories: IdHashMap<Memory, u32>,
     elements: IdHashMap<Element, u32>,
     data: IdHashMap<Data, u32>,
-    pub locals: IdHashMap<Function, IdHashMap<Local, u32>>,
+    pub(crate) locals: IdHashMap<Function, IdHashMap<Local, u32>>,
 }
 
 macro_rules! define_get_index {
@@ -58,7 +58,6 @@ macro_rules! define_get_index {
         impl IdsToIndices {
             /// Get the index for the given identifier.
             #[inline]
-            #[allow(dead_code)] // not everything is used just yet
             pub fn $get_name(&self, id: $id_ty) -> u32 {
                 self.$member.get(&id).cloned().expect(
                     "Should never try and get the index for an identifier that has not already had \
@@ -77,7 +76,7 @@ macro_rules! define_get_push_index {
             /// Adds the given identifier to this set, assigning it the next
             /// available index.
             #[inline]
-            pub fn $push_name(&mut self, id: $id_ty) {
+            pub(crate) fn $push_name(&mut self, id: $id_ty) {
                 let idx = self.$member.len() as u32;
                 self.$member.insert(id, idx);
             }
@@ -95,7 +94,7 @@ define_get_index!(get_data_index, DataId, data);
 
 impl IdsToIndices {
     /// Sets the data index to the specified value
-    pub fn set_data_index(&mut self, id: DataId, idx: u32) {
+    pub(crate) fn set_data_index(&mut self, id: DataId, idx: u32) {
         self.data.insert(id, idx);
     }
 }

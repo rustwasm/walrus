@@ -13,7 +13,7 @@ use std::marker::PhantomData;
 ///
 /// Custom sections are added to a `walrus::Module` via
 /// `my_module.custom_sections.add(my_custom_section)`.
-pub trait CustomSection: Any + Debug + Send + Sync {
+pub trait CustomSection: WalrusAny + Debug + Send + Sync {
     /// Get this custom section's name.
     ///
     /// For example ".debug_info" for one of the DWARF custom sections or "name"
@@ -29,51 +29,44 @@ pub trait CustomSection: Any + Debug + Send + Sync {
     fn data(&self, ids_to_indices: &IdsToIndices) -> Cow<[u8]>;
 }
 
-// We have to have this so that we can convert `CustomSection` trait objects
-// into `Any` trait objects.
-#[doc(hidden)]
-pub trait CustomSectionAny: Any + CustomSection {
-    fn impl_as_custom_section(&self) -> &dyn CustomSection;
-    fn impl_as_custom_section_mut(&mut self) -> &mut dyn CustomSection;
-    fn impl_into_any(self: Box<Self>) -> Box<dyn Any + 'static>;
-    fn impl_as_any(&self) -> &dyn Any;
-    fn impl_as_any_mut(&mut self) -> &mut dyn Any;
+/// A wrapper trait around `any` but implemented for all types that already
+/// implement `Any`. You shouldn't need to implement this type yourself as it
+/// should automatically be implemented.
+pub trait WalrusAny: Any + Send + Sync {
+    #[doc(hidden)]
+    fn walrus_into_any(self: Box<Self>) -> Box<dyn Any + Send + 'static>;
+    #[doc(hidden)]
+    fn walrus_as_any(&self) -> &(dyn Any + Send + Sync);
+    #[doc(hidden)]
+    fn walrus_as_any_mut(&mut self) -> &mut (dyn Any + Send + Sync);
 }
 
-impl<T> CustomSectionAny for T
-where
-    T: CustomSection,
-{
-    fn impl_as_custom_section(&self) -> &dyn CustomSection {
+impl<T: Any + Send + Sync> WalrusAny for T {
+    fn walrus_into_any(self: Box<Self>) -> Box<dyn Any + Send + 'static> {
         self
     }
-
-    fn impl_as_custom_section_mut(&mut self) -> &mut dyn CustomSection {
+    fn walrus_as_any(&self) -> &(dyn Any + Send + Sync) {
         self
     }
-
-    fn impl_into_any(self: Box<Self>) -> Box<dyn Any + 'static> {
-        self
-    }
-
-    fn impl_as_any(&self) -> &dyn Any {
-        self
-    }
-
-    fn impl_as_any_mut(&mut self) -> &mut dyn Any {
+    fn walrus_as_any_mut(&mut self) -> &mut (dyn Any + Send + Sync) {
         self
     }
 }
 
-impl dyn CustomSectionAny {
-    fn into_any(self: Box<Self>) -> Box<dyn Any + 'static> {
-        self.impl_into_any()
+impl dyn CustomSection {
+    /// Convert this custom section to `Box<Any>` to do dynamic downcasting
+    pub fn into_any(self: Box<Self>) -> Box<dyn Any + Send + 'static> {
+        self.walrus_into_any()
     }
-    fn as_any(&self) -> &Any {
-        self.impl_as_any()
+
+    /// Convert this custom section to `&Any` to do dynamic downcasting
+    pub fn as_any(&self) -> &(dyn Any + Send + Sync) {
+        self.walrus_as_any()
     }
-    fn as_any_mut(&mut self) -> &mut Any {
-        self.impl_as_any_mut()
+
+    /// Convert this custom section to `&mut Any` to do dynamic downcasting
+    pub fn as_any_mut(&mut self) -> &mut (dyn Any + Send + Sync) {
+        self.walrus_as_any_mut()
     }
 }
 
@@ -111,30 +104,30 @@ pub trait CustomSectionId {
     type CustomSection: ?Sized;
 
     #[doc(hidden)]
-    fn into_inner_id(self) -> Id<Option<Box<dyn CustomSectionAny>>>;
+    fn into_inner_id(self) -> Id<Option<Box<dyn CustomSection>>>;
     #[doc(hidden)]
-    fn section(s: &dyn CustomSectionAny) -> Option<&Self::CustomSection>;
+    fn section(s: &dyn CustomSection) -> Option<&Self::CustomSection>;
     #[doc(hidden)]
-    fn section_mut(s: &mut dyn CustomSectionAny) -> Option<&mut Self::CustomSection>;
+    fn section_mut(s: &mut dyn CustomSection) -> Option<&mut Self::CustomSection>;
 }
 
 /// The id of some `CustomSection` instance in a `ModuleCustomSections`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct UntypedCustomSectionId(Id<Option<Box<dyn CustomSectionAny>>>);
+pub struct UntypedCustomSectionId(Id<Option<Box<dyn CustomSection>>>);
 
 impl CustomSectionId for UntypedCustomSectionId {
     type CustomSection = dyn CustomSection;
 
-    fn into_inner_id(self) -> Id<Option<Box<dyn CustomSectionAny>>> {
+    fn into_inner_id(self) -> Id<Option<Box<dyn CustomSection>>> {
         self.0
     }
 
-    fn section(s: &dyn CustomSectionAny) -> Option<&dyn CustomSection> {
-        Some(s.impl_as_custom_section())
+    fn section(s: &dyn CustomSection) -> Option<&dyn CustomSection> {
+        Some(s)
     }
 
-    fn section_mut(s: &mut dyn CustomSectionAny) -> Option<&mut dyn CustomSection> {
-        Some(s.impl_as_custom_section_mut())
+    fn section_mut(s: &mut dyn CustomSection) -> Option<&mut dyn CustomSection> {
+        Some(s)
     }
 }
 
@@ -199,15 +192,15 @@ where
 {
     type CustomSection = T;
 
-    fn into_inner_id(self) -> Id<Option<Box<dyn CustomSectionAny>>> {
+    fn into_inner_id(self) -> Id<Option<Box<dyn CustomSection>>> {
         self.id.0
     }
 
-    fn section(s: &dyn CustomSectionAny) -> Option<&T> {
+    fn section(s: &dyn CustomSection) -> Option<&T> {
         s.as_any().downcast_ref::<T>()
     }
 
-    fn section_mut(s: &mut dyn CustomSectionAny) -> Option<&mut T> {
+    fn section_mut(s: &mut dyn CustomSection) -> Option<&mut T> {
         s.as_any_mut().downcast_mut::<T>()
     }
 }
@@ -222,7 +215,7 @@ where
     }
 }
 
-impl Tombstone for Option<Box<dyn CustomSectionAny>> {
+impl Tombstone for Option<Box<dyn CustomSection>> {
     fn on_delete(&mut self) {
         *self = None;
     }
@@ -252,7 +245,7 @@ impl Tombstone for Option<Box<dyn CustomSectionAny>> {
 ///   of the custom section.
 #[derive(Debug, Default)]
 pub struct ModuleCustomSections {
-    arena: TombstoneArena<Option<Box<dyn CustomSectionAny>>>,
+    arena: TombstoneArena<Option<Box<dyn CustomSection>>>,
 }
 
 impl ModuleCustomSections {
@@ -263,7 +256,7 @@ impl ModuleCustomSections {
     {
         let id = self
             .arena
-            .alloc(Some(Box::new(custom_section) as Box<dyn CustomSectionAny>));
+            .alloc(Some(Box::new(custom_section) as Box<dyn CustomSection>));
         TypedCustomSectionId {
             id: UntypedCustomSectionId(id),
             _phantom: PhantomData,
@@ -333,7 +326,7 @@ impl ModuleCustomSections {
     pub fn iter(&self) -> impl Iterator<Item = (UntypedCustomSectionId, &dyn CustomSection)> {
         self.arena.iter().flat_map(|(id, s)| {
             if let Some(s) = s.as_ref() {
-                Some((UntypedCustomSectionId(id), s.impl_as_custom_section()))
+                Some((UntypedCustomSectionId(id), &**s))
             } else {
                 None
             }
@@ -346,7 +339,7 @@ impl ModuleCustomSections {
     ) -> impl Iterator<Item = (UntypedCustomSectionId, &mut dyn CustomSection)> {
         self.arena.iter_mut().flat_map(|(id, s)| {
             if let Some(s) = s.as_mut() {
-                Some((UntypedCustomSectionId(id), s.impl_as_custom_section_mut()))
+                Some((UntypedCustomSectionId(id), &mut **s))
             } else {
                 None
             }

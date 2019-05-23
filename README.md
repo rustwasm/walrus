@@ -1,11 +1,28 @@
-# `walrus`
+<div align="center">
 
-**Walrus is a WebAssembly transformation library.**
+  <h1>Walrus 🌊🐘</h1>
 
-[![](https://docs.rs/walrus/badge.svg)](https://docs.rs/walrus/)
-[![](https://img.shields.io/crates/v/walrus.svg)](https://crates.io/crates/walrus)
-[![](https://img.shields.io/crates/d/walrus.svg)](https://crates.io/crates/walrus)
-[![Travis CI Build Status](https://travis-ci.org/rustwasm/walrus.svg?branch=master)](https://travis-ci.org/rustwasm/walrus)
+  <strong>Walrus is a WebAssembly transformation library</strong>
+
+  <p>
+    <a href="https://travis-ci.org/rustwasm/walrus"><img src="https://img.shields.io/travis/rustwasm/walrus.svg?style=flat-square" alt="Build Status" /></a>
+    <a href="https://crates.io/crates/walrus"><img src="https://img.shields.io/crates/v/walrus.svg?style=flat-square" alt="Crates.io version" /></a>
+    <a href="https://crates.io/crates/walrus"><img src="https://img.shields.io/crates/d/walrus.svg?style=flat-square" alt="Download" /></a>
+    <a href="https://docs.rs/walrus"><img src="https://img.shields.io/badge/docs-latest-blue.svg?style=flat-square" alt="docs.rs docs" /></a>
+  </p>
+
+  <h3>
+    <a href="https://docs.rs/walrus">API Docs</a>
+    <span> | </span>
+    <a href="https://github.com/rustwasm/walrus/blob/master/CONTRIBUTING.md">Contributing</a>
+    <span> | </span>
+    <a href="https://discordapp.com/channels/442252698964721669/443151097398296587">Chat</a>
+  </h3>
+
+  <sub>Built with 🦀🕸 by <a href="https://rustwasm.github.io/">The Rust and WebAssembly Working Group</a></sub>
+</div>
+
+## About
 
 The `walrus` crate is a Rust library for performing WebAssembly transformations
 in a robust and ergonomic fashion. The crate is still in its early days but is

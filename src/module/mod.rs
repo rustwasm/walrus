@@ -19,6 +19,7 @@ use crate::encode::Encoder;
 use crate::error::Result;
 pub use crate::module::custom::{
     CustomSection, CustomSectionId, ModuleCustomSections, RawCustomSection, TypedCustomSectionId,
+    UntypedCustomSectionId,
 };
 pub use crate::module::data::{Data, DataId, ModuleData};
 pub use crate::module::elements::{Element, ElementId, ModuleElements};

@@ -109,6 +109,8 @@ pub trait CustomSectionId {
     fn section(s: &dyn CustomSection) -> Option<&Self::CustomSection>;
     #[doc(hidden)]
     fn section_mut(s: &mut dyn CustomSection) -> Option<&mut Self::CustomSection>;
+    #[doc(hidden)]
+    fn section_box(s: Box<dyn CustomSection>) -> Option<Box<Self::CustomSection>>;
 }
 
 /// The id of some `CustomSection` instance in a `ModuleCustomSections`.
@@ -127,6 +129,10 @@ impl CustomSectionId for UntypedCustomSectionId {
     }
 
     fn section_mut(s: &mut dyn CustomSection) -> Option<&mut dyn CustomSection> {
+        Some(s)
+    }
+
+    fn section_box(s: Box<dyn CustomSection>) -> Option<Box<dyn CustomSection>> {
         Some(s)
     }
 }
@@ -203,6 +209,10 @@ where
     fn section_mut(s: &mut dyn CustomSection) -> Option<&mut T> {
         s.as_any_mut().downcast_mut::<T>()
     }
+
+    fn section_box(s: Box<dyn CustomSection>) -> Option<Box<T>> {
+        s.into_any().downcast().ok()
+    }
 }
 
 impl<T> From<TypedCustomSectionId<T>> for UntypedCustomSectionId
@@ -264,12 +274,14 @@ impl ModuleCustomSections {
     }
 
     /// Remove a custom section from the module.
-    pub fn delete<I>(&mut self, id: I)
+    pub fn delete<I>(&mut self, id: I) -> Option<Box<I::CustomSection>>
     where
-        I: Into<UntypedCustomSectionId>,
+        I: CustomSectionId
     {
-        let id = id.into().0;
+        let id = id.into_inner_id();
+        let ret = self.arena.get_mut(id)?.take()?;
         self.arena.delete(id);
+        I::section_box(ret)
     }
 
     /// Take a raw, unparsed custom section out of this module.

@@ -276,7 +276,7 @@ impl ModuleCustomSections {
     /// Remove a custom section from the module.
     pub fn delete<I>(&mut self, id: I) -> Option<Box<I::CustomSection>>
     where
-        I: CustomSectionId
+        I: CustomSectionId,
     {
         let id = id.into_inner_id();
         let ret = self.arena.get_mut(id)?.take()?;
@@ -356,5 +356,43 @@ impl ModuleCustomSections {
                 None
             }
         })
+    }
+
+    /// Remove a custom section (by type) from the module.
+    ///
+    /// If there are multiple custom sections of the type `T` only the first one
+    /// is removed.
+    pub fn delete_typed<T>(&mut self) -> Option<Box<T>>
+    where
+        T: CustomSection,
+    {
+        let (id, _) = self.iter().find(|(_, s)| s.as_any().is::<T>())?;
+        self.delete(id)?.into_any().downcast().ok()
+    }
+
+    /// Get a shared reference to a custom section, by type.
+    ///
+    /// If there are multiple custom sections of the type `T` this returns a
+    /// reference to the first one.
+    pub fn get_typed<T>(&self) -> Option<&T>
+    where
+        T: CustomSection,
+    {
+        self.iter()
+            .filter_map(|(_, s)| s.as_any().downcast_ref())
+            .next()
+    }
+
+    /// Get a mutable reference to a custom section, by type.
+    ///
+    /// If there are multiple custom sections of the type `T` this returns a
+    /// reference to the first one.
+    pub fn get_typed_mut<T>(&mut self) -> Option<&mut T>
+    where
+        T: CustomSection,
+    {
+        self.iter_mut()
+            .filter_map(|(_, s)| s.as_any_mut().downcast_mut())
+            .next()
     }
 }

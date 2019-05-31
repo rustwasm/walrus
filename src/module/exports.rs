@@ -72,6 +72,11 @@ impl ModuleExports {
         self.arena.iter().map(|(_, f)| f)
     }
 
+    /// Get a mutable reference to this module's exports.
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut Export> {
+        self.arena.iter_mut().map(|(_, f)| f)
+    }
+
     /// Add a new export to this module
     pub fn add(&mut self, name: &str, item: impl Into<ExportItem>) -> ExportId {
         self.arena.alloc_with_id(|id| Export {

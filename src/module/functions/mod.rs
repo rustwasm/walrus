@@ -184,6 +184,9 @@ impl ModuleFunctions {
 
     /// Get a function ID by its name.
     ///
+    /// The name used is the "name" custom section name and *not* the export
+    /// name, if a function happens to be exported.
+    ///
     /// Note that function names are *not* guaranteed to be unique. This will
     /// return the first function in the module with the given name.
     pub fn by_name(&self, name: &str) -> Option<FunctionId> {

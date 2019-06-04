@@ -4,6 +4,7 @@ use crate::arena_set::ArenaSet;
 use crate::emit::{Emit, EmitContext, Section};
 use crate::error::Result;
 use crate::module::Module;
+use crate::parse::IndicesToIds;
 use crate::ty::{Type, TypeId, ValType};
 
 /// The set of de-duplicated types within a module.
@@ -66,7 +67,11 @@ impl ModuleTypes {
 
 impl Module {
     /// Construct the set of types within a module.
-    pub(crate) fn parse_types(&mut self, section: wasmparser::TypeSectionReader) -> Result<()> {
+    pub(crate) fn parse_types(
+        &mut self,
+        section: wasmparser::TypeSectionReader,
+        ids: &mut IndicesToIds,
+    ) -> Result<()> {
         log::debug!("parsing type section");
         for ty in section {
             let fun_ty = ty?;
@@ -84,7 +89,7 @@ impl Module {
                 .collect::<Result<Vec<_>>>()?
                 .into_boxed_slice();
             let id = self.types.arena.insert(Type::new(id, params, results));
-            self.indices_to_ids.push_type(id);
+            ids.push_type(id);
         }
 
         Ok(())

@@ -1,6 +1,7 @@
 //! Tables within a wasm module.
 
 use crate::emit::{Emit, EmitContext, Section};
+use crate::parse::IndicesToIds;
 use crate::tombstone_arena::{Id, Tombstone, TombstoneArena};
 use crate::{FunctionId, GlobalId, ImportId, Module, Result, ValType};
 
@@ -173,7 +174,11 @@ impl ModuleTables {
 
 impl Module {
     /// Construct a new, empty set of tables for a module.
-    pub(crate) fn parse_tables(&mut self, section: wasmparser::TableSectionReader) -> Result<()> {
+    pub(crate) fn parse_tables(
+        &mut self,
+        section: wasmparser::TableSectionReader,
+        ids: &mut IndicesToIds,
+    ) -> Result<()> {
         log::debug!("parse table section");
         for t in section {
             let t = t?;
@@ -186,7 +191,7 @@ impl Module {
                     _ => failure::bail!("invalid table type"),
                 },
             );
-            self.indices_to_ids.push_table(id);
+            ids.push_table(id);
         }
         Ok(())
     }

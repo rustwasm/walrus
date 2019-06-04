@@ -1,7 +1,6 @@
 //! A wasm module's imports.
 
 use crate::emit::{Emit, EmitContext, Section};
-use crate::parse::IndicesToIds;
 use crate::tombstone_arena::{Id, Tombstone, TombstoneArena};
 use crate::{FunctionId, FunctionTable, GlobalId, MemoryId, Result, TableId};
 use crate::{Module, TableKind, TypeId, ValType};
@@ -96,19 +95,15 @@ impl ModuleImports {
 
 impl Module {
     /// Construct the import set for a wasm module.
-    pub(crate) fn parse_imports(
-        &mut self,
-        section: wasmparser::ImportSectionReader,
-        ids: &mut IndicesToIds,
-    ) -> Result<()> {
+    pub(crate) fn parse_imports(&mut self, section: wasmparser::ImportSectionReader) -> Result<()> {
         log::debug!("parse import section");
         for entry in section {
             let entry = entry?;
             match entry.ty {
                 wasmparser::ImportSectionEntryType::Function(idx) => {
-                    let ty = ids.get_type(idx)?;
+                    let ty = self.indices_to_ids.get_type(idx)?;
                     let id = self.add_import_func(entry.module, entry.field, ty);
-                    ids.push_func(id);
+                    self.indices_to_ids.push_func(id);
                 }
                 wasmparser::ImportSectionEntryType::Table(t) => {
                     let kind = match t.element_type {
@@ -122,7 +117,7 @@ impl Module {
                         t.limits.maximum,
                         kind,
                     );
-                    ids.push_table(id);
+                    self.indices_to_ids.push_table(id);
                 }
                 wasmparser::ImportSectionEntryType::Memory(m) => {
                     let id = self.add_import_memory(
@@ -132,7 +127,7 @@ impl Module {
                         m.limits.initial,
                         m.limits.maximum,
                     );
-                    ids.push_memory(id);
+                    self.indices_to_ids.push_memory(id);
                 }
                 wasmparser::ImportSectionEntryType::Global(g) => {
                     let id = self.add_import_global(
@@ -141,7 +136,7 @@ impl Module {
                         ValType::parse(&g.content_type)?,
                         g.mutable,
                     );
-                    ids.push_global(id);
+                    self.indices_to_ids.push_global(id);
                 }
             }
         }

@@ -1,7 +1,6 @@
 //! Exported items in a wasm module.
 
 use crate::emit::{Emit, EmitContext, Section};
-use crate::parse::IndicesToIds;
 use crate::tombstone_arena::{Id, Tombstone, TombstoneArena};
 use crate::{FunctionId, GlobalId, MemoryId, Module, Result, TableId};
 
@@ -90,21 +89,17 @@ impl ModuleExports {
 
 impl Module {
     /// Construct the export set for a wasm module.
-    pub(crate) fn parse_exports(
-        &mut self,
-        section: wasmparser::ExportSectionReader,
-        ids: &IndicesToIds,
-    ) -> Result<()> {
+    pub(crate) fn parse_exports(&mut self, section: wasmparser::ExportSectionReader) -> Result<()> {
         log::debug!("parse export section");
         use wasmparser::ExternalKind::*;
 
         for entry in section {
             let entry = entry?;
             let item = match entry.kind {
-                Function => ExportItem::Function(ids.get_func(entry.index)?),
-                Table => ExportItem::Table(ids.get_table(entry.index)?),
-                Memory => ExportItem::Memory(ids.get_memory(entry.index)?),
-                Global => ExportItem::Global(ids.get_global(entry.index)?),
+                Function => ExportItem::Function(self.indices_to_ids.get_func(entry.index)?),
+                Table => ExportItem::Table(self.indices_to_ids.get_table(entry.index)?),
+                Memory => ExportItem::Memory(self.indices_to_ids.get_memory(entry.index)?),
+                Global => ExportItem::Global(self.indices_to_ids.get_global(entry.index)?),
             };
             self.exports.arena.alloc_with_id(|id| Export {
                 id,

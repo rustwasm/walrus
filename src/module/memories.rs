@@ -2,7 +2,6 @@
 
 use crate::emit::{Emit, EmitContext, Section};
 use crate::ir::Value;
-use crate::parse::IndicesToIds;
 use crate::tombstone_arena::{Id, Tombstone, TombstoneArena};
 use crate::{GlobalId, ImportId, InitExpr, Module, Result};
 
@@ -154,7 +153,6 @@ impl Module {
     pub(crate) fn parse_memories(
         &mut self,
         section: wasmparser::MemorySectionReader,
-        ids: &mut IndicesToIds,
     ) -> Result<()> {
         log::debug!("parse memory section");
         for m in section {
@@ -162,7 +160,7 @@ impl Module {
             let id = self
                 .memories
                 .add_local(m.shared, m.limits.initial, m.limits.maximum);
-            ids.push_memory(id);
+            self.indices_to_ids.push_memory(id);
         }
         Ok(())
     }

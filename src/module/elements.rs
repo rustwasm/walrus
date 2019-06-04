@@ -2,10 +2,10 @@
 
 use crate::emit::{Emit, EmitContext, Section};
 use crate::ir::Value;
-use crate::parse::IndicesToIds;
 use crate::tombstone_arena::{Id, Tombstone, TombstoneArena};
 use crate::{FunctionId, InitExpr, Module, Result, TableKind, ValType};
 use failure::{bail, ResultExt};
+use std::mem;
 
 /// A passive element segment identifier
 pub type ElementId = Id<Element>;
@@ -67,9 +67,12 @@ impl Module {
     pub(crate) fn parse_elements(
         &mut self,
         section: wasmparser::ElementSectionReader,
-        ids: &mut IndicesToIds,
     ) -> Result<()> {
         log::debug!("parse element section");
+
+        // Take `indices_to_ids` out temporarily to avoid borrowck issues.
+        let indices_to_ids = mem::replace(&mut self.indices_to_ids, Default::default());
+
         for (i, segment) in section.into_iter().enumerate() {
             let segment = segment?;
 
@@ -82,7 +85,7 @@ impl Module {
                     table_index,
                     init_expr,
                 } => {
-                    let table = ids.get_table(table_index)?;
+                    let table = indices_to_ids.get_table(table_index)?;
                     let table = match &mut self.tables.get_mut(table).kind {
                         TableKind::Function(t) => t,
                         TableKind::Anyref(_) => {
@@ -90,11 +93,11 @@ impl Module {
                         }
                     };
 
-                    let offset = InitExpr::eval(&init_expr, ids)
+                    let offset = InitExpr::eval(&init_expr, &indices_to_ids)
                         .with_context(|_e| format!("in segment {}", i))?;
                     let functions = segment.items.get_items_reader()?.into_iter().map(|func| {
                         let func = func?;
-                        ids.get_func(func)
+                        indices_to_ids.get_func(func)
                     });
 
                     match offset {
@@ -116,6 +119,10 @@ impl Module {
                 }
             }
         }
+
+        // Put `indices_to_ids` back.
+        self.indices_to_ids = indices_to_ids;
+
         Ok(())
     }
 }

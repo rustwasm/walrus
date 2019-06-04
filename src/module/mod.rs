@@ -68,6 +68,9 @@ pub struct Module {
     /// The name of this module, used for debugging purposes in the `name`
     /// custom section.
     pub name: Option<String>,
+    /// Maps from old indices in the original Wasm binary to `walrus` IDs used
+    /// in this module.
+    pub indices_to_ids: IndicesToIds,
     pub(crate) config: ModuleConfig,
 }
 
@@ -111,7 +114,6 @@ impl Module {
 
         let mut ret = Module::default();
         ret.config = config.clone();
-        let mut indices = IndicesToIds::default();
         let mut function_section_size = None;
         let mut data_count = None;
 
@@ -120,52 +122,53 @@ impl Module {
             match section.code {
                 wasmparser::SectionCode::Data => {
                     let reader = section.get_data_section_reader()?;
-                    ret.parse_data(reader, &mut indices, data_count)
+                    ret.parse_data(reader, data_count)
                         .context("failed to parse data section")?;
                 }
                 wasmparser::SectionCode::Type => {
                     let reader = section.get_type_section_reader()?;
-                    ret.parse_types(reader, &mut indices)
+                    ret.parse_types(reader)
                         .context("failed to parse type section")?;
                 }
                 wasmparser::SectionCode::Import => {
                     let reader = section.get_import_section_reader()?;
-                    ret.parse_imports(reader, &mut indices)
+                    ret.parse_imports(reader)
                         .context("failed to parse import section")?;
                 }
                 wasmparser::SectionCode::Table => {
                     let reader = section.get_table_section_reader()?;
-                    ret.parse_tables(reader, &mut indices)
+                    ret.parse_tables(reader)
                         .context("failed to parse table section")?;
                 }
                 wasmparser::SectionCode::Memory => {
                     let reader = section.get_memory_section_reader()?;
-                    ret.parse_memories(reader, &mut indices)
+                    ret.parse_memories(reader)
                         .context("failed to parse memory section")?;
                 }
                 wasmparser::SectionCode::Global => {
                     let reader = section.get_global_section_reader()?;
-                    ret.parse_globals(reader, &mut indices)
+                    ret.parse_globals(reader)
                         .context("failed to parse global section")?;
                 }
                 wasmparser::SectionCode::Export => {
                     let reader = section.get_export_section_reader()?;
-                    ret.parse_exports(reader, &mut indices)
+                    ret.parse_exports(reader)
                         .context("failed to parse export section")?;
                 }
                 wasmparser::SectionCode::Element => {
                     let reader = section.get_element_section_reader()?;
-                    ret.parse_elements(reader, &mut indices)
+                    ret.parse_elements(reader)
                         .context("failed to parse element section")?;
                 }
                 wasmparser::SectionCode::Start => {
                     let idx = section.get_start_section_content()?;
-                    ret.start = Some(indices.get_func(idx)?);
+                    let start = ret.indices_to_ids.get_func(idx)?;
+                    ret.start = Some(start);
                 }
                 wasmparser::SectionCode::Function => {
                     let reader = section.get_function_section_reader()?;
                     function_section_size = Some(reader.get_count());
-                    ret.declare_local_functions(reader, &mut indices)
+                    ret.declare_local_functions(reader)
                         .context("failed to parse function section")?;
                 }
                 wasmparser::SectionCode::Code => {
@@ -174,13 +177,13 @@ impl Module {
                         None => bail!("cannot have a code section without function section"),
                     };
                     let reader = section.get_code_section_reader()?;
-                    ret.parse_local_functions(reader, function_section_size, &mut indices)
+                    ret.parse_local_functions(reader, function_section_size)
                         .context("failed to parse code section")?;
                 }
                 wasmparser::SectionCode::DataCount => {
                     let count = section.get_data_count_section_content()?;
                     data_count = Some(count);
-                    ret.reserve_data(count, &mut indices);
+                    ret.reserve_data(count);
                 }
                 wasmparser::SectionCode::Custom { name, kind: _ } => {
                     let result = match name {
@@ -191,7 +194,7 @@ impl Module {
                         "name" => section
                             .get_name_section_reader()
                             .map_err(failure::Error::from)
-                            .and_then(|r| ret.parse_name_section(r, &indices)),
+                            .and_then(|r| ret.parse_name_section(r)),
                         _ => {
                             log::debug!("parsing custom section `{}`", name);
                             let mut reader = section.get_binary_reader();
@@ -298,11 +301,7 @@ impl Module {
         self.funcs.iter()
     }
 
-    fn parse_name_section(
-        &mut self,
-        names: wasmparser::NameSectionReader,
-        indices: &IndicesToIds,
-    ) -> Result<()> {
+    fn parse_name_section(&mut self, names: wasmparser::NameSectionReader) -> Result<()> {
         log::debug!("parse name section");
         for name in names {
             match name? {
@@ -313,7 +312,7 @@ impl Module {
                     let mut map = f.get_map()?;
                     for _ in 0..map.get_count() {
                         let naming = map.read()?;
-                        let id = indices.get_func(naming.index)?;
+                        let id = self.indices_to_ids.get_func(naming.index)?;
                         self.funcs.get_mut(id).name = Some(naming.name.to_string());
                     }
                 }
@@ -321,7 +320,7 @@ impl Module {
                     let mut reader = l.get_function_local_reader()?;
                     for _ in 0..reader.get_count() {
                         let name = reader.read()?;
-                        let func_id = indices.get_func(name.func_index)?;
+                        let func_id = self.indices_to_ids.get_func(name.func_index)?;
                         let mut map = name.get_map()?;
                         for _ in 0..map.get_count() {
                             let naming = map.read()?;
@@ -334,7 +333,7 @@ impl Module {
                             {
                                 continue;
                             }
-                            let id = indices.get_local(func_id, naming.index)?;
+                            let id = self.indices_to_ids.get_local(func_id, naming.index)?;
                             self.locals.get_mut(id).name = Some(naming.name.to_string());
                         }
                     }

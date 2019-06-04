@@ -8,7 +8,6 @@ use crate::encode::Encoder;
 use crate::error::Result;
 use crate::module::imports::ImportId;
 use crate::module::Module;
-use crate::parse::IndicesToIds;
 use crate::tombstone_arena::{Id, Tombstone, TombstoneArena};
 use crate::ty::TypeId;
 use crate::ty::ValType;
@@ -280,16 +279,15 @@ impl Module {
     pub(crate) fn declare_local_functions(
         &mut self,
         section: wasmparser::FunctionSectionReader,
-        ids: &mut IndicesToIds,
     ) -> Result<()> {
         log::debug!("parse function section");
         for func in section {
-            let ty = ids.get_type(func?)?;
+            let ty = self.indices_to_ids.get_type(func?)?;
             let id = self
                 .funcs
                 .arena
                 .alloc_with_id(|id| Function::new_uninitialized(id, ty));
-            let idx = ids.push_func(id);
+            let idx = self.indices_to_ids.push_func(id);
             if self.config.generate_synthetic_names_for_anonymous_items {
                 self.funcs.get_mut(id).name = Some(format!("f{}", idx));
             }
@@ -303,7 +301,6 @@ impl Module {
         &mut self,
         section: wasmparser::CodeSectionReader,
         function_section_count: u32,
-        indices: &mut IndicesToIds,
     ) -> Result<()> {
         log::debug!("parse code section");
         let amt = section.get_count();
@@ -320,7 +317,7 @@ impl Module {
         for (i, body) in section.into_iter().enumerate() {
             let body = body?;
             let index = (num_imports + i) as u32;
-            let id = indices.get_func(index)?;
+            let id = self.indices_to_ids.get_func(index)?;
             let ty = match self.funcs.arena[id].kind {
                 FunctionKind::Uninitialized(ty) => ty,
                 _ => unreachable!(),
@@ -331,7 +328,7 @@ impl Module {
             let mut args = Vec::new();
             for ty in self.types.get(ty).params().iter() {
                 let local_id = self.locals.add(*ty);
-                let idx = indices.push_local(id, local_id);
+                let idx = self.indices_to_ids.push_local(id, local_id);
                 args.push(local_id);
                 if self.config.generate_synthetic_names_for_anonymous_items {
                     let name = format!("arg{}", idx);
@@ -357,7 +354,7 @@ impl Module {
                 let ty = ValType::parse(&ty)?;
                 for _ in 0..count {
                     let local_id = self.locals.add(ty);
-                    let idx = indices.push_local(id, local_id);
+                    let idx = self.indices_to_ids.push_local(id, local_id);
                     if self.config.generate_synthetic_names_for_anonymous_items {
                         let name = format!("l{}", idx);
                         self.locals.get_mut(local_id).name = Some(name);
@@ -374,7 +371,10 @@ impl Module {
         let results = bodies
             .into_par_iter()
             .map(|(id, body, args, ty)| {
-                (id, LocalFunction::parse(self, indices, id, ty, args, body))
+                (
+                    id,
+                    LocalFunction::parse(self, &self.indices_to_ids, id, ty, args, body),
+                )
             })
             .collect::<Vec<_>>();
 

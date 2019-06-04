@@ -2,7 +2,6 @@
 
 use crate::emit::{Emit, EmitContext, Section};
 use crate::ir::Value;
-use crate::parse::IndicesToIds;
 use crate::tombstone_arena::{Id, Tombstone, TombstoneArena};
 use crate::{InitExpr, Module, Result, ValType};
 use failure::{bail, ResultExt};
@@ -116,13 +115,14 @@ impl Module {
     /// considered valid, and it's only afterwards that we discover whether
     /// they're actually passive or not, and that property is checked during
     /// validation.
-    pub(crate) fn reserve_data(&mut self, count: u32, ids: &mut IndicesToIds) {
+    pub(crate) fn reserve_data(&mut self, count: u32) {
         for _ in 0..count {
-            ids.push_data(self.data.arena.alloc_with_id(|id| Data {
-                id,
-                passive: false, // this'll get set to `true` when parsing data
-                value: Vec::new(),
-            }));
+            self.indices_to_ids
+                .push_data(self.data.arena.alloc_with_id(|id| Data {
+                    id,
+                    passive: false, // this'll get set to `true` when parsing data
+                    value: Vec::new(),
+                }));
         }
     }
 
@@ -130,7 +130,6 @@ impl Module {
     pub(crate) fn parse_data(
         &mut self,
         section: wasmparser::DataSectionReader,
-        ids: &IndicesToIds,
         data_count: Option<u32>,
     ) -> Result<()> {
         log::debug!("parse data section");
@@ -144,7 +143,7 @@ impl Module {
 
             match segment.kind {
                 wasmparser::DataKind::Passive => {
-                    let id = ids.get_data(i as u32)?;
+                    let id = self.indices_to_ids.get_data(i as u32)?;
                     let data = self.data.get_mut(id);
                     data.value = segment.data.to_vec();
                     data.passive = true;
@@ -153,11 +152,11 @@ impl Module {
                     memory_index,
                     init_expr,
                 } => {
-                    let memory = ids.get_memory(memory_index)?;
+                    let memory = self.indices_to_ids.get_memory(memory_index)?;
                     let value = segment.data.to_vec();
                     let memory = self.memories.get_mut(memory);
 
-                    let offset = InitExpr::eval(&init_expr, ids)
+                    let offset = InitExpr::eval(&init_expr, &self.indices_to_ids)
                         .with_context(|_e| format!("in segment {}", i))?;
                     match offset {
                         InitExpr::Value(Value::I32(n)) => {

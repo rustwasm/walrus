@@ -1,6 +1,5 @@
 //! Globals within a wasm module.
 use crate::emit::{Emit, EmitContext, Section};
-use crate::parse::IndicesToIds;
 use crate::tombstone_arena::{Id, Tombstone, TombstoneArena};
 use crate::{ImportId, InitExpr, Module, Result, ValType};
 
@@ -104,20 +103,16 @@ impl ModuleGlobals {
 
 impl Module {
     /// Construct a new, empty set of globals for a module.
-    pub(crate) fn parse_globals(
-        &mut self,
-        section: wasmparser::GlobalSectionReader,
-        ids: &mut IndicesToIds,
-    ) -> Result<()> {
+    pub(crate) fn parse_globals(&mut self, section: wasmparser::GlobalSectionReader) -> Result<()> {
         log::debug!("parse global section");
         for g in section {
             let g = g?;
             let id = self.globals.add_local(
                 ValType::parse(&g.ty.content_type)?,
                 g.ty.mutable,
-                InitExpr::eval(&g.init_expr, ids)?,
+                InitExpr::eval(&g.init_expr, &self.indices_to_ids)?,
             );
-            ids.push_global(id);
+            self.indices_to_ids.push_global(id);
         }
         Ok(())
     }

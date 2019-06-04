@@ -24,6 +24,11 @@ impl ModuleTypes {
     }
 
     /// Get a type ID by its name.
+    ///
+    /// This is currently only intended for in-memory modifications, and by
+    /// default will always return `None` for a newly parsed module. A
+    /// hypothetical future WAT text format to `walrus::Module` parser could
+    /// preserve type names from the WAT.
     pub fn by_name(&self, name: &str) -> Option<TypeId> {
         self.arena.iter().find_map(|(id, ty)| {
             if ty.name.as_ref().map(|s| s.as_str()) == Some(name) {

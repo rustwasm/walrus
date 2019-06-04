@@ -23,6 +23,17 @@ impl ModuleTypes {
         &mut self.arena[id]
     }
 
+    /// Get a type ID by its name.
+    pub fn by_name(&self, name: &str) -> Option<TypeId> {
+        self.arena.iter().find_map(|(id, ty)| {
+            if ty.name.as_ref().map(|s| s.as_str()) == Some(name) {
+                Some(id)
+            } else {
+                None
+            }
+        })
+    }
+
     /// Get a shared reference to this module's types.
     pub fn iter(&self) -> impl Iterator<Item = &Type> {
         self.arena.iter().map(|(_, f)| f)

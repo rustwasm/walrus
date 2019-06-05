@@ -36,6 +36,23 @@ pub enum TableKind {
     Anyref(AnyrefTable),
 }
 
+impl TableKind {
+    /// Unwrap `TableKind` to get inner `FunctionTable`. Panics if `TableKind` is anything other than `Function`
+    pub fn unwrap_function(&self) -> &FunctionTable {
+        match *self {
+            TableKind::Function(ref table) => table,
+            _ => panic!("not a Function"),
+        }
+    }
+    /// Unwrap `TableKind` to get inner `Anyref`. Panics if `TableKind` is anything other than `Anyref`
+    pub fn unwrap_anyref(&self) -> &AnyrefTable {
+        match *self {
+            TableKind::Anyref(ref anyref) => anyref,
+            _ => panic!("not an Anyref"),
+        }
+    }
+}
+
 /// Components of a table of functions (`anyfunc` table)
 #[derive(Debug, Default)]
 pub struct FunctionTable {
@@ -96,7 +113,7 @@ impl ModuleTables {
         let id = self.arena.next_id();
         self.arena.alloc(Table {
             id,
-            initial: initial,
+            initial,
             maximum: max,
             kind,
             import: Some(import),
@@ -109,7 +126,7 @@ impl ModuleTables {
         let id = self.arena.next_id();
         let id2 = self.arena.alloc(Table {
             id,
-            initial: initial,
+            initial,
             maximum: max,
             kind,
             import: None,

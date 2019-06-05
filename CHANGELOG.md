@@ -32,6 +32,34 @@ Released YYYY-MM-DD.
 
 --------------------------------------------------------------------------------
 
+## 0.8.0
+
+Released 2019-06-05.
+
+### Added
+
+* Added `ModuleExports::iter_mut` for iterating over exclusive references to a
+  module's exports.
+
+* Added a `ModuleConfig::on_parse` hook, which has access to a map from indices
+  in the original Wasm binary to the newly assigned walrus IDs. This is a good
+  time to parse custom sections that reference functions or types or whatever by
+  index.
+
+* The `TableKind` enum now has various `unwrap_*` helpers to get a particular
+  variant's inner data or else panic.
+
+* Added `ModuleFunctions::by_name` to get a function ID by function name.
+
+### Changed
+
+* The `CustomSection::data` trait method now has a new parameter: a map from
+  walrus IDs to their indices in the new wasm binary we are emitting. This is
+  useful for custom sections that reference functions or types or whatever by
+  index.
+
+--------------------------------------------------------------------------------
+
 ## 0.7.0
 
 Released 2019-05-17.

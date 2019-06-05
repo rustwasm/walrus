@@ -223,6 +223,10 @@ impl Module {
             crate::passes::validate::run(&ret)?;
         }
 
+        if let Some(ref on_parse) = config.on_parse {
+            on_parse(&mut ret, &indices)?;
+        }
+
         log::debug!("parse complete");
         Ok(ret)
     }

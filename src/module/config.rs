@@ -1,9 +1,11 @@
 use crate::error::Result;
 use crate::module::Module;
+use crate::parse::IndicesToIds;
+use std::fmt;
 use std::path::Path;
 
 /// Configuration for a `Module` which currently affects parsing.
-#[derive(Clone, Debug, Default)]
+#[derive(Default)]
 pub struct ModuleConfig {
     pub(crate) generate_dwarf: bool,
     pub(crate) generate_synthetic_names_for_anonymous_items: bool,
@@ -11,6 +13,55 @@ pub struct ModuleConfig {
     pub(crate) skip_strict_validate: bool,
     pub(crate) skip_producers_section: bool,
     pub(crate) skip_name_section: bool,
+    pub(crate) on_parse:
+        Option<Box<dyn Fn(&mut Module, &IndicesToIds) -> Result<()> + Sync + Send + 'static>>,
+}
+
+impl Clone for ModuleConfig {
+    fn clone(&self) -> ModuleConfig {
+        ModuleConfig {
+            // These are all cloned...
+            generate_dwarf: self.generate_dwarf,
+            generate_synthetic_names_for_anonymous_items: self
+                .generate_synthetic_names_for_anonymous_items,
+            only_stable_features: self.only_stable_features,
+            skip_strict_validate: self.skip_strict_validate,
+            skip_producers_section: self.skip_producers_section,
+            skip_name_section: self.skip_name_section,
+
+            // ... and this is left empty.
+            on_parse: None,
+        }
+    }
+}
+
+impl fmt::Debug for ModuleConfig {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        // Destructure `self` so that we get compilation errors if we forget to
+        // add new fields to the debug here.
+        let ModuleConfig {
+            ref generate_dwarf,
+            ref generate_synthetic_names_for_anonymous_items,
+            ref only_stable_features,
+            ref skip_strict_validate,
+            ref skip_producers_section,
+            ref skip_name_section,
+            ref on_parse,
+        } = self;
+
+        f.debug_struct("ModuleConfig")
+            .field("generate_dwarf", generate_dwarf)
+            .field(
+                "generate_synthetic_names_for_anonymous_items",
+                generate_synthetic_names_for_anonymous_items,
+            )
+            .field("only_stable_features", only_stable_features)
+            .field("skip_strict_validate", skip_strict_validate)
+            .field("skip_producers_section", skip_producers_section)
+            .field("skip_name_section", skip_name_section)
+            .field("on_parse", &on_parse.as_ref().map(|_| ".."))
+            .finish()
+    }
 }
 
 impl ModuleConfig {
@@ -94,6 +145,29 @@ impl ModuleConfig {
     /// By default this flag is `false`
     pub fn only_stable_features(&mut self, only: bool) -> &mut ModuleConfig {
         self.only_stable_features = only;
+        self
+    }
+
+    /// Provide a function that is invoked after successfully parsing a module,
+    /// and gets access to data structures that only exist at parse time, such
+    /// as the map from indices in the original Wasm to the new walrus IDs.
+    ///
+    /// This is a good place to parse custom sections that reference things by
+    /// index.
+    ///
+    /// This will never be invoked for modules that are created from scratch,
+    /// and are not parsed from an existing Wasm binary.
+    ///
+    /// Note that only one `on_parse` function may be registered and subsequent
+    /// registrations will override the old ones.
+    ///
+    /// Note that cloning a `ModuleConfig` will result in a config that does not
+    /// have an `on_parse` function, even if the original did.
+    pub fn on_parse<F>(&mut self, f: F) -> &mut ModuleConfig
+    where
+        F: Fn(&mut Module, &IndicesToIds) -> Result<()> + Send + Sync + 'static,
+    {
+        self.on_parse = Some(Box::new(f) as _);
         self
     }
 

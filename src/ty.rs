@@ -17,12 +17,18 @@ pub struct Type {
     id: TypeId,
     params: Box<[ValType]>,
     results: Box<[ValType]>,
+
+    /// An optional name for debugging.
+    ///
+    /// This is not really used by anything currently, but a theoretical WAT to
+    /// walrus parser could keep track of the original name in the WAT.
+    pub name: Option<String>,
 }
 
 impl PartialEq for Type {
     #[inline]
     fn eq(&self, rhs: &Type) -> bool {
-        // NB: do not compare id.
+        // NB: do not compare id or name.
         self.params == rhs.params && self.results == rhs.results
     }
 }
@@ -32,7 +38,7 @@ impl Eq for Type {}
 impl hash::Hash for Type {
     #[inline]
     fn hash<H: hash::Hasher>(&self, h: &mut H) {
-        // Do not hash id.
+        // Do not hash id or name.
         self.params.hash(h);
         self.results.hash(h)
     }
@@ -53,6 +59,7 @@ impl Type {
             id,
             params,
             results,
+            name: None,
         }
     }
 

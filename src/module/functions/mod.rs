@@ -183,6 +183,23 @@ impl ModuleFunctions {
         &mut self.arena[id]
     }
 
+    /// Get a function ID by its name.
+    ///
+    /// The name used is the "name" custom section name and *not* the export
+    /// name, if a function happens to be exported.
+    ///
+    /// Note that function names are *not* guaranteed to be unique. This will
+    /// return the first function in the module with the given name.
+    pub fn by_name(&self, name: &str) -> Option<FunctionId> {
+        self.arena.iter().find_map(|(id, f)| {
+            if f.name.as_ref().map(|s| s.as_str()) == Some(name) {
+                Some(id)
+            } else {
+                None
+            }
+        })
+    }
+
     /// Removes a function from this module.
     ///
     /// It is up to you to ensure that any potential references to the deleted

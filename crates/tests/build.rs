@@ -26,7 +26,7 @@ fn path_to_ident(p: &Path) -> String {
         .to_string()
         .chars()
         .map(|c| match c {
-            'a'...'z' | 'A'...'Z' | '0'...'9' | '_' => c,
+            'a'..='z' | 'A'..='Z' | '0'..='9' | '_' => c,
             _ => '_',
         })
         .collect()

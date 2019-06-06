@@ -4,17 +4,14 @@ use crate::ir::*;
 use crate::map::IdHashMap;
 use crate::module::functions::LocalFunction;
 use crate::module::memories::MemoryId;
-use crate::ModuleTypes;
 
 pub(crate) fn run(
-    types: &ModuleTypes,
     func: &LocalFunction,
     indices: &IdsToIndices,
     local_indices: &IdHashMap<Local, u32>,
     encoder: &mut Encoder,
 ) {
     let v = &mut Emit {
-        types,
         indices,
         blocks: vec![],
         block_kinds: vec![BlockKind::FunctionEntry],
@@ -28,9 +25,6 @@ pub(crate) fn run(
 }
 
 struct Emit<'a, 'b> {
-    // Needed so that we can encode block types.
-    types: &'a ModuleTypes,
-
     // Needed so we can map locals to their indices.
     indices: &'a IdsToIndices,
     local_indices: &'a IdHashMap<Local, u32>,
@@ -789,12 +783,10 @@ impl Emit<'_, '_> {
         match ty {
             InstrSeqType::Simple(None) => self.encoder.byte(0x40),
             InstrSeqType::Simple(Some(ty)) => ty.emit(self.encoder),
-            InstrSeqType::MultiValue(_) => {
-                let _ = self.types;
-                panic!(
-                    "multiple return values not yet supported; write a transformation to \
-                     rewrite them into single value returns"
-                )
+            InstrSeqType::MultiValue(ty) => {
+                let index = self.indices.get_type_index(ty);
+                assert!(index < std::i32::MAX as u32);
+                self.encoder.i32(index as i32);
             }
         }
     }

@@ -349,7 +349,8 @@ impl Module {
             // First up, implicitly add locals for all function arguments. We also
             // record these in the function itself for later processing.
             let mut args = Vec::new();
-            for ty in self.types.get(ty).params().iter() {
+            let type_ = self.types.get(ty);
+            for ty in type_.params().iter() {
                 let local_id = self.locals.add(*ty);
                 let idx = indices.push_local(id, local_id);
                 args.push(local_id);
@@ -358,6 +359,13 @@ impl Module {
                     self.locals.get_mut(local_id).name = Some(name);
                 }
             }
+
+            // Ensure that there exists a `Type` for the function's entry
+            // block. This is required because multi-value blocks reference a
+            // `Type`, however function entry's type is implicit in the
+            // encoding, and doesn't already exist in the `ModuleTypes`.
+            let results = type_.results().to_vec();
+            self.types.add_entry_ty(&results);
 
             // WebAssembly local indices are 32 bits, so it's a validation error to
             // have more than 2^32 locals. Sure enough there's a spec test for this!
@@ -452,7 +460,7 @@ impl Emit for ModuleFunctions {
                 let mut wasm = Vec::new();
                 let mut encoder = Encoder::new(&mut wasm);
                 let (used_locals, local_indices) = func.emit_locals(cx.module, &mut encoder);
-                func.emit_instructions(&cx.module.types, cx.indices, &local_indices, &mut encoder);
+                func.emit_instructions(cx.indices, &local_indices, &mut encoder);
                 (wasm, id, used_locals, local_indices)
             })
             .collect::<Vec<_>>();

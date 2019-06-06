@@ -1,23 +1,17 @@
 use std::env;
 use std::path::Path;
+use std::sync::Once;
 
 fn run(wat: &Path) -> Result<(), failure::Error> {
-    static INIT_LOGS: std::sync::Once = std::sync::Once::new();
+    static INIT_LOGS: Once = Once::new();
     INIT_LOGS.call_once(|| {
         env_logger::init();
     });
 
     let wasm = walrus_tests_utils::wat2wasm(wat)?;
-    let module = walrus::Module::from_buffer(&wasm)?;
 
-    let local_funcs: Vec<_> = module
-        .functions()
-        .filter(|f| match f.kind {
-            walrus::FunctionKind::Local(_) => true,
-            _ => false,
-        })
-        .collect();
-    assert_eq!(local_funcs.len(), 1);
+    // NB: reading the module will do the validation.
+    let module = walrus::Module::from_buffer(&wasm)?;
 
     if env::var("WALRUS_TESTS_DOT").is_ok() {
         module.write_graphviz_dot(wat.with_extension("dot"))?;

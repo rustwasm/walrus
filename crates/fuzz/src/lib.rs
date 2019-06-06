@@ -460,7 +460,18 @@ mod tests {
              (export "" (func $b))
              (func $b
                data.drop 0))
-        "#,
+            "#,
+        );
+    }
+
+    #[test]
+    fn fuzz1() {
+        super::assert_round_trip_execution_is_same::<WasmOptTtf>(
+            r#"
+            (module
+              (func (result i32) (local i32)
+                local.get 0))
+            "#,
         );
     }
 }

@@ -28,7 +28,7 @@ impl FunctionBuilder {
     ) -> FunctionBuilder {
         let ty = types.add(params, results);
         let mut builder = FunctionBuilder::without_entry(ty);
-        let entry_ty = types.add(&[], results);
+        let entry_ty = types.add_entry_ty(results);
         let entry = builder.dangling_instr_seq(entry_ty).id;
         builder.entry = Some(entry);
         builder

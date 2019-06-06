@@ -12,6 +12,7 @@ pub const FEATURES: &[&str] = &[
     "--enable-bulk-memory",
     "--enable-reference-types",
     "--enable-simd",
+    "--enable-multi-value",
     // TODO
     // "--enable-saturating-float-to-int",
     // "--enable-sign-extension",

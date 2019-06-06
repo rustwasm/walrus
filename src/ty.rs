@@ -4,7 +4,6 @@ use crate::emit::{Emit, EmitContext};
 use crate::encode::Encoder;
 use crate::error::Result;
 use crate::tombstone_arena::Tombstone;
-use failure::bail;
 use id_arena::Id;
 use std::fmt;
 use std::hash;
@@ -19,6 +18,11 @@ pub struct Type {
     params: Box<[ValType]>,
     results: Box<[ValType]>,
 
+    // Whether or not this type is for a multi-value function entry block, and
+    // therefore is for internal use only and shouldn't be emitted when we
+    // serialize the Type section.
+    is_for_function_entry: bool,
+
     /// An optional name for debugging.
     ///
     /// This is not really used by anything currently, but a theoretical WAT to
@@ -30,7 +34,9 @@ impl PartialEq for Type {
     #[inline]
     fn eq(&self, rhs: &Type) -> bool {
         // NB: do not compare id or name.
-        self.params == rhs.params && self.results == rhs.results
+        self.params == rhs.params
+            && self.results == rhs.results
+            && self.is_for_function_entry == rhs.is_for_function_entry
     }
 }
 
@@ -41,7 +47,8 @@ impl hash::Hash for Type {
     fn hash<H: hash::Hasher>(&self, h: &mut H) {
         // Do not hash id or name.
         self.params.hash(h);
-        self.results.hash(h)
+        self.results.hash(h);
+        self.is_for_function_entry.hash(h);
     }
 }
 
@@ -55,11 +62,25 @@ impl Tombstone for Type {
 impl Type {
     /// Construct a new function type.
     #[inline]
-    pub fn new(id: TypeId, params: Box<[ValType]>, results: Box<[ValType]>) -> Type {
+    pub(crate) fn new(id: TypeId, params: Box<[ValType]>, results: Box<[ValType]>) -> Type {
         Type {
             id,
             params,
             results,
+            is_for_function_entry: false,
+            name: None,
+        }
+    }
+
+    /// Construct a new type for function entry blocks.
+    #[inline]
+    pub(crate) fn for_function_entry(id: TypeId, results: Box<[ValType]>) -> Type {
+        let params = vec![].into();
+        Type {
+            id,
+            params,
+            results,
+            is_for_function_entry: true,
             name: None,
         }
     }
@@ -81,10 +102,15 @@ impl Type {
     pub fn results(&self) -> &[ValType] {
         &*self.results
     }
+
+    pub(crate) fn is_for_function_entry(&self) -> bool {
+        self.is_for_function_entry
+    }
 }
 
 impl Emit for Type {
     fn emit(&self, cx: &mut EmitContext) {
+        assert!(!self.is_for_function_entry());
         cx.encoder.byte(0x60);
         cx.list(self.params.iter());
         cx.list(self.results.iter());
@@ -109,12 +135,7 @@ pub enum ValType {
 }
 
 impl ValType {
-    /// Construct a vector of `ValType`s from a `wasmparser::TypeOrFuncType`
-    pub fn from_wasmparser_type(ty: wasmparser::TypeOrFuncType) -> Result<Box<[ValType]>> {
-        let ty = match ty {
-            wasmparser::TypeOrFuncType::Type(t) => t,
-            wasmparser::TypeOrFuncType::FuncType(_) => bail!("function types not supported yet"),
-        };
+    pub(crate) fn from_wasmparser_type(ty: wasmparser::Type) -> Result<Box<[ValType]>> {
         let v = match ty {
             wasmparser::Type::EmptyBlockType => Vec::new(),
             _ => vec![ValType::parse(&ty)?],

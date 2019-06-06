@@ -24,6 +24,22 @@ impl ModuleTypes {
         &mut self.arena[id]
     }
 
+    /// Get the parameters and results for the given type.
+    pub fn params_results(&self, id: TypeId) -> (&[ValType], &[ValType]) {
+        let ty = self.get(id);
+        (ty.params(), ty.results())
+    }
+
+    /// Get the parameters for the given type.
+    pub fn params(&self, id: TypeId) -> &[ValType] {
+        self.get(id).params()
+    }
+
+    /// Get the results for the given type.
+    pub fn results(&self, id: TypeId) -> &[ValType] {
+        self.get(id).results()
+    }
+
     /// Get a type ID by its name.
     ///
     /// This is currently only intended for in-memory modifications, and by
@@ -64,10 +80,28 @@ impl ModuleTypes {
         ))
     }
 
+    pub(crate) fn add_entry_ty(&mut self, results: &[ValType]) -> TypeId {
+        let id = self.arena.next_id();
+        self.arena.insert(Type::for_function_entry(
+            id,
+            results.to_vec().into_boxed_slice(),
+        ))
+    }
+
     /// Find the existing type for the given parameters and results.
     pub fn find(&self, params: &[ValType], results: &[ValType]) -> Option<TypeId> {
         self.arena.iter().find_map(|(id, ty)| {
-            if ty.params() == params && ty.results() == results {
+            if !ty.is_for_function_entry() && ty.params() == params && ty.results() == results {
+                Some(id)
+            } else {
+                None
+            }
+        })
+    }
+
+    pub(crate) fn find_for_function_entry(&self, results: &[ValType]) -> Option<TypeId> {
+        self.arena.iter().find_map(|(id, ty)| {
+            if ty.is_for_function_entry() && ty.params().is_empty() && ty.results() == results {
                 Some(id)
             } else {
                 None
@@ -110,14 +144,18 @@ impl Module {
 impl Emit for ModuleTypes {
     fn emit(&self, cx: &mut EmitContext) {
         log::debug!("emitting type section");
-        let ntypes = self.iter().count();
-        if ntypes == 0 {
+        let tys = self
+            .arena
+            .iter()
+            .filter(|(_, ty)| !ty.is_for_function_entry())
+            .collect::<Vec<_>>();
+        if tys.is_empty() {
             return;
         }
         let mut cx = cx.start_section(Section::Type);
-        cx.encoder.usize(ntypes);
+        cx.encoder.usize(tys.len());
 
-        for (id, ty) in self.arena.iter() {
+        for (id, ty) in tys {
             cx.indices.push_type(id);
             ty.emit(&mut cx);
         }

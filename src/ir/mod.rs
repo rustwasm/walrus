@@ -45,7 +45,7 @@ impl Local {
     }
 }
 
-/// TODO FITZGEN
+/// The identifier for a `InstrSeq` within some `LocalFunction`.
 pub type InstrSeqId = Id<InstrSeq>;
 
 /// The type of an instruction sequence.
@@ -209,17 +209,17 @@ pub(crate) enum BlockKind {
 #[walrus_instr]
 #[derive(Clone, Debug)]
 pub enum Instr {
-    /// A block of multiple instructions, and also a control frame.
+    /// `block ... end`
     #[walrus(skip_builder)]
     Block {
         /// The id of this `block` instruction's inner `InstrSeq`.
         seq: InstrSeqId,
     },
 
-    /// TODO FITZGEN
+    /// `loop ... end`
     #[walrus(skip_builder)]
     Loop {
-        /// TODO FITZGEN
+        /// The id of this `loop` instruction's inner `InstrSeq`.
         seq: InstrSeqId,
     },
 

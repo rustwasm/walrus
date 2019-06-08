@@ -1303,7 +1303,11 @@ fn validate_instruction(ctx: &mut ValidationContext, inst: Operator) -> Result<(
         Operator::V8x16Shuffle { lines } => {
             let (_, hi) = ctx.pop_operand_expected(Some(V128))?;
             let (_, lo) = ctx.pop_operand_expected(Some(V128))?;
-            let expr = ctx.func.alloc(V128Shuffle { indices: lines, lo, hi });
+            let expr = ctx.func.alloc(V128Shuffle {
+                indices: lines,
+                lo,
+                hi,
+            });
             ctx.push_operand(Some(V128), expr);
         }
 

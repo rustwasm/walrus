@@ -111,6 +111,15 @@ pub enum FunctionKind {
 }
 
 impl FunctionKind {
+    /// Get the underlying `FunctionKind::Import` or panic if this is not an
+    /// import function
+    pub fn unwrap_import(&self) -> &ImportedFunction {
+        match *self {
+            FunctionKind::Import(ref import) => import,
+            _ => panic!("not an import function"),
+        }
+    }
+
     /// Get the underlying `FunctionKind::Local` or panic if this is not a local
     /// function.
     pub fn unwrap_local(&self) -> &LocalFunction {

@@ -117,7 +117,7 @@ impl Module {
                 wasmparser::ImportSectionEntryType::Function(idx) => {
                     let ty = ids.get_type(idx)?;
                     let id = self.add_import_func(entry.module, entry.field, ty);
-                    ids.push_func(id);
+                    ids.push_func(id.0);
                 }
                 wasmparser::ImportSectionEntryType::Table(t) => {
                     let kind = match t.element_type {
@@ -131,7 +131,7 @@ impl Module {
                         t.limits.maximum,
                         kind,
                     );
-                    ids.push_table(id);
+                    ids.push_table(id.0);
                 }
                 wasmparser::ImportSectionEntryType::Memory(m) => {
                     let id = self.add_import_memory(
@@ -141,7 +141,7 @@ impl Module {
                         m.limits.initial,
                         m.limits.maximum,
                     );
-                    ids.push_memory(id);
+                    ids.push_memory(id.0);
                 }
                 wasmparser::ImportSectionEntryType::Global(g) => {
                     let id = self.add_import_global(
@@ -150,7 +150,7 @@ impl Module {
                         ValType::parse(&g.content_type)?,
                         g.mutable,
                     );
-                    ids.push_global(id);
+                    ids.push_global(id.0);
                 }
             }
         }
@@ -159,11 +159,11 @@ impl Module {
     }
 
     /// Add an imported function to this module
-    pub fn add_import_func(&mut self, module: &str, name: &str, ty: TypeId) -> FunctionId {
+    pub fn add_import_func(&mut self, module: &str, name: &str, ty: TypeId) -> (FunctionId, ImportId) {
         let import = self.imports.arena.next_id();
         let func = self.funcs.add_import(ty, import);
         self.imports.add(module, name, func);
-        func
+        (func, import)
     }
 
     /// Add an imported memory to this module
@@ -174,11 +174,11 @@ impl Module {
         shared: bool,
         initial: u32,
         maximum: Option<u32>,
-    ) -> MemoryId {
+    ) -> (MemoryId, ImportId) {
         let import = self.imports.arena.next_id();
         let mem = self.memories.add_import(shared, initial, maximum, import);
         self.imports.add(module, name, mem);
-        mem
+        (mem, import)
     }
 
     /// Add an imported table to this module
@@ -189,11 +189,11 @@ impl Module {
         initial: u32,
         max: Option<u32>,
         kind: TableKind,
-    ) -> TableId {
+    ) -> (TableId, ImportId) {
         let import = self.imports.arena.next_id();
         let table = self.tables.add_import(initial, max, kind, import);
         self.imports.add(module, name, table);
-        table
+        (table, import)
     }
 
     /// Add an imported global to this module
@@ -203,11 +203,11 @@ impl Module {
         name: &str,
         ty: ValType,
         mutable: bool,
-    ) -> GlobalId {
+    ) -> (GlobalId, ImportId) {
         let import = self.imports.arena.next_id();
         let global = self.globals.add_import(ty, mutable, import);
         self.imports.add(module, name, global);
-        global
+        (global, import)
     }
 }
 

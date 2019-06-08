@@ -1,5 +1,5 @@
 use std::path::Path;
-use walrus_tests_utils::{wat2wasm};
+use walrus_tests_utils::wat2wasm;
 
 fn run(wat_path: &Path) -> Result<(), failure::Error> {
     let wasm = wat2wasm(wat_path);

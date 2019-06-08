@@ -95,7 +95,8 @@ impl ModuleImports {
 
     /// Get the import with the given module and name
     pub fn find(&self, module: &str, name: &str) -> Option<ImportId> {
-        let import = self.arena
+        let import = self
+            .arena
             .iter()
             .find(|(_, import)| import.name == name && import.module == module);
 

@@ -199,8 +199,18 @@ fn create_types(attrs: &[syn::Attribute], variants: &[WalrusVariant]) -> impl qu
                     pub #name : #ty,
                 }
             });
+            let id_name_doc = format!("An identifier to a `{}` expression.", name);
+            let new_doc = format!(
+                "
+                Construct a `{}` from an `ExprId`.
+                
+                It is the caller's responsibility to ensure that the
+                `Expr` referenced by the given `ExprId` is a `{}`.
+            ",
+                id_name, name
+            );
             quote! {
-                /// An identifier to a `#name` expression.
+                #[doc=#id_name_doc]
                 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
                 pub struct #id_name(ExprId);
 
@@ -212,10 +222,7 @@ fn create_types(attrs: &[syn::Attribute], variants: &[WalrusVariant]) -> impl qu
                 }
 
                 impl #id_name {
-                    /// Construct a `#id_name` from an `ExprId`.
-                    ///
-                    /// It is the caller's responsibility to ensure that the
-                    /// `Expr` referenced by the given `ExprId` is a `#name`.
+                    #[doc=#new_doc]
                     #[inline]
                     pub fn new(id: ExprId) -> #id_name {
                         #id_name(id)
@@ -280,10 +287,46 @@ fn create_types(attrs: &[syn::Attribute], variants: &[WalrusVariant]) -> impl qu
             let unwrap_mut_name = format!("unwrap_{}_mut", snake_name);
             let unwrap_mut_name = syn::Ident::new(&unwrap_mut_name, Span::call_site());
 
+            let ref_name_doc = format!(
+                "
+                If this expression is a `{}`, get a shared reference to it.
+                
+                Returns `None` otherwise.
+            ",
+                name
+            );
+
+            let mut_name_doc = format!(
+                "
+                If this expression is a `{}`, get an exclusive reference to it.
+                
+                Returns `None` otherwise.
+            ",
+                name
+            );
+
+            let is_name_doc = format!("Is this expression a `{}`?", name);
+
+            let unwrap_name_doc = format!(
+                "
+                Get a shared reference to the underlying `{}`.
+                
+                Panics if this expression is not a `{}`.
+            ",
+                name, name
+            );
+
+            let unwrap_mut_name_doc = format!(
+                "
+                Get an exclusive reference to the underlying `{}`.
+                
+                Panics if this expression is not a `{}`.
+            ",
+                name, name
+            );
+
             quote! {
-                /// If this expression is a `#name`, get a shared reference to it.
-                ///
-                /// Returns `None` otherwise.
+                #[doc=#ref_name_doc]
                 #[inline]
                 fn #ref_name(&self) -> Option<&#name> {
                     if let Expr::#name(ref x) = *self {
@@ -293,10 +336,7 @@ fn create_types(attrs: &[syn::Attribute], variants: &[WalrusVariant]) -> impl qu
                     }
                 }
 
-                /// If this expression is a `#name`, get an exclusive reference to
-                /// it.
-                ///
-                /// Returns `None` otherwise.
+                #[doc=#mut_name_doc]
                 #[inline]
                 pub fn #mut_name(&mut self) -> Option<&mut #name> {
                     if let Expr::#name(ref mut x) = *self {
@@ -306,23 +346,19 @@ fn create_types(attrs: &[syn::Attribute], variants: &[WalrusVariant]) -> impl qu
                     }
                 }
 
-                /// Is this expression a `#name`?
+                #[doc=#is_name_doc]
                 #[inline]
                 pub fn #is_name(&self) -> bool {
                     self.#ref_name().is_some()
                 }
 
-                /// Get a shared reference to the underlying `#name`.
-                ///
-                /// Panics if this expression is not a `#name`.
+                #[doc=#unwrap_name_doc]
                 #[inline]
                 pub fn #unwrap_name(&self) -> &#name {
                     self.#ref_name().unwrap()
                 }
 
-                /// Get an exclusive reference to the underlying `#name`.
-                ///
-                /// Panics if this expression is not a `#name`.
+                #[doc=#unwrap_mut_name_doc]
                 #[inline]
                 pub fn #unwrap_mut_name(&mut self) -> &mut #name {
                     self.#mut_name().unwrap()

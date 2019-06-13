@@ -10,19 +10,19 @@ pub const FEATURES: &[&str] = &[
     "--enable-simd",
 ];
 
-fn require_wat2wasm() {
+fn require_tool(tool: &str, repo: &str) {
+    let diagnostic = format!("Could not spawn {}; do you have {} installed?", tool, repo);
     let status = Command::new("wat2wasm")
         .arg("--help")
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .status()
-        .expect(
-            "Could not spawn wat2wasm; do you have https://github.com/WebAssembly/wabt installed?",
-        );
-    assert!(
-        status.success(),
-        "wat2wasm did not run OK; do you have https://github.com/WebAssembly/wabt installed?"
-    )
+        .expect(&diagnostic);
+    assert!(status.success(), "{}", diagnostic)
+}
+
+fn require_wat2wasm() {
+    require_tool("wat2wasm", "https://github.com/WebAssembly/wabt");
 }
 
 /// Compile the `.wat` file at the given path into a `.wasm`.
@@ -54,18 +54,7 @@ pub fn wat2wasm(path: &Path) -> Vec<u8> {
 }
 
 fn require_wasm2wat() {
-    let status = Command::new("wasm2wat")
-        .arg("--help")
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .expect(
-            "Could not spawn wasm2wat; do you have https://github.com/WebAssembly/wabt installed?",
-        );
-    assert!(
-        status.success(),
-        "wasm2wat did not run OK; do you have https://github.com/WebAssembly/wabt installed?"
-    )
+    require_tool("wasm2wat", "https://github.com/WebAssembly/wabt");
 }
 
 /// Disassemble the `.wasm` file at the given path into a `.wat`.
@@ -87,18 +76,7 @@ pub fn wasm2wat(path: &Path) -> String {
 }
 
 fn require_wasm_interp() {
-    let status = Command::new("wasm-interp")
-        .arg("--help")
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .expect(
-            "Could not spawn wasm-interp; do you have https://github.com/WebAssembly/wabt installed?",
-        );
-    assert!(
-        status.success(),
-        "wasm-interp did not run OK; do you have https://github.com/WebAssembly/wabt installed?"
-    )
+    require_tool("wasm-insterp", "https://github.com/WebAssembly/wabt");
 }
 
 /// Run the wasm-interp on the given wat file.

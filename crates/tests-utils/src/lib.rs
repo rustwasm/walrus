@@ -1,3 +1,4 @@
+use std::ffi::OsStr;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -97,6 +98,37 @@ pub fn wasm_interp(path: &Path) -> String {
         panic!("expected ok");
     }
     String::from_utf8_lossy(&output.stdout).into_owned()
+}
+
+fn require_wasm_opt() {
+    require_tool("wasm-opt", "https://github.com/WebAssembly/binaryen");
+}
+
+/// Run `wasm-opt` on the given input file with optional extra arguments, and
+/// return the resulting wasm binary as an in-memory buffer.
+pub fn wasm_opt<A, S>(input: &Path, args: A) -> Vec<u8>
+where
+    A: IntoIterator<Item = S>,
+    S: AsRef<OsStr>,
+{
+    static CHECK: Once = ONCE_INIT;
+    CHECK.call_once(require_wasm_opt);
+
+    let tmp = tempfile::NamedTempFile::new().unwrap();
+
+    let mut cmd = Command::new("wasm-opt");
+    cmd.arg(input);
+    cmd.arg("-o");
+    cmd.arg(tmp.path());
+    cmd.args(args);
+    println!("running: {:?}", cmd);
+    let output = cmd.output().expect("should spawn wasm-opt OK");
+    if !output.status.success() {
+        println!("status: {}", output.status);
+        println!("stderr: {}", String::from_utf8_lossy(&output.stderr));
+        panic!("expected ok");
+    }
+    fs::read(tmp.path()).unwrap()
 }
 
 pub fn handle<T: TestResult>(result: T) {

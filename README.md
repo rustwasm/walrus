@@ -39,8 +39,11 @@ Stay tuned for more information in the future!
 
 ## Examples
 
+* Check out `examples/build-wasm-from-scratch.rs` for a quick intro to building
+  a Wasm module from scratch with `walrus`.
 * Check out the [`wasm-snip`](https://github.com/rustwasm/wasm-snip) project for
-  a relatively simple and self-contained example of using `walrus`.
+  a relatively simple and self-contained but still Real World example of using
+  `walrus`.
 
 ## License
 

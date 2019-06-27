@@ -2,7 +2,7 @@ use std::path::Path;
 use walrus_tests_utils::wat2wasm;
 
 fn run(wat_path: &Path) -> Result<(), failure::Error> {
-    let wasm = wat2wasm(wat_path);
+    let wasm = wat2wasm(wat_path)?;
     let module = walrus::Module::from_buffer(&wasm)?;
 
     assert!(module.imports.find("doggo", "husky").is_some());

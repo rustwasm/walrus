@@ -38,6 +38,7 @@ criterion = "0.2.11"
 [workspace]
 members = [
     "./crates/fuzz",
+    "./crates/fuzz-with-wasm-opt",
     "./crates/macro",
     "./crates/tests",
     "./crates/tests-utils",

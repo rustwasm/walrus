@@ -8,6 +8,7 @@ publish = false
 [dependencies]
 rand = "0.6"
 tempfile = "3.0.5"
+failure = "0.1.5"
 
 [dependencies.walrus]
 path = "../.."

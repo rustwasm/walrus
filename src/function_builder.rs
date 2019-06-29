@@ -62,7 +62,7 @@ impl FunctionBuilder {
     /// Create a `Block` node with the kind of `Loop`
     pub fn loop_<'a>(&'a mut self, results: Box<[ValType]>) -> BlockBuilder<'a> {
         self.block_builder(Block {
-            kind: BlockKind::Block,
+            kind: BlockKind::Loop,
             params: Vec::new().into_boxed_slice(),
             results,
             exprs: Vec::new(),

@@ -15,12 +15,10 @@ use crate::ty::ValType;
 use failure::bail;
 use rayon::prelude::*;
 use std::cmp;
-use std::fmt;
 
 pub use self::local_function::LocalFunction;
 
 // have generated impls from the `#[walrus_expr]` macro
-pub(crate) use self::local_function::display::DisplayExpr;
 pub(crate) use self::local_function::DotExpr;
 
 /// A function identifier.
@@ -84,16 +82,6 @@ impl Dot for Function {
     }
 }
 
-impl fmt::Display for Function {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match &self.kind {
-            FunctionKind::Import(i) => fmt::Display::fmt(i, f),
-            FunctionKind::Local(l) => fmt::Display::fmt(l, f),
-            FunctionKind::Uninitialized(_) => unreachable!(),
-        }
-    }
-}
-
 /// The local- or external-specific bits of a function.
 #[derive(Debug)]
 pub enum FunctionKind {
@@ -142,12 +130,6 @@ pub struct ImportedFunction {
 impl Dot for ImportedFunction {
     fn dot(&self, out: &mut String) {
         out.push_str("digraph {{ imported_function; }}");
-    }
-}
-
-impl fmt::Display for ImportedFunction {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        writeln!(f, "Imported function")
     }
 }
 

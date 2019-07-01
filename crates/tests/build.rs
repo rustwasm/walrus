@@ -55,7 +55,6 @@ fn main() {
 
     generate_tests("valid");
     generate_tests("round_trip");
-    generate_tests("ir");
     generate_tests("spec-tests");
     generate_tests("function_imports");
 }

@@ -28,7 +28,6 @@ pub fn walrus_expr(_attr: TokenStream, input: TokenStream) -> TokenStream {
     let types = create_types(&input.attrs, &variants);
     let visit = create_visit(&variants);
     let matchers = create_matchers(&variants);
-    let display = create_display(&variants);
     let dot = create_dot(&variants);
     let builder = create_builder(&variants);
 
@@ -36,7 +35,6 @@ pub fn walrus_expr(_attr: TokenStream, input: TokenStream) -> TokenStream {
         #types
         #visit
         #matchers
-        #display
         #dot
         #builder
     };
@@ -203,7 +201,7 @@ fn create_types(attrs: &[syn::Attribute], variants: &[WalrusVariant]) -> impl qu
             let new_doc = format!(
                 "
                 Construct a `{}` from an `ExprId`.
-                
+
                 It is the caller's responsibility to ensure that the
                 `Expr` referenced by the given `ExprId` is a `{}`.
             ",
@@ -290,7 +288,7 @@ fn create_types(attrs: &[syn::Attribute], variants: &[WalrusVariant]) -> impl qu
             let ref_name_doc = format!(
                 "
                 If this expression is a `{}`, get a shared reference to it.
-                
+
                 Returns `None` otherwise.
             ",
                 name
@@ -299,7 +297,7 @@ fn create_types(attrs: &[syn::Attribute], variants: &[WalrusVariant]) -> impl qu
             let mut_name_doc = format!(
                 "
                 If this expression is a `{}`, get an exclusive reference to it.
-                
+
                 Returns `None` otherwise.
             ",
                 name
@@ -310,7 +308,7 @@ fn create_types(attrs: &[syn::Attribute], variants: &[WalrusVariant]) -> impl qu
             let unwrap_name_doc = format!(
                 "
                 Get a shared reference to the underlying `{}`.
-                
+
                 Panics if this expression is not a `{}`.
             ",
                 name, name
@@ -319,7 +317,7 @@ fn create_types(attrs: &[syn::Attribute], variants: &[WalrusVariant]) -> impl qu
             let unwrap_mut_name_doc = format!(
                 "
                 Get an exclusive reference to the underlying `{}`.
-                
+
                 Panics if this expression is not a `{}`.
             ",
                 name, name
@@ -807,82 +805,6 @@ fn create_matchers(variants: &[WalrusVariant]) -> impl quote::ToTokens {
             use super::matcher::Matcher;
 
             #( #matchers )*
-        }
-    }
-}
-
-fn create_display(variants: &[WalrusVariant]) -> impl quote::ToTokens {
-    let mut display_methods = Vec::new();
-    for variant in variants {
-        let name = &variant.syn.ident;
-
-        let mut method_name = "visit_".to_string();
-        method_name.push_str(&name.to_string().to_snake_case());
-        let method_name = syn::Ident::new(&method_name, Span::call_site());
-
-        let instr_name = match &variant.opts.display_name {
-            Some(f) => quote! { #f(expr, self) },
-            None => {
-                let instr = name.to_string().to_snake_case().replace("_", ".");
-                quote! { self.f.push_str(#instr) }
-            }
-        };
-        let extra = match &variant.opts.display_extra {
-            Some(extra) => quote! { #extra(expr, self); },
-            None => quote! {},
-        };
-        display_methods.push(quote! {
-            fn #method_name(&mut self, expr: &#name) {
-                #instr_name;
-                #extra
-                expr.visit(self);
-            }
-        });
-    }
-    quote! {
-        impl<'expr> Visitor<'expr> for crate::module::DisplayExpr<'expr, '_> {
-            fn local_function(&self) -> &'expr crate::LocalFunction {
-                self.func
-            }
-
-            fn visit_expr_id(&mut self, expr: &ExprId) {
-                self.expr_id(*expr)
-            }
-
-            fn visit_local_id(&mut self, local: &crate::LocalId) {
-                self.id(*local);
-            }
-
-            fn visit_memory_id(&mut self, memory: &crate::MemoryId) {
-                self.id(*memory);
-            }
-
-            fn visit_table_id(&mut self, table: &crate::TableId) {
-                self.id(*table);
-            }
-
-            fn visit_global_id(&mut self, global: &crate::GlobalId) {
-                self.id(*global);
-            }
-
-            fn visit_function_id(&mut self, function: &crate::FunctionId) {
-                self.id(*function);
-            }
-
-            fn visit_type_id(&mut self, ty: &crate::TypeId) {
-                self.id(*ty);
-            }
-
-            fn visit_data_id(&mut self, data: &crate::DataId) {
-                self.id(*data);
-            }
-
-            fn visit_value(&mut self, value: &crate::ir::Value) {
-                self.f.push_str(" ");
-                self.f.push_str(&value.to_string());
-            }
-
-            #(#display_methods)*
         }
     }
 }

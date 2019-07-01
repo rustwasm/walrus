@@ -40,6 +40,12 @@ matrix:
     - name: "test (nightly)"
       rust: nightly
 
+    # A job to run our fuzzers a bit longer than the default.
+    - name: "fuzz (stable)"
+      rust: stable
+      script:
+        - WALRUS_FUZZ_TIMEOUT=$((60 * 5)) cargo test -p walrus-fuzz
+
     - name: "check benches"
       rust: stable
       script:

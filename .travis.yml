@@ -11,6 +11,7 @@ after_script:
   - sccache -s
 
 install:
+  # Build WABT
   - git clone --recursive https://github.com/WebAssembly/wabt.git
   - mkdir wabt/build
   - cd wabt/build
@@ -20,6 +21,15 @@ install:
   - export PATH=$PATH:$(pwd)/wabt/build
   - which wasm2wat
   - which wat2wasm
+  # Build binaryen
+  - git clone --recursive https://github.com/WebAssembly/binaryen.git
+  - mkdir binaryen/build
+  - cd binaryen/build
+  - cmake .. -DCMAKE_CXX_COMPILER_LAUNCHER=sccache
+  - make -j 8
+  - cd -
+  - export PATH=$PATH:$(pwd)/binaryen/build/bin
+  - which wasm-opt
 
 matrix:
   include:
@@ -29,6 +39,12 @@ matrix:
       rust: beta
     - name: "test (nightly)"
       rust: nightly
+
+    # A job to run our fuzzers a bit longer than the default.
+    - name: "fuzz (stable)"
+      rust: stable
+      script:
+        - WALRUS_FUZZ_TIMEOUT=$((60 * 5)) cargo test -p walrus-fuzz
 
     - name: "check benches"
       rust: stable

@@ -4,7 +4,7 @@ use std::path::Path;
 use walrus::dot::Dot;
 
 fn run(wat_path: &Path) -> Result<(), failure::Error> {
-    let wasm = walrus_tests_utils::wat2wasm(wat_path);
+    let wasm = walrus_tests_utils::wat2wasm(wat_path)?;
     let module = walrus::Module::from_buffer(&wasm)?;
 
     let local_funcs: Vec<_> = module

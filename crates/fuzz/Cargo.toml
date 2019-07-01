@@ -8,6 +8,7 @@ publish = false
 [dependencies]
 rand = { version = "0.7", features = ['small_rng'] }
 tempfile = "3.0.5"
+failure = "0.1.5"
 
 [dependencies.walrus]
 path = "../.."

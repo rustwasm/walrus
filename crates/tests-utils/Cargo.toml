@@ -7,4 +7,4 @@ publish = false
 
 [dependencies]
 tempfile = "3.0"
-failure = "0.1"
+failure = "0.1.5"

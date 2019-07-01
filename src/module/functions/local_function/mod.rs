@@ -723,15 +723,15 @@ fn validate_instruction(ctx: &mut ValidationContext, inst: Operator) -> Result<(
             ctx.unreachable(expr);
         }
         Operator::Block { ty } => {
-            let results = ValType::from_block_ty(ty)?;
+            let results = ValType::from_wasmparser_type(ty)?;
             ctx.push_control(BlockKind::Block, results.clone(), results);
         }
         Operator::Loop { ty } => {
-            let t = ValType::from_block_ty(ty)?;
+            let t = ValType::from_wasmparser_type(ty)?;
             ctx.push_control(BlockKind::Loop, vec![].into_boxed_slice(), t);
         }
         Operator::If { ty } => {
-            let ty = ValType::from_block_ty(ty)?;
+            let ty = ValType::from_wasmparser_type(ty)?;
             let (_, condition) = ctx.pop_operand_expected(Some(I32))?;
 
             let consequent = ctx.push_control(BlockKind::IfElse, ty.clone(), ty.clone());

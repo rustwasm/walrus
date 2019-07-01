@@ -4,6 +4,7 @@ use crate::emit::{Emit, EmitContext};
 use crate::encode::Encoder;
 use crate::error::Result;
 use crate::tombstone_arena::Tombstone;
+use failure::bail;
 use id_arena::Id;
 use std::fmt;
 use std::hash;
@@ -108,11 +109,15 @@ pub enum ValType {
 }
 
 impl ValType {
-    /// Construct a vector of `ValType`s from a parity-wasm `BlockType`.
-    pub fn from_block_ty(block_ty: wasmparser::Type) -> Result<Box<[ValType]>> {
-        let v = match block_ty {
+    /// Construct a vector of `ValType`s from a `wasmparser::TypeOrFuncType`
+    pub fn from_wasmparser_type(ty: wasmparser::TypeOrFuncType) -> Result<Box<[ValType]>> {
+        let ty = match ty {
+            wasmparser::TypeOrFuncType::Type(t) => t,
+            wasmparser::TypeOrFuncType::FuncType(_) => bail!("function types not supported yet"),
+        };
+        let v = match ty {
             wasmparser::Type::EmptyBlockType => Vec::new(),
-            _ => vec![ValType::parse(&block_ty)?],
+            _ => vec![ValType::parse(&ty)?],
         };
         Ok(v.into_boxed_slice())
     }

@@ -411,9 +411,19 @@ fn print_err(e: &failure::Error) {
 mod tests {
     use super::*;
 
+    fn get_timeout() -> Option<u64> {
+        use std::str::FromStr;
+        std::env::var("WALRUS_FUZZ_TIMEOUT")
+            .ok()
+            .and_then(|t| u64::from_str(&t).ok())
+    }
+
     #[test]
     fn watgen_fuzz() {
         let mut config = Config::<WatGen>::new();
+        if let Some(t) = get_timeout() {
+            config.timeout = t;
+        }
         if let Err(failing_test_case) = config.run() {
             print_err(&failing_test_case);
             panic!("Found a failing test case");
@@ -423,6 +433,9 @@ mod tests {
     #[test]
     fn wasm_opt_ttf_fuzz() {
         let mut config = Config::<WasmOptTtf>::new();
+        if let Some(t) = get_timeout() {
+            config.timeout = t;
+        }
         if let Err(failing_test_case) = config.run() {
             print_err(&failing_test_case);
             panic!("Found a failing test case");

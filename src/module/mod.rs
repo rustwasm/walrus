@@ -41,7 +41,7 @@ use std::mem;
 use std::path::Path;
 
 pub use self::config::ModuleConfig;
-pub(crate) use self::functions::{DisplayExpr, DotExpr};
+pub(crate) use self::functions::DotExpr;
 
 /// A wasm module.
 #[derive(Debug, Default)]

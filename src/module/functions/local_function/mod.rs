@@ -1,7 +1,6 @@
 //! Functions defined locally within a wasm module.
 
 mod context;
-pub mod display;
 mod emit;
 
 use self::context::ValidationContext;
@@ -16,7 +15,6 @@ use crate::{FunctionBuilder, FunctionId, Module, Result, TableKind, TypeId, ValT
 use failure::{bail, ResultExt};
 use id_arena::Id;
 use std::collections::BTreeMap;
-use std::fmt;
 use std::mem;
 use wasmparser::Operator;
 
@@ -268,15 +266,6 @@ impl LocalFunction {
         dst: &mut Encoder,
     ) {
         emit::run(self, indices, local_indices, dst)
-    }
-}
-
-impl fmt::Display for LocalFunction {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        use self::display::DisplayIr;
-        let mut dst = String::new();
-        self.display_ir(&mut dst, &(), 0);
-        dst.fmt(f)
     }
 }
 

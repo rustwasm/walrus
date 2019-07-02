@@ -8,7 +8,7 @@ pub mod matcher;
 
 use crate::dot::Dot;
 use crate::encode::Encoder;
-use crate::module::{DisplayExpr, DotExpr};
+use crate::module::DotExpr;
 use crate::{DataId, FunctionId, GlobalId, MemoryId, TableId, TypeId, ValType};
 use id_arena::Id;
 use std::fmt;
@@ -109,7 +109,7 @@ pub enum BlockKind {
 #[derive(Clone, Debug)]
 pub enum Expr {
     /// A block of multiple expressions, and also a control frame.
-    #[walrus(display_name = display_block_name, dot_name = dot_block_name)]
+    #[walrus(dot_name = dot_block_name)]
     Block {
         /// What kind of block is this?
         #[walrus(skip_visit)] // nothing to recurse
@@ -189,7 +189,7 @@ pub enum Expr {
     },
 
     /// Binary operations, those requiring two operands
-    #[walrus(display_name = display_binop_name, dot_name = dot_binop_name)]
+    #[walrus(dot_name = dot_binop_name)]
     Binop {
         /// The operation being performed
         #[walrus(skip_visit)]
@@ -201,7 +201,7 @@ pub enum Expr {
     },
 
     /// Unary operations, those requiring one operand
-    #[walrus(display_name = display_unop_name, dot_name = dot_unop_name)]
+    #[walrus(dot_name = dot_unop_name)]
     Unop {
         /// The operation being performed
         #[walrus(skip_visit)]
@@ -226,7 +226,6 @@ pub enum Expr {
     Unreachable {},
 
     /// `br`
-    #[walrus(display_extra = display_br)]
     Br {
         /// The target block to branch to.
         #[walrus(skip_visit)] // should have already been visited
@@ -236,7 +235,6 @@ pub enum Expr {
     },
 
     /// `br_if`
-    #[walrus(display_extra = display_br_if)]
     BrIf {
         /// The condition for when to branch.
         condition: ExprId,
@@ -258,7 +256,6 @@ pub enum Expr {
     },
 
     /// `br_table`
-    #[walrus(display_extra = display_br_table)]
     BrTable {
         /// The table index of which block to branch to.
         which: ExprId,
@@ -1198,13 +1195,6 @@ impl VisitMut for ExprId {
     }
 }
 
-fn display_block_name(block: &Block, out: &mut DisplayExpr) {
-    match block.kind {
-        BlockKind::Loop => out.f.push_str("loop"),
-        _ => out.f.push_str("block"),
-    }
-}
-
 fn dot_block_name(block: &Block, out: &mut DotExpr<'_, '_>) {
     match block.kind {
         BlockKind::Loop => out.out.push_str("loop"),
@@ -1214,40 +1204,8 @@ fn dot_block_name(block: &Block, out: &mut DotExpr<'_, '_>) {
     }
 }
 
-fn display_br(e: &Br, out: &mut DisplayExpr) {
-    out.f
-        .push_str(&format!(" (;e{};)", ExprId::from(e.block).index()))
-}
-
-fn display_br_if(e: &BrIf, out: &mut DisplayExpr) {
-    out.f
-        .push_str(&format!(" (;e{};)", ExprId::from(e.block).index()))
-}
-
-fn display_br_table(e: &BrTable, out: &mut DisplayExpr) {
-    let blocks = e
-        .blocks
-        .iter()
-        .map(|b| format!("e{}", ExprId::from(*b).index()))
-        .collect::<Vec<_>>()
-        .join(" ");
-    out.f.push_str(&format!(
-        " (;default:e{}  [{}];)",
-        ExprId::from(e.default).index(),
-        blocks
-    ))
-}
-
-fn display_binop_name(e: &Binop, out: &mut DisplayExpr) {
-    out.f.push_str(&format!("{:?}", e.op))
-}
-
 fn dot_binop_name(e: &Binop, out: &mut DotExpr<'_, '_>) {
     out.out.push_str(&format!("{:?}", e.op))
-}
-
-fn display_unop_name(e: &Unop, out: &mut DisplayExpr) {
-    out.f.push_str(&format!("{:?}", e.op))
 }
 
 fn dot_unop_name(e: &Unop, out: &mut DotExpr<'_, '_>) {

@@ -69,7 +69,14 @@ fn run(wast: &Path) -> Result<(), failure::Error> {
         match command["type"].as_str().unwrap() {
             "assert_invalid" | "assert_malformed" => {
                 let wasm = fs::read(&path)?;
+                println!("{:?}", command);
                 if config.parse(&wasm).is_ok() {
+                    // A few spec tests assume multi-value isn't implemented,
+                    // but we implement it, so basically just skip those tests.
+                    let message = command["text"].as_str().unwrap();
+                    if message.contains("invalid result arity") {
+                        continue;
+                    }
                     panic!("wasm parsed when it shouldn't (line {})", line);
                 }
             }

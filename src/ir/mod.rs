@@ -541,6 +541,14 @@ pub enum Expr {
         v2: ExprId,
     },
 
+    /// `v128.swizzle`
+    V128Swizzle {
+        /// The indices we're using to select and generate the final vector
+        indices: ExprId,
+        /// The vector that's being swizzled
+        lanes: ExprId,
+    },
+
     /// `v128.shuffle`
     V128Shuffle {
         /// The indices that are used to create the final vector of this
@@ -548,9 +556,9 @@ pub enum Expr {
         #[walrus(skip_visit)]
         indices: ShuffleIndices,
         /// The first 16 bytes to be indxed (with indices 0..15)
-        lo: ExprId,
+        a: ExprId,
         /// The second 16 bytes to be indxed (with indices 16..31)
-        hi: ExprId,
+        b: ExprId,
     },
 }
 
@@ -1133,6 +1141,7 @@ impl Expr {
             | Expr::RefNull(..)
             | Expr::RefIsNull(..)
             | Expr::V128Bitselect(..)
+            | Expr::V128Swizzle(..)
             | Expr::V128Shuffle(..)
             | Expr::Drop(..) => false,
         }

@@ -1289,63 +1289,76 @@ fn validate_instruction(ctx: &mut ValidationContext, inst: Operator) -> Result<(
             ctx.push_operand(Some(I32), expr);
         }
 
-        Operator::V8x16Shuffle { lines } => {
-            let (_, hi) = ctx.pop_operand_expected(Some(V128))?;
-            let (_, lo) = ctx.pop_operand_expected(Some(V128))?;
+        // Operator::V8x16Shuffle { .. } => bail!("v8x16.shuffle not supported"),
+
+        Operator::V8x16Swizzle => {
+            let (_, lanes) = ctx.pop_operand_expected(Some(V128))?;
+            let (_, indices) = ctx.pop_operand_expected(Some(V128))?;
+            let expr = ctx.func.alloc(V128Swizzle {
+                lanes,
+                indices,
+            });
+            ctx.push_operand(Some(V128), expr);
+        }
+
+        Operator::V8x16Shuffle { lanes } |
+        Operator::V8x16ShuffleImm { lanes } => {
+            let (_, a) = ctx.pop_operand_expected(Some(V128))?;
+            let (_, b) = ctx.pop_operand_expected(Some(V128))?;
             let expr = ctx.func.alloc(V128Shuffle {
-                indices: lines,
-                lo,
-                hi,
+                indices: lanes,
+                a,
+                b,
             });
             ctx.push_operand(Some(V128), expr);
         }
 
         Operator::I8x16Splat => one_op(ctx, I32, V128, UnaryOp::I8x16Splat)?,
-        Operator::I8x16ExtractLaneS { line: idx } => {
+        Operator::I8x16ExtractLaneS { lane: idx } => {
             one_op(ctx, V128, I32, UnaryOp::I8x16ExtractLaneS { idx })?
         }
-        Operator::I8x16ExtractLaneU { line: idx } => {
+        Operator::I8x16ExtractLaneU { lane: idx } => {
             one_op(ctx, V128, I32, UnaryOp::I8x16ExtractLaneU { idx })?
         }
-        Operator::I8x16ReplaceLane { line: idx } => {
+        Operator::I8x16ReplaceLane { lane: idx } => {
             two_ops(ctx, V128, I32, V128, BinaryOp::I8x16ReplaceLane { idx })?
         }
         Operator::I16x8Splat => one_op(ctx, I32, V128, UnaryOp::I16x8Splat)?,
-        Operator::I16x8ExtractLaneS { line: idx } => {
+        Operator::I16x8ExtractLaneS { lane: idx } => {
             one_op(ctx, V128, I32, UnaryOp::I16x8ExtractLaneS { idx })?
         }
-        Operator::I16x8ExtractLaneU { line: idx } => {
+        Operator::I16x8ExtractLaneU { lane: idx } => {
             one_op(ctx, V128, I32, UnaryOp::I16x8ExtractLaneU { idx })?
         }
-        Operator::I16x8ReplaceLane { line: idx } => {
+        Operator::I16x8ReplaceLane { lane: idx } => {
             two_ops(ctx, V128, I32, V128, BinaryOp::I16x8ReplaceLane { idx })?
         }
         Operator::I32x4Splat => one_op(ctx, I32, V128, UnaryOp::I32x4Splat)?,
-        Operator::I32x4ExtractLane { line: idx } => {
+        Operator::I32x4ExtractLane { lane: idx } => {
             one_op(ctx, V128, I32, UnaryOp::I32x4ExtractLane { idx })?
         }
-        Operator::I32x4ReplaceLane { line: idx } => {
+        Operator::I32x4ReplaceLane { lane: idx } => {
             two_ops(ctx, V128, I32, V128, BinaryOp::I32x4ReplaceLane { idx })?
         }
         Operator::I64x2Splat => one_op(ctx, I64, V128, UnaryOp::I64x2Splat)?,
-        Operator::I64x2ExtractLane { line: idx } => {
+        Operator::I64x2ExtractLane { lane: idx } => {
             one_op(ctx, V128, I64, UnaryOp::I64x2ExtractLane { idx })?
         }
-        Operator::I64x2ReplaceLane { line: idx } => {
+        Operator::I64x2ReplaceLane { lane: idx } => {
             two_ops(ctx, V128, I64, V128, BinaryOp::I64x2ReplaceLane { idx })?
         }
         Operator::F32x4Splat => one_op(ctx, F32, V128, UnaryOp::F32x4Splat)?,
-        Operator::F32x4ExtractLane { line: idx } => {
+        Operator::F32x4ExtractLane { lane: idx } => {
             one_op(ctx, V128, F32, UnaryOp::F32x4ExtractLane { idx })?
         }
-        Operator::F32x4ReplaceLane { line: idx } => {
+        Operator::F32x4ReplaceLane { lane: idx } => {
             two_ops(ctx, V128, F32, V128, BinaryOp::F32x4ReplaceLane { idx })?
         }
         Operator::F64x2Splat => one_op(ctx, F64, V128, UnaryOp::F64x2Splat)?,
-        Operator::F64x2ExtractLane { line: idx } => {
+        Operator::F64x2ExtractLane { lane: idx } => {
             one_op(ctx, V128, F64, UnaryOp::F64x2ExtractLane { idx })?
         }
-        Operator::F64x2ReplaceLane { line: idx } => {
+        Operator::F64x2ReplaceLane { lane: idx } => {
             two_ops(ctx, V128, F64, V128, BinaryOp::F64x2ReplaceLane { idx })?
         }
 

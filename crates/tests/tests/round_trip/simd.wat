@@ -16,10 +16,12 @@
     v128.store
   )
 
+(;
   (func $v128.shuffle (export "v128.shuffle") (param v128 v128) (result v128)
     local.get 0
     local.get 1
     v8x16.shuffle 16 1 18 3 20 5 22 7 24 9 26 11 28 13 30 15)
+;)
 
    (func $i8x16.splat (export "i8x16.splat") (param i32) (result v128)
      local.get 0
@@ -526,18 +528,18 @@
     (type (;0;) (func (result v128)))
     (type (;1;) (func (param i32) (result v128)))
     (type (;2;) (func (param i32 v128)))
-    (type (;3;) (func (param v128 v128) (result v128)))
-    (type (;4;) (func (param v128) (result i32)))
-    (type (;5;) (func (param v128 i32) (result v128)))
-    (type (;6;) (func (param i64) (result v128)))
-    (type (;7;) (func (param v128) (result i64)))
-    (type (;8;) (func (param v128 i64) (result v128)))
-    (type (;9;) (func (param f32) (result v128)))
-    (type (;10;) (func (param v128) (result f32)))
-    (type (;11;) (func (param v128 f32) (result v128)))
-    (type (;12;) (func (param f64) (result v128)))
-    (type (;13;) (func (param v128) (result f64)))
-    (type (;14;) (func (param v128 f64) (result v128)))
+    (type (;3;) (func (param v128) (result i32)))
+    (type (;4;) (func (param v128 i32) (result v128)))
+    (type (;5;) (func (param i64) (result v128)))
+    (type (;6;) (func (param v128) (result i64)))
+    (type (;7;) (func (param v128 i64) (result v128)))
+    (type (;8;) (func (param f32) (result v128)))
+    (type (;9;) (func (param v128) (result f32)))
+    (type (;10;) (func (param v128 f32) (result v128)))
+    (type (;11;) (func (param f64) (result v128)))
+    (type (;12;) (func (param v128) (result f64)))
+    (type (;13;) (func (param v128 f64) (result v128)))
+    (type (;14;) (func (param v128 v128) (result v128)))
     (type (;15;) (func (param v128) (result v128)))
     (type (;16;) (func (param v128 v128 v128) (result v128)))
     (func $v128.bitselect (type 16) (param v128 v128 v128) (result v128)
@@ -549,363 +551,359 @@
       local.get 0
       local.get 1
       v128.store)
-    (func $v128.shuffle (type 3) (param v128 v128) (result v128)
-      local.get 0
-      local.get 1
-      v8x16.shuffle  16  1  18  3  20  5  22  7  24  9  26  11  28  13  30  15 )
-    (func $i8x16.replace_lane (type 5) (param v128 i32) (result v128)
+    (func $i8x16.replace_lane (type 4) (param v128 i32) (result v128)
       local.get 0
       local.get 1
       i8x16.replace_lane 2 )
-    (func $i16x8.replace_lane (type 5) (param v128 i32) (result v128)
+    (func $i16x8.replace_lane (type 4) (param v128 i32) (result v128)
       local.get 0
       local.get 1
       i16x8.replace_lane 2 )
-    (func $i32x4.replace_lane (type 5) (param v128 i32) (result v128)
+    (func $i32x4.replace_lane (type 4) (param v128 i32) (result v128)
       local.get 0
       local.get 1
       i32x4.replace_lane 2 )
-    (func $i64x2.replace_lane (type 8) (param v128 i64) (result v128)
+    (func $i64x2.replace_lane (type 7) (param v128 i64) (result v128)
       local.get 0
       local.get 1
       i64x2.replace_lane 0 )
-    (func $f32x4.replace_lane (type 11) (param v128 f32) (result v128)
+    (func $f32x4.replace_lane (type 10) (param v128 f32) (result v128)
       local.get 0
       local.get 1
       f32x4.replace_lane 2 )
-    (func $f64x2.replace_lane (type 14) (param v128 f64) (result v128)
+    (func $f64x2.replace_lane (type 13) (param v128 f64) (result v128)
       local.get 0
       local.get 1
       f64x2.replace_lane 0 )
-    (func $i8x16.eq (type 3) (param v128 v128) (result v128)
+    (func $i8x16.eq (type 14) (param v128 v128) (result v128)
       local.get 0
       local.get 1
       i8x16.eq)
-    (func $i8x16.lt_s (type 3) (param v128 v128) (result v128)
+    (func $i8x16.lt_s (type 14) (param v128 v128) (result v128)
       local.get 0
       local.get 1
       i8x16.lt_s)
-    (func $i8x16.lt_u (type 3) (param v128 v128) (result v128)
+    (func $i8x16.lt_u (type 14) (param v128 v128) (result v128)
       local.get 0
       local.get 1
       i8x16.lt_u)
-    (func $i8x16.gt_s (type 3) (param v128 v128) (result v128)
+    (func $i8x16.gt_s (type 14) (param v128 v128) (result v128)
       local.get 0
       local.get 1
       i8x16.gt_s)
-    (func $i8x16.gt_u (type 3) (param v128 v128) (result v128)
+    (func $i8x16.gt_u (type 14) (param v128 v128) (result v128)
       local.get 0
       local.get 1
       i8x16.gt_u)
-    (func $i8x16.le_s (type 3) (param v128 v128) (result v128)
+    (func $i8x16.le_s (type 14) (param v128 v128) (result v128)
       local.get 0
       local.get 1
       i8x16.le_s)
-    (func $i8x16.le_u (type 3) (param v128 v128) (result v128)
+    (func $i8x16.le_u (type 14) (param v128 v128) (result v128)
       local.get 0
       local.get 1
       i8x16.le_u)
-    (func $i8x16.ge_s (type 3) (param v128 v128) (result v128)
+    (func $i8x16.ge_s (type 14) (param v128 v128) (result v128)
       local.get 0
       local.get 1
       i8x16.ge_s)
-    (func $i8x16.ge_u (type 3) (param v128 v128) (result v128)
+    (func $i8x16.ge_u (type 14) (param v128 v128) (result v128)
       local.get 0
       local.get 1
       i8x16.ge_u)
-    (func $i16x8.eq (type 3) (param v128 v128) (result v128)
+    (func $i16x8.eq (type 14) (param v128 v128) (result v128)
       local.get 0
       local.get 1
       i16x8.eq)
-    (func $i16x8.lt_s (type 3) (param v128 v128) (result v128)
+    (func $i16x8.lt_s (type 14) (param v128 v128) (result v128)
       local.get 0
       local.get 1
       i16x8.lt_s)
-    (func $i16x8.lt_u (type 3) (param v128 v128) (result v128)
+    (func $i16x8.lt_u (type 14) (param v128 v128) (result v128)
       local.get 0
       local.get 1
       i16x8.lt_u)
-    (func $i16x8.gt_s (type 3) (param v128 v128) (result v128)
+    (func $i16x8.gt_s (type 14) (param v128 v128) (result v128)
       local.get 0
       local.get 1
       i16x8.gt_s)
-    (func $i16x8.gt_u (type 3) (param v128 v128) (result v128)
+    (func $i16x8.gt_u (type 14) (param v128 v128) (result v128)
       local.get 0
       local.get 1
       i16x8.gt_u)
-    (func $i16x8.le_s (type 3) (param v128 v128) (result v128)
+    (func $i16x8.le_s (type 14) (param v128 v128) (result v128)
       local.get 0
       local.get 1
       i16x8.le_s)
-    (func $i16x8.le_u (type 3) (param v128 v128) (result v128)
+    (func $i16x8.le_u (type 14) (param v128 v128) (result v128)
       local.get 0
       local.get 1
       i16x8.le_u)
-    (func $i16x8.ge_s (type 3) (param v128 v128) (result v128)
+    (func $i16x8.ge_s (type 14) (param v128 v128) (result v128)
       local.get 0
       local.get 1
       i16x8.ge_s)
-    (func $i16x8.ge_u (type 3) (param v128 v128) (result v128)
+    (func $i16x8.ge_u (type 14) (param v128 v128) (result v128)
       local.get 0
       local.get 1
       i16x8.ge_u)
-    (func $i32x4.eq (type 3) (param v128 v128) (result v128)
+    (func $i32x4.eq (type 14) (param v128 v128) (result v128)
       local.get 0
       local.get 1
       i32x4.eq)
-    (func $i32x4.lt_s (type 3) (param v128 v128) (result v128)
+    (func $i32x4.lt_s (type 14) (param v128 v128) (result v128)
       local.get 0
       local.get 1
       i32x4.lt_s)
-    (func $i32x4.lt_u (type 3) (param v128 v128) (result v128)
+    (func $i32x4.lt_u (type 14) (param v128 v128) (result v128)
       local.get 0
       local.get 1
       i32x4.lt_u)
-    (func $i32x4.gt_s (type 3) (param v128 v128) (result v128)
+    (func $i32x4.gt_s (type 14) (param v128 v128) (result v128)
       local.get 0
       local.get 1
       i32x4.gt_s)
-    (func $i32x4.gt_u (type 3) (param v128 v128) (result v128)
+    (func $i32x4.gt_u (type 14) (param v128 v128) (result v128)
       local.get 0
       local.get 1
       i32x4.gt_u)
-    (func $i32x4.le_s (type 3) (param v128 v128) (result v128)
+    (func $i32x4.le_s (type 14) (param v128 v128) (result v128)
       local.get 0
       local.get 1
       i32x4.le_s)
-    (func $i32x4.le_u (type 3) (param v128 v128) (result v128)
+    (func $i32x4.le_u (type 14) (param v128 v128) (result v128)
       local.get 0
       local.get 1
       i32x4.le_u)
-    (func $i32x4.ge_s (type 3) (param v128 v128) (result v128)
+    (func $i32x4.ge_s (type 14) (param v128 v128) (result v128)
       local.get 0
       local.get 1
       i32x4.ge_s)
-    (func $i32x4.ge_u (type 3) (param v128 v128) (result v128)
+    (func $i32x4.ge_u (type 14) (param v128 v128) (result v128)
       local.get 0
       local.get 1
       i32x4.ge_u)
-    (func $f32x4.eq (type 3) (param v128 v128) (result v128)
+    (func $f32x4.eq (type 14) (param v128 v128) (result v128)
       local.get 0
       local.get 1
       f32x4.eq)
-    (func $f32x4.lt (type 3) (param v128 v128) (result v128)
+    (func $f32x4.lt (type 14) (param v128 v128) (result v128)
       local.get 0
       local.get 1
       f32x4.lt)
-    (func $f32x4.gt (type 3) (param v128 v128) (result v128)
+    (func $f32x4.gt (type 14) (param v128 v128) (result v128)
       local.get 0
       local.get 1
       f32x4.gt)
-    (func $f32x4.le (type 3) (param v128 v128) (result v128)
+    (func $f32x4.le (type 14) (param v128 v128) (result v128)
       local.get 0
       local.get 1
       f32x4.le)
-    (func $f32x4.ge (type 3) (param v128 v128) (result v128)
+    (func $f32x4.ge (type 14) (param v128 v128) (result v128)
       local.get 0
       local.get 1
       f32x4.ge)
-    (func $f64x2.eq (type 3) (param v128 v128) (result v128)
+    (func $f64x2.eq (type 14) (param v128 v128) (result v128)
       local.get 0
       local.get 1
       f64x2.eq)
-    (func $f64x2.lt (type 3) (param v128 v128) (result v128)
+    (func $f64x2.lt (type 14) (param v128 v128) (result v128)
       local.get 0
       local.get 1
       f64x2.lt)
-    (func $f64x2.gt (type 3) (param v128 v128) (result v128)
+    (func $f64x2.gt (type 14) (param v128 v128) (result v128)
       local.get 0
       local.get 1
       f64x2.gt)
-    (func $f64x2.le (type 3) (param v128 v128) (result v128)
+    (func $f64x2.le (type 14) (param v128 v128) (result v128)
       local.get 0
       local.get 1
       f64x2.le)
-    (func $f64x2.ge (type 3) (param v128 v128) (result v128)
+    (func $f64x2.ge (type 14) (param v128 v128) (result v128)
       local.get 0
       local.get 1
       f64x2.ge)
-    (func $v128.and (type 3) (param v128 v128) (result v128)
+    (func $v128.and (type 14) (param v128 v128) (result v128)
       local.get 0
       local.get 1
       v128.and)
-    (func $v128.or (type 3) (param v128 v128) (result v128)
+    (func $v128.or (type 14) (param v128 v128) (result v128)
       local.get 0
       local.get 1
       v128.or)
-    (func $v128.xor (type 3) (param v128 v128) (result v128)
+    (func $v128.xor (type 14) (param v128 v128) (result v128)
       local.get 0
       local.get 1
       v128.xor)
-    (func $i8x16.shl (type 5) (param v128 i32) (result v128)
+    (func $i8x16.shl (type 4) (param v128 i32) (result v128)
       local.get 0
       local.get 1
       i8x16.shl)
-    (func $i8x16.shr_s (type 5) (param v128 i32) (result v128)
+    (func $i8x16.shr_s (type 4) (param v128 i32) (result v128)
       local.get 0
       local.get 1
       i8x16.shr_s)
-    (func $i8x16.shr_u (type 5) (param v128 i32) (result v128)
+    (func $i8x16.shr_u (type 4) (param v128 i32) (result v128)
       local.get 0
       local.get 1
       i8x16.shr_u)
-    (func $i8x16.add (type 3) (param v128 v128) (result v128)
+    (func $i8x16.add (type 14) (param v128 v128) (result v128)
       local.get 0
       local.get 1
       i8x16.add)
-    (func $i8x16.add_saturate_u (type 3) (param v128 v128) (result v128)
+    (func $i8x16.add_saturate_u (type 14) (param v128 v128) (result v128)
       local.get 0
       local.get 1
       i8x16.add_saturate_u)
-    (func $i8x16.add_saturate_s (type 3) (param v128 v128) (result v128)
+    (func $i8x16.add_saturate_s (type 14) (param v128 v128) (result v128)
       local.get 0
       local.get 1
       i8x16.add_saturate_s)
-    (func $i8x16.sub (type 3) (param v128 v128) (result v128)
+    (func $i8x16.sub (type 14) (param v128 v128) (result v128)
       local.get 0
       local.get 1
       i8x16.sub)
-    (func $i8x16.sub_saturate_u (type 3) (param v128 v128) (result v128)
+    (func $i8x16.sub_saturate_u (type 14) (param v128 v128) (result v128)
       local.get 0
       local.get 1
       i8x16.sub_saturate_u)
-    (func $i8x16.sub_saturate_s (type 3) (param v128 v128) (result v128)
+    (func $i8x16.sub_saturate_s (type 14) (param v128 v128) (result v128)
       local.get 0
       local.get 1
       i8x16.sub_saturate_s)
-    (func $i8x16.mul (type 3) (param v128 v128) (result v128)
+    (func $i8x16.mul (type 14) (param v128 v128) (result v128)
       local.get 0
       local.get 1
       i8x16.mul)
-    (func $i16x8.shl (type 5) (param v128 i32) (result v128)
+    (func $i16x8.shl (type 4) (param v128 i32) (result v128)
       local.get 0
       local.get 1
       i16x8.shl)
-    (func $i16x8.shr_s (type 5) (param v128 i32) (result v128)
+    (func $i16x8.shr_s (type 4) (param v128 i32) (result v128)
       local.get 0
       local.get 1
       i16x8.shr_s)
-    (func $i16x8.shr_u (type 5) (param v128 i32) (result v128)
+    (func $i16x8.shr_u (type 4) (param v128 i32) (result v128)
       local.get 0
       local.get 1
       i16x8.shr_u)
-    (func $i16x8.add (type 3) (param v128 v128) (result v128)
+    (func $i16x8.add (type 14) (param v128 v128) (result v128)
       local.get 0
       local.get 1
       i16x8.add)
-    (func $i16x8.add_saturate_u (type 3) (param v128 v128) (result v128)
+    (func $i16x8.add_saturate_u (type 14) (param v128 v128) (result v128)
       local.get 0
       local.get 1
       i16x8.add_saturate_u)
-    (func $i16x8.add_saturate_s (type 3) (param v128 v128) (result v128)
+    (func $i16x8.add_saturate_s (type 14) (param v128 v128) (result v128)
       local.get 0
       local.get 1
       i16x8.add_saturate_s)
-    (func $i16x8.sub (type 3) (param v128 v128) (result v128)
+    (func $i16x8.sub (type 14) (param v128 v128) (result v128)
       local.get 0
       local.get 1
       i16x8.sub)
-    (func $i16x8.sub_saturate_u (type 3) (param v128 v128) (result v128)
+    (func $i16x8.sub_saturate_u (type 14) (param v128 v128) (result v128)
       local.get 0
       local.get 1
       i16x8.sub_saturate_u)
-    (func $i16x8.sub_saturate_s (type 3) (param v128 v128) (result v128)
+    (func $i16x8.sub_saturate_s (type 14) (param v128 v128) (result v128)
       local.get 0
       local.get 1
       i16x8.sub_saturate_s)
-    (func $i16x8.mul (type 3) (param v128 v128) (result v128)
+    (func $i16x8.mul (type 14) (param v128 v128) (result v128)
       local.get 0
       local.get 1
       i16x8.mul)
-    (func $i32x4.shl (type 5) (param v128 i32) (result v128)
+    (func $i32x4.shl (type 4) (param v128 i32) (result v128)
       local.get 0
       local.get 1
       i32x4.shl)
-    (func $i32x4.shr_s (type 5) (param v128 i32) (result v128)
+    (func $i32x4.shr_s (type 4) (param v128 i32) (result v128)
       local.get 0
       local.get 1
       i32x4.shr_s)
-    (func $i32x4.shr_u (type 5) (param v128 i32) (result v128)
+    (func $i32x4.shr_u (type 4) (param v128 i32) (result v128)
       local.get 0
       local.get 1
       i32x4.shr_u)
-    (func $i32x4.add (type 3) (param v128 v128) (result v128)
+    (func $i32x4.add (type 14) (param v128 v128) (result v128)
       local.get 0
       local.get 1
       i32x4.add)
-    (func $i32x4.sub (type 3) (param v128 v128) (result v128)
+    (func $i32x4.sub (type 14) (param v128 v128) (result v128)
       local.get 0
       local.get 1
       i32x4.sub)
-    (func $i32x4.mul (type 3) (param v128 v128) (result v128)
+    (func $i32x4.mul (type 14) (param v128 v128) (result v128)
       local.get 0
       local.get 1
       i32x4.mul)
-    (func $i64x2.shl (type 5) (param v128 i32) (result v128)
+    (func $i64x2.shl (type 4) (param v128 i32) (result v128)
       local.get 0
       local.get 1
       i64x2.shl)
-    (func $i64x2.shr_s (type 5) (param v128 i32) (result v128)
+    (func $i64x2.shr_s (type 4) (param v128 i32) (result v128)
       local.get 0
       local.get 1
       i64x2.shr_s)
-    (func $i64x2.shr_u (type 5) (param v128 i32) (result v128)
+    (func $i64x2.shr_u (type 4) (param v128 i32) (result v128)
       local.get 0
       local.get 1
       i64x2.shr_u)
-    (func $i64x2.add (type 3) (param v128 v128) (result v128)
+    (func $i64x2.add (type 14) (param v128 v128) (result v128)
       local.get 0
       local.get 1
       i64x2.add)
-    (func $i64x2.sub (type 3) (param v128 v128) (result v128)
+    (func $i64x2.sub (type 14) (param v128 v128) (result v128)
       local.get 0
       local.get 1
       i64x2.sub)
-    (func $f32x4.add (type 3) (param v128 v128) (result v128)
+    (func $f32x4.add (type 14) (param v128 v128) (result v128)
       local.get 0
       local.get 1
       f32x4.add)
-    (func $f32x4.sub (type 3) (param v128 v128) (result v128)
+    (func $f32x4.sub (type 14) (param v128 v128) (result v128)
       local.get 0
       local.get 1
       f32x4.sub)
-    (func $f32x4.mul (type 3) (param v128 v128) (result v128)
+    (func $f32x4.mul (type 14) (param v128 v128) (result v128)
       local.get 0
       local.get 1
       f32x4.mul)
-    (func $f32x4.div (type 3) (param v128 v128) (result v128)
+    (func $f32x4.div (type 14) (param v128 v128) (result v128)
       local.get 0
       local.get 1
       f32x4.div)
-    (func $f32x4.min (type 3) (param v128 v128) (result v128)
+    (func $f32x4.min (type 14) (param v128 v128) (result v128)
       local.get 0
       local.get 1
       f32x4.min)
-    (func $f32x4.max (type 3) (param v128 v128) (result v128)
+    (func $f32x4.max (type 14) (param v128 v128) (result v128)
       local.get 0
       local.get 1
       f32x4.max)
-    (func $f64x2.add (type 3) (param v128 v128) (result v128)
+    (func $f64x2.add (type 14) (param v128 v128) (result v128)
       local.get 0
       local.get 1
       f64x2.add)
-    (func $f64x2.sub (type 3) (param v128 v128) (result v128)
+    (func $f64x2.sub (type 14) (param v128 v128) (result v128)
       local.get 0
       local.get 1
       f64x2.sub)
-    (func $f64x2.mul (type 3) (param v128 v128) (result v128)
+    (func $f64x2.mul (type 14) (param v128 v128) (result v128)
       local.get 0
       local.get 1
       f64x2.mul)
-    (func $f64x2.div (type 3) (param v128 v128) (result v128)
+    (func $f64x2.div (type 14) (param v128 v128) (result v128)
       local.get 0
       local.get 1
       f64x2.div)
-    (func $f64x2.min (type 3) (param v128 v128) (result v128)
+    (func $f64x2.min (type 14) (param v128 v128) (result v128)
       local.get 0
       local.get 1
       f64x2.min)
-    (func $f64x2.max (type 3) (param v128 v128) (result v128)
+    (func $f64x2.max (type 14) (param v128 v128) (result v128)
       local.get 0
       local.get 1
       f64x2.max)
@@ -915,43 +913,43 @@
     (func $i8x16.splat (type 1) (param i32) (result v128)
       local.get 0
       i8x16.splat)
-    (func $i8x16.extract_lane_s (type 4) (param v128) (result i32)
+    (func $i8x16.extract_lane_s (type 3) (param v128) (result i32)
       local.get 0
       i8x16.extract_lane_s 1 )
-    (func $i8x16.extract_lane_u (type 4) (param v128) (result i32)
+    (func $i8x16.extract_lane_u (type 3) (param v128) (result i32)
       local.get 0
       i8x16.extract_lane_u 2 )
     (func $i16x8.splat (type 1) (param i32) (result v128)
       local.get 0
       i16x8.splat)
-    (func $i16x8.extract_lane_s (type 4) (param v128) (result i32)
+    (func $i16x8.extract_lane_s (type 3) (param v128) (result i32)
       local.get 0
       i16x8.extract_lane_s 1 )
-    (func $i16x8.extract_lane_u (type 4) (param v128) (result i32)
+    (func $i16x8.extract_lane_u (type 3) (param v128) (result i32)
       local.get 0
       i16x8.extract_lane_u 2 )
     (func $i32x4.splat (type 1) (param i32) (result v128)
       local.get 0
       i32x4.splat)
-    (func $i32x4.extract_lane (type 4) (param v128) (result i32)
+    (func $i32x4.extract_lane (type 3) (param v128) (result i32)
       local.get 0
       i32x4.extract_lane 1 )
-    (func $i64x2.splat (type 6) (param i64) (result v128)
+    (func $i64x2.splat (type 5) (param i64) (result v128)
       local.get 0
       i64x2.splat)
-    (func $i64x2.extract_lane (type 7) (param v128) (result i64)
+    (func $i64x2.extract_lane (type 6) (param v128) (result i64)
       local.get 0
       i64x2.extract_lane 1 )
-    (func $f32x4.splat (type 9) (param f32) (result v128)
+    (func $f32x4.splat (type 8) (param f32) (result v128)
       local.get 0
       f32x4.splat)
-    (func $f32x4.extract_lane (type 10) (param v128) (result f32)
+    (func $f32x4.extract_lane (type 9) (param v128) (result f32)
       local.get 0
       f32x4.extract_lane 1 )
-    (func $f64x2.splat (type 12) (param f64) (result v128)
+    (func $f64x2.splat (type 11) (param f64) (result v128)
       local.get 0
       f64x2.splat)
-    (func $f64x2.extract_lane (type 13) (param v128) (result f64)
+    (func $f64x2.extract_lane (type 12) (param v128) (result f64)
       local.get 0
       f64x2.extract_lane 1 )
     (func $v128.not (type 15) (param v128) (result v128)
@@ -960,37 +958,37 @@
     (func $i8x16.neg (type 15) (param v128) (result v128)
       local.get 0
       i8x16.neg)
-    (func $i8x16.any_true (type 4) (param v128) (result i32)
+    (func $i8x16.any_true (type 3) (param v128) (result i32)
       local.get 0
       i8x16.any_true)
-    (func $i8x16.all_true (type 4) (param v128) (result i32)
+    (func $i8x16.all_true (type 3) (param v128) (result i32)
       local.get 0
       i8x16.all_true)
     (func $i16x8.neg (type 15) (param v128) (result v128)
       local.get 0
       i16x8.neg)
-    (func $i16x8.any_true (type 4) (param v128) (result i32)
+    (func $i16x8.any_true (type 3) (param v128) (result i32)
       local.get 0
       i16x8.any_true)
-    (func $i16x8.all_true (type 4) (param v128) (result i32)
+    (func $i16x8.all_true (type 3) (param v128) (result i32)
       local.get 0
       i16x8.all_true)
     (func $i32x4.neg (type 15) (param v128) (result v128)
       local.get 0
       i32x4.neg)
-    (func $i32x4.any_true (type 4) (param v128) (result i32)
+    (func $i32x4.any_true (type 3) (param v128) (result i32)
       local.get 0
       i32x4.any_true)
-    (func $i32x4.all_true (type 4) (param v128) (result i32)
+    (func $i32x4.all_true (type 3) (param v128) (result i32)
       local.get 0
       i32x4.all_true)
     (func $i64x2.neg (type 15) (param v128) (result v128)
       local.get 0
       i64x2.neg)
-    (func $i64x2.any_true (type 4) (param v128) (result i32)
+    (func $i64x2.any_true (type 3) (param v128) (result i32)
       local.get 0
       i64x2.any_true)
-    (func $i64x2.all_true (type 4) (param v128) (result i32)
+    (func $i64x2.all_true (type 3) (param v128) (result i32)
       local.get 0
       i64x2.all_true)
     (func $f32x4.abs (type 15) (param v128) (result v128)
@@ -1041,7 +1039,6 @@
     (export "v128.const" (func $v128.const))
     (export "v128.load" (func $v128.load))
     (export "v128.store" (func $v128.store))
-    (export "v128.shuffle" (func $v128.shuffle))
     (export "i8x16.splat" (func $i8x16.splat))
     (export "i8x16.extract_lane_s" (func $i8x16.extract_lane_s))
     (export "i8x16.extract_lane_u" (func $i8x16.extract_lane_u))

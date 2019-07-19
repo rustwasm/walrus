@@ -19,9 +19,9 @@
       (i32.const 3))
   )
 
-  (data passive "A")
+  (data "A")
   (data (i32.const 0) "b")
-  (data passive "C")
+  (data "C")
 )
 
 ;; CHECK: (module
@@ -43,5 +43,5 @@
 ;; NEXT:    (memory (;0;) 1)
 ;; NEXT:    (export "a" (func 0))
 ;; NEXT:    (data (;0;) (i32.const 0) "b")
-;; NEXT:    (data (;1;) passive "A")
-;; NEXT:    (data (;2;) passive "C"))
+;; NEXT:    (data (;1;) "A")
+;; NEXT:    (data (;2;) "C"))

@@ -771,10 +771,15 @@ impl Emit<'_, '_> {
                 self.visit(e.mask);
                 self.simd(0x50);
             }
+            V128Swizzle(e) => {
+                self.visit(e.lanes);
+                self.visit(e.indices);
+                self.simd(0xc0);
+            }
             V128Shuffle(e) => {
-                self.visit(e.lo);
-                self.visit(e.hi);
-                self.simd(0x03);
+                self.visit(e.a);
+                self.visit(e.b);
+                self.simd(0xc1);
                 self.encoder.raw(&e.indices);
             }
         }

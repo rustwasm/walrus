@@ -560,6 +560,20 @@ pub enum Expr {
         /// The second 16 bytes to be indxed (with indices 16..31)
         b: ExprId,
     },
+
+    /// `iaaxbb.load_splat`
+    LoadSplat {
+        /// The memory we're loading from.
+        memory: MemoryId,
+        /// The size of load this is performing
+        #[walrus(skip_visit)]
+        kind: LoadSplatKind,
+        /// The alignment and offset of this memory load
+        #[walrus(skip_visit)]
+        arg: MemArg,
+        /// The address that we're loading from
+        address: ExprId,
+    },
 }
 
 /// Argument in `V128Shuffle` of lane indices to select
@@ -953,6 +967,16 @@ pub enum LoadKind {
     I64_32 { kind: ExtendedLoad },
 }
 
+/// The different kinds of load instructions that are part of a `LoadSplat` IR node
+#[derive(Debug, Copy, Clone)]
+#[allow(missing_docs)]
+pub enum LoadSplatKind {
+    I8,
+    I16,
+    I32,
+    I64,
+}
+
 /// The kinds of extended loads which can happen
 #[derive(Debug, Copy, Clone)]
 #[allow(missing_docs)]
@@ -1143,6 +1167,7 @@ impl Expr {
             | Expr::V128Bitselect(..)
             | Expr::V128Swizzle(..)
             | Expr::V128Shuffle(..)
+            | Expr::LoadSplat(..)
             | Expr::Drop(..) => false,
         }
     }

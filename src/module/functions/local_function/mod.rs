@@ -441,6 +441,20 @@ fn validate_instruction(ctx: &mut ValidationContext, inst: Operator) -> Result<(
         Ok(())
     };
 
+    let load_splat = |ctx: &mut ValidationContext, arg, kind| -> Result<()> {
+        let (_, address) = ctx.pop_operand_expected(Some(I32))?;
+        let memory = ctx.indices.get_memory(0)?;
+        let arg = mem_arg(&arg)?;
+        let expr = ctx.func.alloc(LoadSplat {
+            memory,
+            arg,
+            address,
+            kind,
+        });
+        ctx.push_operand(Some(V128), expr);
+        Ok(())
+    };
+
     match inst {
         Operator::Call { function_index } => {
             let func = ctx
@@ -1301,8 +1315,7 @@ fn validate_instruction(ctx: &mut ValidationContext, inst: Operator) -> Result<(
             ctx.push_operand(Some(V128), expr);
         }
 
-        Operator::V8x16Shuffle { lanes } |
-        Operator::V8x16ShuffleImm { lanes } => {
+        Operator::V8x16Shuffle { lanes } => {
             let (_, a) = ctx.pop_operand_expected(Some(V128))?;
             let (_, b) = ctx.pop_operand_expected(Some(V128))?;
             let expr = ctx.func.alloc(V128Shuffle {
@@ -1502,6 +1515,19 @@ fn validate_instruction(ctx: &mut ValidationContext, inst: Operator) -> Result<(
         Operator::I64TruncUSatF32 => one_op(ctx, F32, I64, UnaryOp::I64TruncUSatF32)?,
         Operator::I64TruncSSatF64 => one_op(ctx, F64, I64, UnaryOp::I64TruncSSatF64)?,
         Operator::I64TruncUSatF64 => one_op(ctx, F64, I64, UnaryOp::I64TruncUSatF64)?,
+
+        Operator::I8x16LoadSplat { memarg } => {
+            load_splat(ctx, memarg, LoadSplatKind::I8)?
+        }
+        Operator::I16x8LoadSplat { memarg } => {
+            load_splat(ctx, memarg, LoadSplatKind::I16)?
+        }
+        Operator::I32x4LoadSplat { memarg } => {
+            load_splat(ctx, memarg, LoadSplatKind::I32)?
+        }
+        Operator::I64x2LoadSplat { memarg } => {
+            load_splat(ctx, memarg, LoadSplatKind::I64)?
+        }
 
         op @ Operator::TableInit { .. }
         | op @ Operator::ElemDrop { .. }

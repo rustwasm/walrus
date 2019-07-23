@@ -782,6 +782,17 @@ impl Emit<'_, '_> {
                 self.simd(0xc1);
                 self.encoder.raw(&e.indices);
             }
+            LoadSplat(e) => {
+                self.visit(e.address);
+                match e.kind {
+                    LoadSplatKind::I8 => self.simd(0xc2),
+                    LoadSplatKind::I16 => self.simd(0xc3),
+                    LoadSplatKind::I32 => self.simd(0xc4),
+                    LoadSplatKind::I64 => self.simd(0xc5),
+                }
+                self.simd(0xc1);
+                self.memarg(e.memory, &e.arg);
+            }
         }
 
         self.id = old;

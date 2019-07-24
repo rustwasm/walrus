@@ -89,10 +89,8 @@ impl<G: TestCaseGenerator> Config<G> {
     }
 
     fn round_trip_through_walrus(&self, wasm: &[u8]) -> Result<Vec<u8>> {
-        println!("parsing into walrus::Module");
         let module =
             walrus::Module::from_buffer(&wasm).context("walrus failed to parse the wasm buffer")?;
-        println!("serializing walrus::Module back into wasm");
         let buf = module
             .emit_wasm()
             .context("walrus failed to serialize a module to wasm")?;
@@ -129,8 +127,6 @@ impl<G: TestCaseGenerator> Config<G> {
         let mut seed = rand::thread_rng().gen();
         let mut failing = Ok(());
         loop {
-            println!("-----------------------------------------------------");
-
             let wat = self.gen_wat(seed);
             match self
                 .run_one(&wat)

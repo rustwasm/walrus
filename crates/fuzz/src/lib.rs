@@ -54,8 +54,9 @@ impl<G: TestCaseGenerator> Config<G> {
             .join("..")
             .join("target")
             .join("walrus-fuzz");
-        fs::create_dir_all(&dir).unwrap();
-        let scratch = tempfile::NamedTempFile::new_in(dir).unwrap();
+        fs::create_dir_all(&dir).expect(&format!("should create directory: {:?}", dir));
+
+        let scratch = tempfile::NamedTempFile::new_in(dir).expect("should create temp file OK");
 
         Config {
             _generator: PhantomData,
@@ -371,8 +372,8 @@ impl TestCaseGenerator for WasmOptTtf {
         loop {
             let input: Vec<u8> = (0..fuel).map(|_| rng.gen()).collect();
 
-            let input_tmp = tempfile::NamedTempFile::new().unwrap();
-            fs::write(input_tmp.path(), input).unwrap();
+            let input_tmp = tempfile::NamedTempFile::new().expect("should create temp file OK");
+            fs::write(input_tmp.path(), input).expect("should write to temp file OK");
 
             let wat =
                 match walrus_tests_utils::wasm_opt(input_tmp.path(), vec!["-ttf", "--emit-text"]) {

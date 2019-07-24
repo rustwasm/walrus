@@ -374,16 +374,19 @@ impl TestCaseGenerator for WasmOptTtf {
             let input_tmp = tempfile::NamedTempFile::new().unwrap();
             fs::write(input_tmp.path(), input).unwrap();
 
-            let wat = walrus_tests_utils::wasm_opt(
-                input_tmp.path(),
-                vec![
-                    "-ttf",
-                    "--emit-text",
-                    // wasm-opt and wat2wasm seem to disagree on some of these.
-                    "--disable-sign-ext",
-                ],
-            )
-            .unwrap();
+            let wat =
+                match walrus_tests_utils::wasm_opt(input_tmp.path(), vec!["-ttf", "--emit-text"]) {
+                    Ok(w) => w,
+                    Err(e) => {
+                        // Sometimes `wasm-opt -ttf` fails to generate wasm
+                        // modules, so we just try again with the next output
+                        // from the RNG.
+                        eprintln!("Warning: `wasm-opt -ttf` failed:");
+                        print_err(&e);
+                        continue;
+                    }
+                };
+
             if {
                 // Only generate programs that wat2wasm can handle.
                 let tmp = tempfile::NamedTempFile::new().unwrap();

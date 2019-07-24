@@ -250,13 +250,4 @@ impl<'a> Visitor<'a> for Validate<'a> {
         self.require_atomic(e.memory, &e.arg, width);
         e.visit(self);
     }
-
-    fn visit_data_id(&mut self, id: &DataId) {
-        // Catch references in `memory.init` and such instructions to active
-        // data segments, which our implementation will generate but in general
-        // shouldn't be allowed.
-        if !self.module.data.get(*id).passive {
-            self.err("referenced data segment is not passive");
-        }
-    }
 }

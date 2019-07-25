@@ -54,8 +54,9 @@ impl<G: TestCaseGenerator> Config<G> {
             .join("..")
             .join("target")
             .join("walrus-fuzz");
-        fs::create_dir_all(&dir).unwrap();
-        let scratch = tempfile::NamedTempFile::new_in(dir).unwrap();
+        fs::create_dir_all(&dir).expect(&format!("should create directory: {:?}", dir));
+
+        let scratch = tempfile::NamedTempFile::new_in(dir).expect("should create temp file OK");
 
         Config {
             _generator: PhantomData,
@@ -89,10 +90,8 @@ impl<G: TestCaseGenerator> Config<G> {
     }
 
     fn round_trip_through_walrus(&self, wasm: &[u8]) -> Result<Vec<u8>> {
-        println!("parsing into walrus::Module");
         let module =
             walrus::Module::from_buffer(&wasm).context("walrus failed to parse the wasm buffer")?;
-        println!("serializing walrus::Module back into wasm");
         let buf = module
             .emit_wasm()
             .context("walrus failed to serialize a module to wasm")?;
@@ -129,8 +128,6 @@ impl<G: TestCaseGenerator> Config<G> {
         let mut seed = rand::thread_rng().gen();
         let mut failing = Ok(());
         loop {
-            println!("-----------------------------------------------------");
-
             let wat = self.gen_wat(seed);
             match self
                 .run_one(&wat)
@@ -375,19 +372,22 @@ impl TestCaseGenerator for WasmOptTtf {
         loop {
             let input: Vec<u8> = (0..fuel).map(|_| rng.gen()).collect();
 
-            let input_tmp = tempfile::NamedTempFile::new().unwrap();
-            fs::write(input_tmp.path(), input).unwrap();
+            let input_tmp = tempfile::NamedTempFile::new().expect("should create temp file OK");
+            fs::write(input_tmp.path(), input).expect("should write to temp file OK");
 
-            let wat = walrus_tests_utils::wasm_opt(
-                input_tmp.path(),
-                vec![
-                    "-ttf",
-                    "--emit-text",
-                    // wasm-opt and wat2wasm seem to disagree on some of these.
-                    "--disable-sign-ext",
-                ],
-            )
-            .unwrap();
+            let wat =
+                match walrus_tests_utils::wasm_opt(input_tmp.path(), vec!["-ttf", "--emit-text"]) {
+                    Ok(w) => w,
+                    Err(e) => {
+                        // Sometimes `wasm-opt -ttf` fails to generate wasm
+                        // modules, so we just try again with the next output
+                        // from the RNG.
+                        eprintln!("Warning: `wasm-opt -ttf` failed:");
+                        print_err(&e);
+                        continue;
+                    }
+                };
+
             if {
                 // Only generate programs that wat2wasm can handle.
                 let tmp = tempfile::NamedTempFile::new().unwrap();

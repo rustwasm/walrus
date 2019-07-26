@@ -5,7 +5,7 @@
 
 use crate::ir::*;
 use crate::ValType;
-use crate::{DataId, Function, FunctionKind, InitExpr, LocalFunction, Result};
+use crate::{Function, FunctionKind, InitExpr, LocalFunction, Result};
 use crate::{Global, GlobalKind, Memory, MemoryId, Module, Table, TableKind};
 use failure::{bail, ResultExt};
 use rayon::prelude::*;

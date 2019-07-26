@@ -47,11 +47,17 @@ impl<G: TestCaseGenerator> Config<G> {
 
     /// Construct a new fuzzing configuration.
     pub fn new() -> Config<G> {
+        static INIT_LOGS: std::sync::Once = std::sync::Once::new();
+        INIT_LOGS.call_once(|| {
+            env_logger::init();
+        });
+
         let fuel = Self::DEFAULT_FUEL;
         let timeout = Self::DEFAULT_TIMEOUT_SECS;
 
         let dir = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("..")
+            .join("..") // pop `fuzz`
+            .join("..") // pop `crates`
             .join("target")
             .join("walrus-fuzz");
         fs::create_dir_all(&dir).expect(&format!("should create directory: {:?}", dir));
@@ -231,8 +237,10 @@ impl std::error::Error for FailingTestCase {}
 /// round tripping it through walrus.
 pub fn assert_round_trip_execution_is_same<G: TestCaseGenerator>(wat: &str) {
     let config = Config::<G>::new();
-    let failing_test_case = config.run_one(wat);
-    assert!(failing_test_case.is_ok());
+    if let Err(e) = config.run_one(wat) {
+        print_err(&e);
+        panic!("round trip execution is not the same!");
+    }
 }
 
 /// A simple WAT generator.
@@ -440,5 +448,19 @@ mod tests {
             print_err(&failing_test_case);
             panic!("Found a failing test case");
         }
+    }
+
+    #[test]
+    fn fuzz0() {
+        super::assert_round_trip_execution_is_same::<WasmOptTtf>(
+            r#"
+            (module
+             (memory 1)
+             (data (i32.const 0))
+             (export "" (func $b))
+             (func $b
+               data.drop 0))
+        "#,
+        );
     }
 }

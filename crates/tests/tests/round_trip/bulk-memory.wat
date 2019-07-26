@@ -24,24 +24,26 @@
   (data "C")
 )
 
-;; CHECK: (module
-;; NEXT:    (type (;0;) (func))
-;; NEXT:    (func (;0;) (type 0)
-;; NEXT:      i32.const 1
-;; NEXT:      i32.const 2
-;; NEXT:      i32.const 3
-;; NEXT:      memory.init 1
-;; NEXT:      data.drop 2
-;; NEXT:      i32.const 1
-;; NEXT:      i32.const 2
-;; NEXT:      i32.const 3
-;; NEXT:      memory.copy
-;; NEXT:      i32.const 1
-;; NEXT:      i32.const 2
-;; NEXT:      i32.const 3
-;; NEXT:      memory.fill)
-;; NEXT:    (memory (;0;) 1)
-;; NEXT:    (export "a" (func 0))
-;; NEXT:    (data (;0;) (i32.const 0) "b")
-;; NEXT:    (data (;1;) "A")
-;; NEXT:    (data (;2;) "C"))
+(; CHECK-ALL:
+  (module
+    (type (;0;) (func))
+    (func (;0;) (type 0)
+      i32.const 1
+      i32.const 2
+      i32.const 3
+      memory.init 0
+      data.drop 2
+      i32.const 1
+      i32.const 2
+      i32.const 3
+      memory.copy
+      i32.const 1
+      i32.const 2
+      i32.const 3
+      memory.fill)
+    (memory (;0;) 1)
+    (export "a" (func 0))
+    (data (;0;) "A")
+    (data (;1;) (i32.const 0) "b")
+    (data (;2;) "C"))
+;)

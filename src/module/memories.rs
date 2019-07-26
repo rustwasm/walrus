@@ -1,10 +1,10 @@
 //! Memories used in a wasm module.
 
 use crate::emit::{Emit, EmitContext, Section};
-use crate::ir::Value;
+use crate::map::IdHashSet;
 use crate::parse::IndicesToIds;
 use crate::tombstone_arena::{Id, Tombstone, TombstoneArena};
-use crate::{GlobalId, ImportId, InitExpr, Module, Result};
+use crate::{Data, ImportId, Module, Result};
 
 /// The id of a memory.
 pub type MemoryId = Id<Memory>;
@@ -15,51 +15,26 @@ pub struct Memory {
     id: MemoryId,
     /// Is this memory shared?
     pub shared: bool,
-    /// The initial page size for this memory
+    /// The initial page size for this memory.
     pub initial: u32,
-    /// The maximum page size for this memory
+    /// The maximum page size for this memory.
     pub maximum: Option<u32>,
-    /// Whether or not this memory is imported, and if so from where
+    /// Whether or not this memory is imported, and if so from where.
     pub import: Option<ImportId>,
-    /// Data that will be used to initialize this memory chunk, with known
-    /// static offsets
-    pub data: MemoryData,
+    /// Active data segments that will be used to initialize this memory.
+    pub data_segments: IdHashSet<Data>,
 }
 
 impl Tombstone for Memory {
     fn on_delete(&mut self) {
-        self.data = MemoryData::default();
+        self.data_segments = Default::default();
     }
-}
-
-/// An abstraction for the initialization values of a `Memory`.
-///
-/// This houses all the data sections of a wasm executable that as associated
-/// with this `Memory`.
-#[derive(Debug, Default)]
-pub struct MemoryData {
-    absolute: Vec<(u32, Vec<u8>)>,
-    relative: Vec<(GlobalId, Vec<u8>)>,
 }
 
 impl Memory {
     /// Return the id of this memory
     pub fn id(&self) -> MemoryId {
         self.id
-    }
-
-    pub(crate) fn emit_data(&self) -> impl Iterator<Item = (InitExpr, &[u8])> {
-        let absolute = self
-            .data
-            .absolute
-            .iter()
-            .map(move |(pos, data)| (InitExpr::Value(Value::I32(*pos as i32)), &data[..]));
-        let relative = self
-            .data
-            .relative
-            .iter()
-            .map(move |(id, data)| (InitExpr::Global(*id), &data[..]));
-        absolute.chain(relative)
     }
 }
 
@@ -98,7 +73,7 @@ impl ModuleMemories {
             initial,
             maximum,
             import: Some(import),
-            data: MemoryData::default(),
+            data_segments: Default::default(),
         });
         debug_assert_eq!(id, id2);
         id
@@ -114,7 +89,7 @@ impl ModuleMemories {
             initial,
             maximum,
             import: None,
-            data: MemoryData::default(),
+            data_segments: Default::default(),
         });
         debug_assert_eq!(id, id2);
         id
@@ -183,40 +158,5 @@ impl Emit for ModuleMemories {
             cx.indices.push_memory(memory.id());
             memory.emit(&mut cx);
         }
-    }
-}
-
-impl MemoryData {
-    /// Adds a new chunk of data in this `ModuleData` at an absolute address
-    pub fn add_absolute(&mut self, pos: u32, data: Vec<u8>) {
-        self.absolute.push((pos, data));
-    }
-
-    /// Adds a new chunk of data in this `ModuleData` at a relative address
-    pub fn add_relative(&mut self, id: GlobalId, data: Vec<u8>) {
-        self.relative.push((id, data));
-    }
-
-    /// Returns an iterator of all globals used as relative bases
-    pub fn globals<'a>(&'a self) -> impl Iterator<Item = GlobalId> + 'a {
-        self.relative.iter().map(|p| p.0)
-    }
-
-    /// Returns whether this data has no initialization sections
-    pub fn is_empty(&self) -> bool {
-        self.absolute.is_empty() && self.relative.is_empty()
-    }
-
-    /// Consumes this data and returns a by-value iterator of each segment
-    pub fn into_iter(self) -> impl Iterator<Item = (InitExpr, Vec<u8>)> {
-        let absolute = self
-            .absolute
-            .into_iter()
-            .map(move |(pos, data)| (InitExpr::Value(Value::I32(pos as i32)), data));
-        let relative = self
-            .relative
-            .into_iter()
-            .map(move |(id, data)| (InitExpr::Global(id), data));
-        absolute.chain(relative)
     }
 }

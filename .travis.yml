@@ -43,8 +43,16 @@ matrix:
     # A job to run our fuzzers a bit longer than the default.
     - name: "fuzz (stable)"
       rust: stable
+      env:
+        # 300 seconds = 5 minutes.
+        - WALRUS_FUZZ_TIMEOUT=300
       script:
-        - WALRUS_FUZZ_TIMEOUT=$((60 * 5)) cargo test -p walrus-fuzz
+        |
+          # When the fuzzing fails, the logs are too big for Travis, so just
+          # show the relevant tail portion of the log.
+          cargo test -p walrus-fuzz > fuzz.log || {
+              tail -n 1000 fuzz.log && exit 1
+          }
 
     - name: "check benches"
       rust: stable

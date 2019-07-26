@@ -4,6 +4,11 @@ use std::path::Path;
 use walrus::dot::Dot;
 
 fn run(wat: &Path) -> Result<(), failure::Error> {
+    static INIT_LOGS: std::sync::Once = std::sync::Once::new();
+    INIT_LOGS.call_once(|| {
+        env_logger::init();
+    });
+
     let wasm = walrus_tests_utils::wat2wasm(wat)?;
     let module = walrus::Module::from_buffer(&wasm)?;
 

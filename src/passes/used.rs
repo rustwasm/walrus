@@ -1,6 +1,8 @@
 use crate::ir::*;
 use crate::map::IdHashSet;
-use crate::{Data, DataId, Element, ExportId, ExportItem, Function, InitExpr};
+use crate::{
+    ActiveDataLocation, Data, DataId, DataKind, Element, ExportId, ExportItem, Function, InitExpr,
+};
 use crate::{FunctionId, FunctionKind, Global, GlobalId, LocalFunction};
 use crate::{GlobalKind, ImportKind, Memory, MemoryId, Table, TableId};
 use crate::{Module, TableKind, Type, TypeId};
@@ -42,6 +44,7 @@ impl Used {
             tables: Vec::new(),
             globals: Vec::new(),
             memories: Vec::new(),
+            datas: Vec::new(),
         };
 
         for r in roots {
@@ -63,7 +66,7 @@ impl Used {
             match import.kind {
                 ImportKind::Memory(m) => {
                     let mem = module.memories.get(m);
-                    if !mem.data.is_empty() {
+                    if !mem.data_segments.is_empty() {
                         stack.push_memory(m);
                     }
                 }
@@ -134,8 +137,18 @@ impl Used {
             }
 
             while let Some(t) = stack.memories.pop() {
-                for global in module.memories.get(t).data.globals() {
-                    stack.push_global(global);
+                for data in &module.memories.get(t).data_segments {
+                    stack.push_data(*data);
+                }
+            }
+
+            while let Some(d) = stack.datas.pop() {
+                let d = module.data.get(d);
+                if let DataKind::Active(ref a) = d.kind {
+                    stack.push_memory(a.memory);
+                    if let ActiveDataLocation::Relative(g) = a.location {
+                        stack.push_global(g);
+                    }
                 }
             }
         }
@@ -150,6 +163,7 @@ struct UsedStack<'a> {
     tables: Vec<TableId>,
     memories: Vec<MemoryId>,
     globals: Vec<GlobalId>,
+    datas: Vec<DataId>,
 }
 
 impl UsedStack<'_> {
@@ -174,6 +188,12 @@ impl UsedStack<'_> {
     fn push_memory(&mut self, f: MemoryId) {
         if self.used.memories.insert(f) {
             self.memories.push(f);
+        }
+    }
+
+    fn push_data(&mut self, d: DataId) {
+        if self.used.data.insert(d) {
+            self.datas.push(d);
         }
     }
 }
@@ -208,7 +228,7 @@ impl<'expr> Visitor<'expr> for UsedVisitor<'expr, '_> {
         self.stack.used.types.insert(t);
     }
 
-    fn visit_data_id(&mut self, &t: &DataId) {
-        self.stack.used.data.insert(t);
+    fn visit_data_id(&mut self, &d: &DataId) {
+        self.stack.push_data(d);
     }
 }

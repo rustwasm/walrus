@@ -11,7 +11,9 @@ use crate::ir::matcher::{ConstMatcher, Matcher};
 use crate::ir::*;
 use crate::map::{IdHashMap, IdHashSet};
 use crate::parse::IndicesToIds;
-use crate::{FunctionBuilder, FunctionId, Module, Result, TableKind, TypeId, ValType};
+use crate::{
+    Data, DataId, FunctionBuilder, FunctionId, Module, Result, TableKind, TypeId, ValType,
+};
 use failure::{bail, ResultExt};
 use id_arena::Id;
 use std::collections::BTreeMap;
@@ -177,6 +179,32 @@ impl LocalFunction {
             .exprs
             .iter()
             .all(|e| matcher.is_match(self, &self.get(*e)))
+    }
+
+    /// Collect the set of data segments that are used in this function via
+    /// `memory.init` or `data.drop` instructions.
+    pub fn used_data_segments(&self) -> IdHashSet<Data> {
+        let mut visitor = DataSegmentsVisitor {
+            func: self,
+            segments: Default::default(),
+        };
+        visitor.visit_block_id(&self.entry_block());
+        return visitor.segments;
+
+        struct DataSegmentsVisitor<'a> {
+            func: &'a LocalFunction,
+            segments: IdHashSet<Data>,
+        }
+
+        impl<'a> Visitor<'a> for DataSegmentsVisitor<'a> {
+            fn local_function(&self) -> &'a LocalFunction {
+                self.func
+            }
+
+            fn visit_data_id(&mut self, &id: &DataId) {
+                self.segments.insert(id);
+            }
+        }
     }
 
     fn used_locals(&self) -> IdHashSet<Local> {
@@ -1304,14 +1332,10 @@ fn validate_instruction(ctx: &mut ValidationContext, inst: Operator) -> Result<(
         }
 
         // Operator::V8x16Shuffle { .. } => bail!("v8x16.shuffle not supported"),
-
         Operator::V8x16Swizzle => {
             let (_, lanes) = ctx.pop_operand_expected(Some(V128))?;
             let (_, indices) = ctx.pop_operand_expected(Some(V128))?;
-            let expr = ctx.func.alloc(V128Swizzle {
-                lanes,
-                indices,
-            });
+            let expr = ctx.func.alloc(V128Swizzle { lanes, indices });
             ctx.push_operand(Some(V128), expr);
         }
 
@@ -1516,18 +1540,10 @@ fn validate_instruction(ctx: &mut ValidationContext, inst: Operator) -> Result<(
         Operator::I64TruncSSatF64 => one_op(ctx, F64, I64, UnaryOp::I64TruncSSatF64)?,
         Operator::I64TruncUSatF64 => one_op(ctx, F64, I64, UnaryOp::I64TruncUSatF64)?,
 
-        Operator::I8x16LoadSplat { memarg } => {
-            load_splat(ctx, memarg, LoadSplatKind::I8)?
-        }
-        Operator::I16x8LoadSplat { memarg } => {
-            load_splat(ctx, memarg, LoadSplatKind::I16)?
-        }
-        Operator::I32x4LoadSplat { memarg } => {
-            load_splat(ctx, memarg, LoadSplatKind::I32)?
-        }
-        Operator::I64x2LoadSplat { memarg } => {
-            load_splat(ctx, memarg, LoadSplatKind::I64)?
-        }
+        Operator::I8x16LoadSplat { memarg } => load_splat(ctx, memarg, LoadSplatKind::I8)?,
+        Operator::I16x8LoadSplat { memarg } => load_splat(ctx, memarg, LoadSplatKind::I16)?,
+        Operator::I32x4LoadSplat { memarg } => load_splat(ctx, memarg, LoadSplatKind::I32)?,
+        Operator::I64x2LoadSplat { memarg } => load_splat(ctx, memarg, LoadSplatKind::I64)?,
 
         op @ Operator::TableInit { .. }
         | op @ Operator::ElemDrop { .. }

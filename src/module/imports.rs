@@ -160,7 +160,12 @@ impl Module {
     }
 
     /// Add an imported function to this module
-    pub fn add_import_func(&mut self, module: &str, name: &str, ty: TypeId) -> (FunctionId, ImportId) {
+    pub fn add_import_func(
+        &mut self,
+        module: &str,
+        name: &str,
+        ty: TypeId,
+    ) -> (FunctionId, ImportId) {
         let import = self.imports.arena.next_id();
         let func = self.funcs.add_import(ty, import);
         self.imports.add(module, name, func);

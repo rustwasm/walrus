@@ -11,7 +11,9 @@ use crate::ir::matcher::{ConstMatcher, Matcher};
 use crate::ir::*;
 use crate::map::{IdHashMap, IdHashSet};
 use crate::parse::IndicesToIds;
-use crate::{FunctionBuilder, FunctionId, Module, Result, TableKind, TypeId, ValType};
+use crate::{
+    Data, DataId, FunctionBuilder, FunctionId, Module, Result, TableKind, TypeId, ValType,
+};
 use failure::{bail, ResultExt};
 use id_arena::Id;
 use std::collections::BTreeMap;
@@ -177,6 +179,32 @@ impl LocalFunction {
             .exprs
             .iter()
             .all(|e| matcher.is_match(self, &self.get(*e)))
+    }
+
+    /// Collect the set of data segments that are used in this function via
+    /// `memory.init` or `data.drop` instructions.
+    pub fn used_data_segments(&self) -> IdHashSet<Data> {
+        let mut visitor = DataSegmentsVisitor {
+            func: self,
+            segments: Default::default(),
+        };
+        visitor.visit_block_id(&self.entry_block());
+        return visitor.segments;
+
+        struct DataSegmentsVisitor<'a> {
+            func: &'a LocalFunction,
+            segments: IdHashSet<Data>,
+        }
+
+        impl<'a> Visitor<'a> for DataSegmentsVisitor<'a> {
+            fn local_function(&self) -> &'a LocalFunction {
+                self.func
+            }
+
+            fn visit_data_id(&mut self, &id: &DataId) {
+                self.segments.insert(id);
+            }
+        }
     }
 
     fn used_locals(&self) -> IdHashSet<Local> {

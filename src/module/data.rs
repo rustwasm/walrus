@@ -116,27 +116,39 @@ impl ModuleData {
     // Note that this is inaccordance with the upstream bulk memory proposal to
     // WebAssembly and isn't currently part of the WebAssembly standard.
     pub(crate) fn emit_data_count(&self, cx: &mut EmitContext) {
+        use rayon::iter::ParallelIterator;
+
+        if self.arena.len() == 0 {
+            return;
+        }
+
         let mut count = 0;
+        let mut any_passive = false;
 
         for data in self.iter() {
             cx.indices.set_data_index(data.id(), count as u32);
             count += 1;
+            any_passive |= data.is_passive();
         }
 
-        // Technically, we /could/ emit slightly smaller binaries by only adding
-        // this section when either:
+        // We only emit the `DataCount` section if there are passive data
+        // segments, or `data.drop` or `memory.init` instructions that use
+        // (passive or active) data segments. Yes! You can use `data.drop` and
+        // `memory.init` with active data segments, it just results in a runtime
+        // error.
         //
-        // * there are passive data segments, or
-        //
-        // * there are `memory.init` or `data.drop` instructions (99.99% overlap
-        //   with the previous case, but you technically can try and drop active
-        //   data segments and get a runtime error!)
-        //
-        // However, checking that second case can be somewhat expensive (iterate
-        // over every instruction in every function), so we just always emit the
-        // `DataCount` section when we have data segments. At most this is five
-        // unnecessary bytes, so not a big deal in the grand scheme of things.
-        cx.start_section(Section::DataCount).encoder.usize(count);
+        // The key is that we don't want to generate this section for MVP Wasm,
+        // which has niether passive data segments, nor the `data.drop` and
+        // `memory.init` instructions.
+        if any_passive
+            || cx
+                .module
+                .funcs
+                .par_iter_local()
+                .any(|(_, f)| !f.used_data_segments().is_empty())
+        {
+            cx.start_section(Section::DataCount).encoder.usize(count);
+        }
     }
 }
 

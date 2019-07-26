@@ -11,6 +11,11 @@ struct Test {
 }
 
 fn run(wast: &Path) -> Result<(), failure::Error> {
+    static INIT_LOGS: std::sync::Once = std::sync::Once::new();
+    INIT_LOGS.call_once(|| {
+        env_logger::init();
+    });
+
     let proposal = wast
         .iter()
         .skip_while(|part| *part != "proposals")

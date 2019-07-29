@@ -75,6 +75,8 @@ matrix:
 script:
   - cargo build --all
   - cargo test --all
+  - cargo test --features parallel
+  - cargo test --features parallel --manifest-path crates/tests/Cargo.toml
 
 notifications:
   email:

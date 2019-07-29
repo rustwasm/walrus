@@ -13,8 +13,10 @@ use crate::tombstone_arena::{Id, Tombstone, TombstoneArena};
 use crate::ty::TypeId;
 use crate::ty::ValType;
 use failure::bail;
-use rayon::prelude::*;
 use std::cmp;
+
+#[cfg(feature = "parallel")]
+use rayon::prelude::*;
 
 pub use self::local_function::LocalFunction;
 
@@ -206,6 +208,9 @@ impl ModuleFunctions {
     }
 
     /// Get a shared reference to this module's functions.
+    ///
+    /// Requires the `parallel` feature of this crate to be enabled.
+    #[cfg(feature = "parallel")]
     pub fn par_iter(&self) -> impl ParallelIterator<Item = &Function> {
         self.arena.par_iter().map(|(_, f)| f)
     }
@@ -219,6 +224,9 @@ impl ModuleFunctions {
     }
 
     /// Get a parallel iterator of this module's local functions
+    ///
+    /// Requires the `parallel` feature of this crate to be enabled.
+    #[cfg(feature = "parallel")]
     pub fn par_iter_local(&self) -> impl ParallelIterator<Item = (FunctionId, &LocalFunction)> {
         self.par_iter().filter_map(|f| match &f.kind {
             FunctionKind::Local(local) => Some((f.id(), local)),
@@ -232,6 +240,9 @@ impl ModuleFunctions {
     }
 
     /// Get a mutable reference to this module's functions.
+    ///
+    /// Requires the `parallel` feature of this crate to be enabled.
+    #[cfg(feature = "parallel")]
     pub fn par_iter_mut(&mut self) -> impl ParallelIterator<Item = &mut Function> {
         self.arena.par_iter_mut().map(|(_, f)| f)
     }
@@ -248,6 +259,9 @@ impl ModuleFunctions {
     }
 
     /// Get a parallel iterator of this module's local functions
+    ///
+    /// Requires the `parallel` feature of this crate to be enabled.
+    #[cfg(feature = "parallel")]
     pub fn par_iter_local_mut(
         &mut self,
     ) -> impl ParallelIterator<Item = (FunctionId, &mut LocalFunction)> {
@@ -379,8 +393,7 @@ impl Module {
 
         // Wasm modules can often have a lot of functions and this operation can
         // take some time, so parse all function bodies in parallel.
-        let results = bodies
-            .into_par_iter()
+        let results = maybe_parallel!(bodies.(into_iter | into_par_iter))
             .map(|(id, body, args, ty)| {
                 (id, LocalFunction::parse(self, indices, id, ty, args, body))
             })
@@ -435,8 +448,7 @@ impl Emit for ModuleFunctions {
         // Functions can typically take awhile to serialize, so serialize
         // everything in parallel. Afterwards we'll actually place all the
         // functions together.
-        let bytes = functions
-            .into_par_iter()
+        let bytes = maybe_parallel!(functions.(into_iter | into_par_iter))
             .map(|(id, func, _size)| {
                 log::debug!("emit function {:?} {:?}", id, cx.module.funcs.get(id).name);
                 let mut wasm = Vec::new();

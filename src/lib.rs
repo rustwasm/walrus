@@ -3,6 +3,20 @@
 #![deny(missing_debug_implementations)]
 #![deny(missing_docs)]
 
+#[cfg(feature = "parallel")]
+macro_rules! maybe_parallel {
+    ($e:ident.($serial:ident | $parallel:ident)) => {
+        $e.$parallel()
+    };
+}
+
+#[cfg(not(feature = "parallel"))]
+macro_rules! maybe_parallel {
+    ($e:ident.($serial:ident | $parallel:ident)) => {
+        $e.$serial()
+    };
+}
+
 mod arena_set;
 pub mod dot;
 mod emit;

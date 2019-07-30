@@ -4,8 +4,6 @@
 //! the stack machine into an expression tree. Additionally all control frames
 //! are representd as `Block`s.
 
-pub mod matcher;
-
 use crate::encode::Encoder;
 use crate::{DataId, FunctionId, GlobalId, MemoryId, TableId, TypeId, ValType};
 use id_arena::Id;

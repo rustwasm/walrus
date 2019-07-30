@@ -6,7 +6,6 @@ mod emit;
 use self::context::ValidationContext;
 use crate::emit::IdsToIndices;
 use crate::encode::Encoder;
-use crate::ir::matcher::{ConstMatcher, Matcher};
 use crate::ir::*;
 use crate::map::{IdHashMap, IdHashSet};
 use crate::parse::IndicesToIds;
@@ -170,12 +169,10 @@ impl LocalFunction {
     /// Is this function's body a [constant
     /// expression](https://webassembly.github.io/spec/core/valid/instructions.html#constant-expressions)?
     pub fn is_const(&self) -> bool {
-        let entry = self.block(self.entry_block());
-        let matcher = ConstMatcher::new();
-        entry
+        self.block(self.entry_block())
             .exprs
             .iter()
-            .all(|e| matcher.is_match(self, &self.get(*e)))
+            .all(|e| self.exprs.arena[*e].is_const())
     }
 
     /// Collect the set of data segments that are used in this function via

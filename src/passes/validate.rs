@@ -8,8 +8,10 @@ use crate::ValType;
 use crate::{Function, FunctionKind, InitExpr, LocalFunction, Result};
 use crate::{Global, GlobalKind, Memory, MemoryId, Module, Table, TableKind};
 use failure::{bail, ResultExt};
-use rayon::prelude::*;
 use std::collections::HashSet;
+
+#[cfg(feature = "parallel")]
+use rayon::prelude::*;
 
 /// Validate a wasm module, returning an error if it fails to validate.
 pub fn run(module: &Module) -> Result<()> {
@@ -46,9 +48,8 @@ pub fn run(module: &Module) -> Result<()> {
 
     // Validate each function in the module, collecting errors and returning
     // them all at once if there are any.
-    let errs = module
-        .funcs
-        .par_iter()
+    let funcs = &module.funcs;
+    let errs = maybe_parallel!(funcs.(iter | par_iter))
         .map(|function| {
             let mut errs = Vec::new();
             let local = match &function.kind {
@@ -64,16 +65,13 @@ pub fn run(module: &Module) -> Result<()> {
             local.entry_block().visit(&mut cx);
             errs
         })
-        .reduce(Vec::new, |mut a, b| {
-            a.extend(b);
-            a
-        });
-    if errs.len() == 0 {
+        .collect::<Vec<_>>();
+    if errs.iter().all(|e| e.is_empty()) {
         return Ok(());
     }
 
     let mut msg = format!("errors validating module:\n");
-    for error in errs {
+    for error in errs.into_iter().flat_map(|v| v) {
         msg.push_str(&format!("  * {}\n", error));
         for cause in error.iter_causes() {
             msg.push_str(&format!("    * {}\n", cause));

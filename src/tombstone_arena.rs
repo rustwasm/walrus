@@ -1,8 +1,11 @@
 use crate::map::IdHashSet;
 use id_arena::Arena as InnerArena;
-use rayon::iter::plumbing::UnindexedConsumer;
-use rayon::prelude::*;
 use std::ops::{Index, IndexMut};
+
+#[cfg(feature = "parallel")]
+use rayon::iter::plumbing::UnindexedConsumer;
+#[cfg(feature = "parallel")]
+use rayon::prelude::*;
 
 pub use id_arena::Id;
 
@@ -105,6 +108,7 @@ impl<T> TombstoneArena<T> {
         }
     }
 
+    #[cfg(feature = "parallel")]
     pub fn par_iter(&self) -> impl ParallelIterator<Item = (Id<T>, &T)>
     where
         T: Sync,
@@ -114,6 +118,7 @@ impl<T> TombstoneArena<T> {
             .filter(move |&(id, _)| !self.dead.contains(&id))
     }
 
+    #[cfg(feature = "parallel")]
     pub fn par_iter_mut(&mut self) -> ParIterMut<T>
     where
         T: Send + Sync,
@@ -161,11 +166,13 @@ impl<'a, T: 'a> Iterator for IterMut<'a, T> {
 }
 
 #[derive(Debug)]
+#[cfg(feature = "parallel")]
 pub struct ParIterMut<'a, T: 'a + Send + Sync> {
     dead: &'a IdHashSet<T>,
     inner: id_arena::ParIterMut<'a, T, id_arena::DefaultArenaBehavior<T>>,
 }
 
+#[cfg(feature = "parallel")]
 impl<'a, T> ParallelIterator for ParIterMut<'a, T>
 where
     T: Send + Sync,

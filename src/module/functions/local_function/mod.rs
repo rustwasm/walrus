@@ -4,7 +4,6 @@ mod context;
 mod emit;
 
 use self::context::ValidationContext;
-use crate::dot::Dot;
 use crate::emit::IdsToIndices;
 use crate::encode::Encoder;
 use crate::ir::matcher::{ConstMatcher, Matcher};
@@ -15,9 +14,7 @@ use crate::{
     Data, DataId, FunctionBuilder, FunctionId, Module, Result, TableKind, TypeId, ValType,
 };
 use failure::{bail, ResultExt};
-use id_arena::Id;
 use std::collections::BTreeMap;
-use std::mem;
 use wasmparser::Operator;
 
 /// A function defined locally within the wasm module.
@@ -294,75 +291,6 @@ impl LocalFunction {
         dst: &mut Encoder,
     ) {
         emit::run(self, indices, local_indices, dst)
-    }
-}
-
-impl Dot for LocalFunction {
-    fn dot(&self, out: &mut String) {
-        out.push_str("digraph {\n");
-        out.push_str("rankdir=LR;\n");
-
-        let v = &mut DotExpr {
-            out,
-            func: self,
-            id: self.entry_block().into(),
-            needs_close: false,
-        };
-        v.out.push_str("subgraph unreachable {\n");
-        self.entry_block().visit(v);
-        v.close_previous();
-        v.out.push_str("}\n");
-        out.push_str("}\n");
-    }
-}
-
-pub(crate) struct DotExpr<'a, 'b> {
-    pub(crate) out: &'a mut String,
-    pub(crate) func: &'b LocalFunction,
-    id: ExprId,
-    needs_close: bool,
-}
-
-impl DotExpr<'_, '_> {
-    pub(crate) fn expr_id(&mut self, id: ExprId) {
-        self.close_previous();
-        let prev = mem::replace(&mut self.id, id);
-        id.dot(self.out);
-        self.out.push_str(
-            " [label=<<table cellborder=\"0\" border=\"0\"><tr><td><font face=\"monospace\">",
-        );
-        self.needs_close = true;
-        id.visit(self);
-        self.close_previous();
-        self.id = prev;
-    }
-
-    pub(crate) fn id<T>(&mut self, id: Id<T>) {
-        self.out.push_str(" ");
-        self.out.push_str(&id.index().to_string());
-    }
-
-    fn close_previous(&mut self) {
-        if self.needs_close {
-            self.out.push_str("</font></td></tr></table>>];\n")
-        }
-        self.needs_close = false;
-    }
-
-    pub(crate) fn edge<E, S>(&mut self, to: E, label: S)
-    where
-        E: Into<ExprId>,
-        S: AsRef<str>,
-    {
-        self._edge(to.into(), label.as_ref())
-    }
-
-    fn _edge(&mut self, to: ExprId, label: &str) {
-        self.close_previous();
-        self.id.dot(self.out);
-        self.out.push_str(" -> ");
-        to.dot(self.out);
-        self.out.push_str(&format!(" [label=\"{}\"];\n", label));
     }
 }
 

@@ -6,9 +6,7 @@
 
 pub mod matcher;
 
-use crate::dot::Dot;
 use crate::encode::Encoder;
-use crate::module::DotExpr;
 use crate::{DataId, FunctionId, GlobalId, MemoryId, TableId, TypeId, ValType};
 use id_arena::Id;
 use std::fmt;
@@ -46,12 +44,6 @@ impl Local {
 
 /// An identifier for a particular expression.
 pub type ExprId = Id<Expr>;
-
-impl Dot for ExprId {
-    fn dot(&self, out: &mut String) {
-        out.push_str(&format!("expr_{}", self.index()))
-    }
-}
 
 /// A trait for anything that is an AST node in our IR.
 ///
@@ -109,7 +101,6 @@ pub enum BlockKind {
 #[derive(Clone, Debug)]
 pub enum Expr {
     /// A block of multiple expressions, and also a control frame.
-    #[walrus(dot_name = dot_block_name)]
     Block {
         /// What kind of block is this?
         #[walrus(skip_visit)] // nothing to recurse
@@ -189,7 +180,6 @@ pub enum Expr {
     },
 
     /// Binary operations, those requiring two operands
-    #[walrus(dot_name = dot_binop_name)]
     Binop {
         /// The operation being performed
         #[walrus(skip_visit)]
@@ -201,7 +191,6 @@ pub enum Expr {
     },
 
     /// Unary operations, those requiring one operand
-    #[walrus(dot_name = dot_unop_name)]
     Unop {
         /// The operation being performed
         #[walrus(skip_visit)]
@@ -1227,21 +1216,4 @@ impl VisitMut for ExprId {
         visitor.visit_expr_mut(&mut expr);
         *visitor.local_function_mut().get_mut(*self) = expr;
     }
-}
-
-fn dot_block_name(block: &Block, out: &mut DotExpr<'_, '_>) {
-    match block.kind {
-        BlockKind::Loop => out.out.push_str("loop"),
-        BlockKind::IfElse => out.out.push_str("if_else"),
-        BlockKind::FunctionEntry => out.out.push_str("entry"),
-        BlockKind::Block => out.out.push_str("block"),
-    }
-}
-
-fn dot_binop_name(e: &Binop, out: &mut DotExpr<'_, '_>) {
-    out.out.push_str(&format!("{:?}", e.op))
-}
-
-fn dot_unop_name(e: &Unop, out: &mut DotExpr<'_, '_>) {
-    out.out.push_str(&format!("{:?}", e.op))
 }

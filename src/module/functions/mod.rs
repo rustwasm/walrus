@@ -2,7 +2,6 @@
 
 mod local_function;
 
-use crate::dot::Dot;
 use crate::emit::{Emit, EmitContext, Section};
 use crate::encode::Encoder;
 use crate::error::Result;
@@ -19,9 +18,6 @@ use std::cmp;
 use rayon::prelude::*;
 
 pub use self::local_function::LocalFunction;
-
-// have generated impls from the `#[walrus_expr]` macro
-pub(crate) use self::local_function::DotExpr;
 
 /// A function identifier.
 pub type FunctionId = Id<Function>;
@@ -74,16 +70,6 @@ impl Function {
     }
 }
 
-impl Dot for Function {
-    fn dot(&self, out: &mut String) {
-        match &self.kind {
-            FunctionKind::Import(i) => i.dot(out),
-            FunctionKind::Local(l) => l.dot(out),
-            FunctionKind::Uninitialized(_) => unreachable!(),
-        }
-    }
-}
-
 /// The local- or external-specific bits of a function.
 #[derive(Debug)]
 pub enum FunctionKind {
@@ -127,12 +113,6 @@ pub struct ImportedFunction {
     pub import: ImportId,
     /// The type signature of this imported function.
     pub ty: TypeId,
-}
-
-impl Dot for ImportedFunction {
-    fn dot(&self, out: &mut String) {
-        out.push_str("digraph {{ imported_function; }}");
-    }
 }
 
 /// The set of functions within a module.

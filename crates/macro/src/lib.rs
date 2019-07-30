@@ -28,14 +28,12 @@ pub fn walrus_expr(_attr: TokenStream, input: TokenStream) -> TokenStream {
     let types = create_types(&input.attrs, &variants);
     let visit = create_visit(&variants);
     let matchers = create_matchers(&variants);
-    let dot = create_dot(&variants);
     let builder = create_builder(&variants);
 
     let expanded = quote! {
         #types
         #visit
         #matchers
-        #dot
         #builder
     };
 
@@ -52,7 +50,6 @@ struct WalrusVariant {
 struct WalrusVariantOpts {
     display_name: Option<syn::Ident>,
     display_extra: Option<syn::Ident>,
-    dot_name: Option<syn::Ident>,
 }
 
 #[derive(Default)]
@@ -121,7 +118,6 @@ impl Parse for WalrusVariantOpts {
         enum Attr {
             DisplayName(syn::Ident),
             DisplayExtra(syn::Ident),
-            DotName(syn::Ident),
         }
 
         let attrs = Punctuated::<_, syn::token::Comma>::parse_terminated(input)?;
@@ -130,7 +126,6 @@ impl Parse for WalrusVariantOpts {
             match attr {
                 Attr::DisplayName(ident) => ret.display_name = Some(ident),
                 Attr::DisplayExtra(ident) => ret.display_extra = Some(ident),
-                Attr::DotName(ident) => ret.dot_name = Some(ident),
             }
         }
         return Ok(ret);
@@ -147,11 +142,6 @@ impl Parse for WalrusVariantOpts {
                     input.parse::<Token![=]>()?;
                     let name = input.call(Ident::parse_any)?;
                     return Ok(Attr::DisplayExtra(name));
-                }
-                if attr == "dot_name" {
-                    input.parse::<Token![=]>()?;
-                    let name = input.call(Ident::parse_any)?;
-                    return Ok(Attr::DotName(name));
                 }
                 return Err(Error::new(attr.span(), "unexpected attribute"));
             }
@@ -805,94 +795,6 @@ fn create_matchers(variants: &[WalrusVariant]) -> impl quote::ToTokens {
             use super::matcher::Matcher;
 
             #( #matchers )*
-        }
-    }
-}
-
-fn create_dot(variants: &[WalrusVariant]) -> impl quote::ToTokens {
-    let mut dot_methods = Vec::new();
-    for variant in variants {
-        let name = &variant.syn.ident;
-
-        let mut method_name = "visit_".to_string();
-        method_name.push_str(&name.to_string().to_snake_case());
-        let method_name = syn::Ident::new(&method_name, Span::call_site());
-
-        let instr_name = match &variant.opts.dot_name {
-            Some(f) => quote! { #f(expr, self) },
-            None => {
-                let instr = name.to_string().to_snake_case().replace("_", ".");
-                quote! { self.out.push_str(#instr) }
-            }
-        };
-        let field_edges = visit_fields(variant, false)
-            .filter(|(method, _, _)| method == "visit_expr_id" || method == "visit_block_id")
-            .map(|(_ty, accessor, list)| {
-                if list {
-                    quote! {
-                        for (i, item) in expr.#accessor.iter().enumerate() {
-                            let name = format!(concat!(stringify!(#accessor), "[{}]"), i);
-                            self.edge(*item, &name);
-                        }
-                    }
-                } else {
-                    quote! {
-                        self.edge(expr.#accessor, stringify!(#accessor));
-                    }
-                }
-            });
-        dot_methods.push(quote! {
-            fn #method_name(&mut self, expr: &#name) {
-                #instr_name;
-                expr.visit(self);
-                #(#field_edges)*
-            }
-        });
-    }
-    quote! {
-        impl<'expr> Visitor<'expr> for crate::module::DotExpr<'_, 'expr> {
-            fn local_function(&self) -> &'expr crate::LocalFunction {
-                self.func
-            }
-
-            fn visit_expr_id(&mut self, expr: &ExprId) {
-                self.expr_id(*expr);
-            }
-
-            fn visit_local_id(&mut self, local: &crate::LocalId) {
-                self.id(*local);
-            }
-
-            fn visit_memory_id(&mut self, memory: &crate::MemoryId) {
-                self.id(*memory);
-            }
-
-            fn visit_table_id(&mut self, table: &crate::TableId) {
-                self.id(*table);
-            }
-
-            fn visit_global_id(&mut self, global: &crate::GlobalId) {
-                self.id(*global);
-            }
-
-            fn visit_function_id(&mut self, function: &crate::FunctionId) {
-                self.id(*function);
-            }
-
-            fn visit_type_id(&mut self, ty: &crate::TypeId) {
-                self.id(*ty);
-            }
-
-            fn visit_data_id(&mut self, data: &crate::DataId) {
-                self.id(*data);
-            }
-
-            fn visit_value(&mut self, value: &crate::ir::Value) {
-                self.out.push_str(" ");
-                self.out.push_str(&value.to_string());
-            }
-
-            #(#dot_methods)*
         }
     }
 }

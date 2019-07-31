@@ -15,20 +15,16 @@ pub(crate) fn run(
     let mut v = Emit {
         func,
         indices,
-        id: func.entry_block().into(),
         blocks: vec![],
         encoder,
         local_indices,
     };
-    v.visit(func.entry_block());
+    v.visit_block_id(BlockKind::FunctionEntry, func.entry_block());
 }
 
 struct Emit<'a, 'b> {
     // The function we are visiting.
     func: &'a LocalFunction,
-
-    // The id of the current expression.
-    id: ExprId,
 
     // Needed so we can map locals to their indices.
     indices: &'a IdsToIndices,
@@ -36,52 +32,29 @@ struct Emit<'a, 'b> {
 
     // Stack of blocks that we are currently emitting instructions for. A branch
     // is only valid if its target is one of these blocks.
-    blocks: Vec<BlockId>,
+    blocks: Vec<InstrSeqId>,
 
     // The instruction sequence we are building up to emit.
     encoder: &'a mut Encoder<'b>,
 }
 
 impl Emit<'_, '_> {
-    fn visit<E>(&mut self, e: E)
-    where
-        E: Into<ExprId>,
-    {
-        self.visit_expr_id(e.into())
-    }
+    fn visit(&mut self, instr: &Instr) {
+        use self::Instr::*;
 
-    fn visit_expr_id(&mut self, id: ExprId) {
-        use self::Expr::*;
-
-        let old = self.id;
-        self.id = id;
-
-        match self.func.get(id) {
+        match instr {
             Const(e) => e.value.emit(self.encoder),
-            Block(e) => self.visit_block(e),
+            Block(e) => self.visit_block_id(BlockKind::Block, e.seq),
+            Loop(e) => self.visit_block_id(BlockKind::Loop, e.seq),
             BrTable(e) => self.visit_br_table(e),
             IfElse(e) => self.visit_if_else(e),
 
-            Drop(e) => {
-                self.visit(e.expr);
+            Drop(_) => {
                 self.encoder.byte(0x1a); // drop
             }
 
-            Return(e) => {
-                for x in e.values.iter() {
-                    self.visit(*x);
-                }
+            Return(_) => {
                 self.encoder.byte(0x0f); // return
-            }
-
-            WithSideEffects(e) => {
-                for x in e.before.iter() {
-                    self.visit(*x);
-                }
-                self.visit(e.value);
-                for x in e.after.iter() {
-                    self.visit(*x);
-                }
             }
 
             MemorySize(e) => {
@@ -91,16 +64,12 @@ impl Emit<'_, '_> {
             }
 
             MemoryGrow(e) => {
-                self.visit(e.pages);
                 let idx = self.indices.get_memory_index(e.memory);
                 self.encoder.byte(0x40); // memory.grow
                 self.encoder.u32(idx);
             }
 
             MemoryInit(e) => {
-                self.visit(e.memory_offset);
-                self.visit(e.data_offset);
-                self.visit(e.len);
                 self.encoder.raw(&[0xfc, 0x08]); // memory.init
                 let idx = self.indices.get_data_index(e.data);
                 self.encoder.u32(idx);
@@ -116,9 +85,6 @@ impl Emit<'_, '_> {
             }
 
             MemoryCopy(e) => {
-                self.visit(e.dst_offset);
-                self.visit(e.src_offset);
-                self.visit(e.len);
                 self.encoder.raw(&[0xfc, 0x0a]); // memory.copy
                 let idx = self.indices.get_memory_index(e.src);
                 assert_eq!(idx, 0);
@@ -129,9 +95,6 @@ impl Emit<'_, '_> {
             }
 
             MemoryFill(e) => {
-                self.visit(e.offset);
-                self.visit(e.value);
-                self.visit(e.len);
                 self.encoder.raw(&[0xfc, 0x0b]); // memory.fill
                 let idx = self.indices.get_memory_index(e.memory);
                 assert_eq!(idx, 0);
@@ -140,9 +103,6 @@ impl Emit<'_, '_> {
 
             Binop(e) => {
                 use crate::ir::BinaryOp::*;
-
-                self.visit(e.lhs);
-                self.visit(e.rhs);
 
                 match e.op {
                     I32Eq => self.encoder.byte(0x46),
@@ -337,7 +297,6 @@ impl Emit<'_, '_> {
             Unop(e) => {
                 use crate::ir::UnaryOp::*;
 
-                self.visit(e.expr);
                 match e.op {
                     I32Eqz => self.encoder.byte(0x45),
                     I32Clz => self.encoder.byte(0x67),
@@ -480,10 +439,7 @@ impl Emit<'_, '_> {
                 }
             }
 
-            Select(e) => {
-                self.visit(e.alternative);
-                self.visit(e.consequent);
-                self.visit(e.condition);
+            Select(_) => {
                 self.encoder.byte(0x1b); // select
             }
 
@@ -492,38 +448,24 @@ impl Emit<'_, '_> {
             }
 
             Br(e) => {
-                for x in e.args.iter() {
-                    self.visit(*x);
-                }
                 let target = self.branch_target(e.block);
                 self.encoder.byte(0x0c); // br
                 self.encoder.u32(target);
             }
 
             BrIf(e) => {
-                for x in e.args.iter() {
-                    self.visit(*x);
-                }
-                self.visit(e.condition);
                 let target = self.branch_target(e.block);
                 self.encoder.byte(0x0d); // br_if
                 self.encoder.u32(target);
             }
 
             Call(e) => {
-                for x in e.args.iter() {
-                    self.visit(*x);
-                }
                 let idx = self.indices.get_func_index(e.func);
                 self.encoder.byte(0x10); // call
                 self.encoder.u32(idx);
             }
 
             CallIndirect(e) => {
-                for x in e.args.iter() {
-                    self.visit(*x);
-                }
-                self.visit(e.func);
                 let idx = self.indices.get_type_index(e.ty);
                 let table = self.indices.get_table_index(e.table);
                 self.encoder.byte(0x11); // call_indirect
@@ -538,14 +480,12 @@ impl Emit<'_, '_> {
             }
 
             LocalSet(e) => {
-                self.visit(e.value);
                 let idx = self.local_indices[&e.local];
                 self.encoder.byte(0x21); // local.set
                 self.encoder.u32(idx);
             }
 
             LocalTee(e) => {
-                self.visit(e.value);
                 let idx = self.local_indices[&e.local];
                 self.encoder.byte(0x22); // local.tee
                 self.encoder.u32(idx);
@@ -558,7 +498,6 @@ impl Emit<'_, '_> {
             }
 
             GlobalSet(e) => {
-                self.visit(e.value);
                 let idx = self.indices.get_global_index(e.global);
                 self.encoder.byte(0x24); // global.set
                 self.encoder.u32(idx);
@@ -567,7 +506,6 @@ impl Emit<'_, '_> {
             Load(e) => {
                 use crate::ir::ExtendedLoad::*;
                 use crate::ir::LoadKind::*;
-                self.visit(e.address);
                 match e.kind {
                     I32 { atomic: false } => self.encoder.byte(0x28), // i32.load
                     I32 { atomic: true } => self.encoder.raw(&[0xfe, 0x10]), // i32.atomic.load
@@ -607,8 +545,6 @@ impl Emit<'_, '_> {
 
             Store(e) => {
                 use crate::ir::StoreKind::*;
-                self.visit(e.address);
-                self.visit(e.value);
                 match e.kind {
                     I32 { atomic: false } => self.encoder.byte(0x36), // i32.store
                     I32 { atomic: true } => self.encoder.raw(&[0xfe, 0x17]), // i32.atomic.store
@@ -634,9 +570,6 @@ impl Emit<'_, '_> {
             AtomicRmw(e) => {
                 use crate::ir::AtomicOp::*;
                 use crate::ir::AtomicWidth::*;
-
-                self.visit(e.address);
-                self.visit(e.value);
 
                 self.encoder.byte(0xfe);
                 self.encoder.byte(match (e.op, e.width) {
@@ -695,10 +628,6 @@ impl Emit<'_, '_> {
             Cmpxchg(e) => {
                 use crate::ir::AtomicWidth::*;
 
-                self.visit(e.address);
-                self.visit(e.expected);
-                self.visit(e.replacement);
-
                 self.encoder.byte(0xfe);
                 self.encoder.byte(match e.width {
                     I32 => 0x48,
@@ -714,40 +643,28 @@ impl Emit<'_, '_> {
             }
 
             AtomicNotify(e) => {
-                self.visit(e.address);
-                self.visit(e.count);
-
                 self.encoder.byte(0xfe);
                 self.encoder.byte(0x00);
                 self.memarg(e.memory, &e.arg);
             }
 
             AtomicWait(e) => {
-                self.visit(e.address);
-                self.visit(e.expected);
-                self.visit(e.timeout);
-
                 self.encoder.byte(0xfe);
                 self.encoder.byte(if e.sixty_four { 0x02 } else { 0x01 });
                 self.memarg(e.memory, &e.arg);
             }
 
             TableGet(e) => {
-                self.visit(e.index);
                 self.encoder.byte(0x25);
                 let idx = self.indices.get_table_index(e.table);
                 self.encoder.u32(idx);
             }
             TableSet(e) => {
-                self.visit(e.index);
-                self.visit(e.value);
                 self.encoder.byte(0x26);
                 let idx = self.indices.get_table_index(e.table);
                 self.encoder.u32(idx);
             }
             TableGrow(e) => {
-                self.visit(e.value);
-                self.visit(e.amount);
                 self.encoder.raw(&[0xfc, 0x0f]);
                 let idx = self.indices.get_table_index(e.table);
                 self.encoder.u32(idx);
@@ -760,30 +677,21 @@ impl Emit<'_, '_> {
             RefNull(_e) => {
                 self.encoder.byte(0xd0);
             }
-            RefIsNull(e) => {
-                self.visit(e.value);
+            RefIsNull(_e) => {
                 self.encoder.byte(0xd1);
             }
 
-            V128Bitselect(e) => {
-                self.visit(e.v1);
-                self.visit(e.v2);
-                self.visit(e.mask);
+            V128Bitselect(_) => {
                 self.simd(0x50);
             }
-            V128Swizzle(e) => {
-                self.visit(e.lanes);
-                self.visit(e.indices);
+            V128Swizzle(_) => {
                 self.simd(0xc0);
             }
             V128Shuffle(e) => {
-                self.visit(e.a);
-                self.visit(e.b);
                 self.simd(0xc1);
                 self.encoder.raw(&e.indices);
             }
             LoadSplat(e) => {
-                self.visit(e.address);
                 match e.kind {
                     LoadSplatKind::I8 => self.simd(0xc2),
                     LoadSplatKind::I16 => self.simd(0xc3),
@@ -794,36 +702,42 @@ impl Emit<'_, '_> {
                 self.memarg(e.memory, &e.arg);
             }
         }
-
-        self.id = old;
     }
 
-    fn branch_target(&self, block: BlockId) -> u32 {
-        self.blocks.iter().rev().position(|b| *b == block).expect(
+    fn branch_target(&self, block: InstrSeqId) -> u32 {
+        self.blocks
+            .iter()
+            .rev()
+            .position(|b| *b == block)
+            .expect(
             "attempt to branch to invalid block; bad transformation pass introduced bad branching?",
         ) as u32
     }
 
-    fn visit_block(&mut self, e: &Block) {
-        self.blocks.push(Block::new_id(self.id));
+    fn visit_block_id(&mut self, kind: BlockKind, block_id: InstrSeqId) {
+        self.visit_block(kind, self.func.block(block_id))
+    }
 
-        match e.kind {
+    fn visit_block(&mut self, kind: BlockKind, block: &InstrSeq) {
+        self.blocks.push(block.id());
+
+        match kind {
             BlockKind::Block => {
                 self.encoder.byte(0x02); // block
-                self.block_type(&e.results);
+                self.block_type(&block.results);
             }
             BlockKind::Loop => {
                 self.encoder.byte(0x03); // loop
-                self.block_type(&e.results);
+                self.block_type(&block.results);
             }
             BlockKind::FunctionEntry | BlockKind::IfElse => {}
         }
 
-        for x in &e.exprs {
-            self.visit(*x);
+        for x in &block.instrs {
+            self.visit(x);
         }
 
-        match e.kind {
+        match kind {
             BlockKind::Block | BlockKind::Loop | BlockKind::FunctionEntry => {
                 self.encoder.byte(0x0b); // end
             }
@@ -834,27 +748,20 @@ impl Emit<'_, '_> {
     }
 
     fn visit_if_else(&mut self, e: &IfElse) {
-        self.visit(e.condition);
-
         self.encoder.byte(0x04); // if
         let consequent = self.func.block(e.consequent);
         self.block_type(&consequent.results);
 
-        self.visit(e.consequent);
+        self.visit_block(BlockKind::IfElse, consequent);
 
         // TODO: don't emit `else` for empty else blocks
         self.encoder.byte(0x05); // else
-        self.visit(e.alternative);
+        self.visit_block_id(BlockKind::IfElse, e.alternative);
 
         self.encoder.byte(0x0b); // end
     }
 
     fn visit_br_table(&mut self, e: &BrTable) {
-        for x in e.args.iter() {
-            self.visit(*x);
-        }
-        self.visit(e.which);
-
         self.encoder.byte(0x0e); // br_table
         self.encoder.usize(e.blocks.len());
         for b in e.blocks.iter() {

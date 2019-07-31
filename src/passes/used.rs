@@ -168,30 +168,35 @@ struct UsedStack<'a> {
 
 impl UsedStack<'_> {
     fn push_func(&mut self, f: FunctionId) {
+        log::trace!("function is used: {:?}", f);
         if self.used.funcs.insert(f) {
             self.functions.push(f);
         }
     }
 
     fn push_table(&mut self, f: TableId) {
+        log::trace!("table is used: {:?}", f);
         if self.used.tables.insert(f) {
             self.tables.push(f);
         }
     }
 
     fn push_global(&mut self, f: GlobalId) {
+        log::trace!("global is used: {:?}", f);
         if self.used.globals.insert(f) {
             self.globals.push(f);
         }
     }
 
     fn push_memory(&mut self, f: MemoryId) {
+        log::trace!("memory is used: {:?}", f);
         if self.used.memories.insert(f) {
             self.memories.push(f);
         }
     }
 
     fn push_data(&mut self, d: DataId) {
+        log::trace!("data is used: {:?}", d);
         if self.used.data.insert(d) {
             self.datas.push(d);
         }

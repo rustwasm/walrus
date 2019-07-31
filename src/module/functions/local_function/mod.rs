@@ -19,42 +19,25 @@ use wasmparser::Operator;
 /// A function defined locally within the wasm module.
 #[derive(Debug)]
 pub struct LocalFunction {
-    /// This function's type.
-    pub ty: TypeId,
+    /// All of this function's instructions, contained in the arena.
+    builder: FunctionBuilder,
 
-    /// All of this function's expressions, contained in the arena.
-    exprs: FunctionBuilder,
-
-    /// Arguments to this function, and the locals that they're assigned to
+    /// Arguments to this function, and the locals that they're assigned to.
     pub args: Vec<LocalId>,
-
-    /// The entry block for this function. Always `Some` after the constructor
-    /// returns.
-    entry: Option<BlockId>,
     //
-    // TODO: provenance: ExprId -> offset in code section of the original
-    // instruction. This will be necessary for preserving debug info.
+    // TODO: provenance: (InstrSeqId, usize) -> offset in code section of the
+    // original instruction. This will be necessary for preserving debug info.
 }
 
 impl LocalFunction {
-    /// Creates a new definition of a local function from its components
-    pub(crate) fn new(
-        ty: TypeId,
-        args: Vec<LocalId>,
-        exprs: FunctionBuilder,
-        entry: BlockId,
-    ) -> LocalFunction {
-        LocalFunction {
-            ty,
-            args,
-            entry: Some(entry),
-            exprs,
-        }
+    /// Creates a new definition of a local function from its components.
+    pub(crate) fn new(args: Vec<LocalId>, builder: FunctionBuilder) -> LocalFunction {
+        LocalFunction { args, builder }
     }
 
     /// Construct a new `LocalFunction`.
     ///
-    /// Validates the given function body and constructs the `Expr` IR at the
+    /// Validates the given function body and constructs the `Instr` IR at the
     /// same time.
     pub(crate) fn parse(
         module: &Module,
@@ -65,10 +48,8 @@ impl LocalFunction {
         body: wasmparser::OperatorsReader,
     ) -> Result<LocalFunction> {
         let mut func = LocalFunction {
-            ty,
-            exprs: FunctionBuilder::new(),
+            builder: FunctionBuilder::without_entry(ty),
             args,
-            entry: None,
         };
 
         let result: Vec<_> = module.types.get(ty).results().iter().cloned().collect();
@@ -81,7 +62,7 @@ impl LocalFunction {
         let mut ctx = ValidationContext::new(module, indices, id, &mut func, operands, controls);
 
         let entry = ctx.push_control(BlockKind::FunctionEntry, result.clone(), result);
-        ctx.func.entry = Some(entry);
+        ctx.func.builder.entry = Some(entry);
         for inst in body {
             let inst = inst?;
             validate_instruction(&mut ctx, inst)?;
@@ -96,83 +77,79 @@ impl LocalFunction {
         Ok(func)
     }
 
-    pub(crate) fn alloc<T>(&mut self, val: T) -> T::Id
-    where
-        T: Ast,
-    {
-        self.exprs.alloc(val)
+    /// Get this function's type.
+    #[inline]
+    pub fn ty(&self) -> TypeId {
+        self.builder.ty
+    }
+
+    pub(crate) fn add_block(
+        &mut self,
+        make_block: impl FnOnce(InstrSeqId) -> InstrSeq,
+    ) -> InstrSeqId {
+        self.builder.arena.alloc_with_id(make_block)
     }
 
     /// Get the id of this function's entry block.
-    pub fn entry_block(&self) -> BlockId {
-        self.entry.unwrap()
+    pub fn entry_block(&self) -> InstrSeqId {
+        self.builder.entry.unwrap()
     }
 
     /// Get the block associated with the given id.
-    pub fn block(&self, block: BlockId) -> &Block {
-        self.get(block.into()).unwrap_block()
+    pub fn block(&self, id: InstrSeqId) -> &InstrSeq {
+        &self.builder.arena[id]
     }
 
     /// Get the block associated with the given id.
-    pub fn block_mut(&mut self, block: BlockId) -> &mut Block {
-        self.get_mut(block.into()).unwrap_block_mut()
+    pub fn block_mut(&mut self, id: InstrSeqId) -> &mut InstrSeq {
+        &mut self.builder.arena[id]
     }
 
-    /// Get the expression associated with the given id
-    pub fn get(&self, id: ExprId) -> &Expr {
-        &self.exprs.arena[id]
-    }
-
-    /// Get the expression associated with the given id
-    pub fn get_mut(&mut self, id: ExprId) -> &mut Expr {
-        &mut self.exprs.arena[id]
-    }
-
-    /// Get access to a `FunctionBuilder` to continue adding expressions to
+    /// Get access to a `FunctionBuilder` to continue adding instructions to
     /// this function.
     pub fn builder(&self) -> &FunctionBuilder {
-        &self.exprs
+        &self.builder
     }
 
-    /// Get access to a `FunctionBuilder` to continue adding expressions to
+    /// Get access to a `FunctionBuilder` to continue adding instructions to
     /// this function.
     pub fn builder_mut(&mut self) -> &mut FunctionBuilder {
-        &mut self.exprs
+        &mut self.builder
     }
 
-    /// Get the size of this function, in number of expressions.
+    /// Get the size of this function, in number of instructions.
     pub fn size(&self) -> u64 {
         struct SizeVisitor<'a> {
             func: &'a LocalFunction,
-            exprs: u64,
+            instrs: u64,
         }
 
-        impl<'expr> Visitor<'expr> for SizeVisitor<'expr> {
-            fn local_function(&self) -> &'expr LocalFunction {
+        impl<'instr> Visitor<'instr> for SizeVisitor<'instr> {
+            fn local_function(&self) -> &'instr LocalFunction {
                 self.func
             }
 
-            fn visit_expr(&mut self, e: &'expr Expr) {
-                self.exprs += 1;
+            fn visit_instr(&mut self, e: &'instr Instr) {
+                self.instrs += 1;
                 e.visit(self);
             }
         }
 
         let mut v = SizeVisitor {
             func: self,
-            exprs: 0,
+            instrs: 0,
         };
         self.entry_block().visit(&mut v);
-        v.exprs
+        v.instrs
     }
 
     /// Is this function's body a [constant
-    /// expression](https://webassembly.github.io/spec/core/valid/instructions.html#constant-expressions)?
+    /// instruction](https://webassembly.github.io/spec/core/valid/instructions.html#constant-instructions)?
     pub fn is_const(&self) -> bool {
         self.block(self.entry_block())
-            .exprs
+            .instrs
             .iter()
-            .all(|e| self.exprs.arena[*e].is_const())
+            .all(|e| e.is_const())
     }
 
     /// Collect the set of data segments that are used in this function via
@@ -182,7 +159,7 @@ impl LocalFunction {
             func: self,
             segments: Default::default(),
         };
-        visitor.visit_block_id(&self.entry_block());
+        self.entry_block().visit(&mut visitor);
         return visitor.segments;
 
         struct DataSegmentsVisitor<'a> {
@@ -210,7 +187,7 @@ impl LocalFunction {
             func: self,
             locals: Default::default(),
         };
-        locals.visit_block_id(&self.entry_block());
+        self.entry_block().visit(&mut locals);
         return locals.locals;
 
         impl<'a> Visitor<'a> for Used<'a> {
@@ -296,21 +273,21 @@ fn validate_instruction(ctx: &mut ValidationContext, inst: Operator) -> Result<(
     use crate::ValType::*;
 
     let const_ = |ctx: &mut ValidationContext, ty, value| {
-        let expr = ctx.func.alloc(Const { value });
-        ctx.push_operand(Some(ty), expr);
+        ctx.alloc_instr(Const { value });
+        ctx.push_operand(Some(ty));
     };
 
     let one_op = |ctx: &mut ValidationContext, input, output, op| -> Result<()> {
-        let (_, expr) = ctx.pop_operand_expected(Some(input))?;
-        let expr = ctx.func.alloc(Unop { op, expr });
-        ctx.push_operand(Some(output), expr);
+        ctx.pop_operand_expected(Some(input))?;
+        ctx.alloc_instr(Unop { op });
+        ctx.push_operand(Some(output));
         Ok(())
     };
     let two_ops = |ctx: &mut ValidationContext, lhs, rhs, output, op| -> Result<()> {
-        let (_, rhs) = ctx.pop_operand_expected(Some(rhs))?;
-        let (_, lhs) = ctx.pop_operand_expected(Some(lhs))?;
-        let expr = ctx.func.alloc(Binop { op, lhs, rhs });
-        ctx.push_operand(Some(output), expr);
+        ctx.pop_operand_expected(Some(rhs))?;
+        ctx.pop_operand_expected(Some(lhs))?;
+        ctx.alloc_instr(Binop { op });
+        ctx.push_operand(Some(output));
         Ok(())
     };
 
@@ -330,81 +307,55 @@ fn validate_instruction(ctx: &mut ValidationContext, inst: Operator) -> Result<(
     };
 
     let load = |ctx: &mut ValidationContext, arg, ty, kind| -> Result<()> {
-        let (_, address) = ctx.pop_operand_expected(Some(I32))?;
+        ctx.pop_operand_expected(Some(I32))?;
         let memory = ctx.indices.get_memory(0)?;
         let arg = mem_arg(&arg)?;
-        let expr = ctx.func.alloc(Load {
-            arg,
-            kind,
-            address,
-            memory,
-        });
-        ctx.push_operand(Some(ty), expr);
+        ctx.alloc_instr(Load { arg, kind, memory });
+        ctx.push_operand(Some(ty));
         Ok(())
     };
 
     let store = |ctx: &mut ValidationContext, arg, ty, kind| -> Result<()> {
-        let (_, value) = ctx.pop_operand_expected(Some(ty))?;
-        let (_, address) = ctx.pop_operand_expected(Some(I32))?;
+        ctx.pop_operand_expected(Some(ty))?;
+        ctx.pop_operand_expected(Some(I32))?;
         let memory = ctx.indices.get_memory(0)?;
         let arg = mem_arg(&arg)?;
-        let expr = ctx.func.alloc(Store {
-            arg,
-            kind,
-            address,
-            memory,
-            value,
-        });
-        ctx.add_to_current_frame_block(expr);
+        ctx.alloc_instr(Store { arg, kind, memory });
         Ok(())
     };
 
     let atomicrmw = |ctx: &mut ValidationContext, arg, ty, op, width| -> Result<()> {
-        let (_, value) = ctx.pop_operand_expected(Some(ty))?;
-        let (_, address) = ctx.pop_operand_expected(Some(I32))?;
+        ctx.pop_operand_expected(Some(ty))?;
+        ctx.pop_operand_expected(Some(I32))?;
         let memory = ctx.indices.get_memory(0)?;
         let arg = mem_arg(&arg)?;
-        let expr = ctx.func.alloc(AtomicRmw {
+        ctx.alloc_instr(AtomicRmw {
             arg,
-            address,
             memory,
-            value,
             op,
             width,
         });
-        ctx.push_operand(Some(ty), expr);
+        ctx.push_operand(Some(ty));
         Ok(())
     };
 
     let cmpxchg = |ctx: &mut ValidationContext, arg, ty, width| -> Result<()> {
-        let (_, replacement) = ctx.pop_operand_expected(Some(ty))?;
-        let (_, expected) = ctx.pop_operand_expected(Some(ty))?;
-        let (_, address) = ctx.pop_operand_expected(Some(I32))?;
+        ctx.pop_operand_expected(Some(ty))?;
+        ctx.pop_operand_expected(Some(ty))?;
+        ctx.pop_operand_expected(Some(I32))?;
         let memory = ctx.indices.get_memory(0)?;
         let arg = mem_arg(&arg)?;
-        let expr = ctx.func.alloc(Cmpxchg {
-            arg,
-            address,
-            memory,
-            expected,
-            width,
-            replacement,
-        });
-        ctx.push_operand(Some(ty), expr);
+        ctx.alloc_instr(Cmpxchg { arg, memory, width });
+        ctx.push_operand(Some(ty));
         Ok(())
     };
 
     let load_splat = |ctx: &mut ValidationContext, arg, kind| -> Result<()> {
-        let (_, address) = ctx.pop_operand_expected(Some(I32))?;
+        ctx.pop_operand_expected(Some(I32))?;
         let memory = ctx.indices.get_memory(0)?;
         let arg = mem_arg(&arg)?;
-        let expr = ctx.func.alloc(LoadSplat {
-            memory,
-            arg,
-            address,
-            kind,
-        });
-        ctx.push_operand(Some(V128), expr);
+        ctx.alloc_instr(LoadSplat { memory, arg, kind });
+        ctx.push_operand(Some(V128));
         Ok(())
     };
 
@@ -416,10 +367,9 @@ fn validate_instruction(ctx: &mut ValidationContext, inst: Operator) -> Result<(
                 .context("invalid call")?;
             let ty_id = ctx.module.funcs.get(func).ty();
             let fun_ty = ctx.module.types.get(ty_id);
-            let mut args = ctx.pop_operands(fun_ty.params())?.into_boxed_slice();
-            args.reverse();
-            let expr = ctx.func.alloc(Call { func, args });
-            ctx.push_operands(fun_ty.results(), expr.into());
+            ctx.pop_operands(fun_ty.params())?;
+            ctx.alloc_instr(Call { func });
+            ctx.push_operands(fun_ty.results());
         }
         Operator::CallIndirect { index, table_index } => {
             let type_id = ctx
@@ -431,36 +381,29 @@ fn validate_instruction(ctx: &mut ValidationContext, inst: Operator) -> Result<(
                 .indices
                 .get_table(table_index)
                 .context("invalid call_indirect")?;
-            let (_, func) = ctx.pop_operand_expected(Some(I32))?;
-            let mut args = ctx.pop_operands(ty.params())?.into_boxed_slice();
-            args.reverse();
-            let expr = ctx.func.alloc(CallIndirect {
-                table,
-                ty: type_id,
-                func,
-                args,
-            });
-            ctx.push_operands(ty.results(), expr.into());
+            ctx.pop_operand_expected(Some(I32))?;
+            ctx.pop_operands(ty.params())?;
+            ctx.alloc_instr(CallIndirect { table, ty: type_id });
+            ctx.push_operands(ty.results());
         }
         Operator::GetLocal { local_index } => {
             let local = ctx.indices.get_local(ctx.func_id, local_index)?;
             let ty = ctx.module.locals.get(local).ty();
-            let expr = ctx.func.alloc(LocalGet { local });
-            ctx.push_operand(Some(ty), expr);
+            ctx.alloc_instr(LocalGet { local });
+            ctx.push_operand(Some(ty));
         }
         Operator::SetLocal { local_index } => {
             let local = ctx.indices.get_local(ctx.func_id, local_index)?;
             let ty = ctx.module.locals.get(local).ty();
-            let (_, value) = ctx.pop_operand_expected(Some(ty))?;
-            let expr = ctx.func.alloc(LocalSet { local, value });
-            ctx.add_to_current_frame_block(expr);
+            ctx.pop_operand_expected(Some(ty))?;
+            ctx.alloc_instr(LocalSet { local });
         }
         Operator::TeeLocal { local_index } => {
             let local = ctx.indices.get_local(ctx.func_id, local_index)?;
             let ty = ctx.module.locals.get(local).ty();
-            let (_, value) = ctx.pop_operand_expected(Some(ty))?;
-            let expr = ctx.func.alloc(LocalTee { local, value });
-            ctx.push_operand(Some(ty), expr);
+            ctx.pop_operand_expected(Some(ty))?;
+            ctx.alloc_instr(LocalTee { local });
+            ctx.push_operand(Some(ty));
         }
         Operator::GetGlobal { global_index } => {
             let global = ctx
@@ -468,8 +411,8 @@ fn validate_instruction(ctx: &mut ValidationContext, inst: Operator) -> Result<(
                 .get_global(global_index)
                 .context("invalid global.get")?;
             let ty = ctx.module.globals.get(global).ty;
-            let expr = ctx.func.alloc(GlobalGet { global });
-            ctx.push_operand(Some(ty), expr);
+            ctx.alloc_instr(GlobalGet { global });
+            ctx.push_operand(Some(ty));
         }
         Operator::SetGlobal { global_index } => {
             let global = ctx
@@ -477,9 +420,8 @@ fn validate_instruction(ctx: &mut ValidationContext, inst: Operator) -> Result<(
                 .get_global(global_index)
                 .context("invalid global.set")?;
             let ty = ctx.module.globals.get(global).ty;
-            let (_, value) = ctx.pop_operand_expected(Some(ty))?;
-            let expr = ctx.func.alloc(GlobalSet { global, value });
-            ctx.add_to_current_frame_block(expr);
+            ctx.pop_operand_expected(Some(ty))?;
+            ctx.alloc_instr(GlobalSet { global });
         }
         Operator::I32Const { value } => const_(ctx, I32, Value::I32(value)),
         Operator::I64Const { value } => const_(ctx, I64, Value::I64(value)),
@@ -652,103 +594,90 @@ fn validate_instruction(ctx: &mut ValidationContext, inst: Operator) -> Result<(
         Operator::I64Extend32S => one_op(ctx, I64, I64, UnaryOp::I64Extend32S)?,
 
         Operator::Drop => {
-            let (_, expr) = ctx.pop_operand()?;
-            let expr = ctx.func.alloc(Drop { expr });
-            ctx.add_to_current_frame_block(expr);
+            ctx.pop_operand()?;
+            ctx.alloc_instr(Drop {});
         }
         Operator::Select => {
-            let (_, condition) = ctx.pop_operand_expected(Some(I32))?;
-            let (t1, consequent) = ctx.pop_operand()?;
-            let (t2, alternative) = ctx.pop_operand_expected(t1)?;
-            let expr = ctx.func.alloc(Select {
-                condition,
-                consequent,
-                alternative,
-            });
-            ctx.push_operand(t2, expr);
+            ctx.pop_operand_expected(Some(I32))?;
+            let t1 = ctx.pop_operand()?;
+            let t2 = ctx.pop_operand_expected(t1)?;
+            ctx.alloc_instr(Select {});
+            ctx.push_operand(t2);
         }
         Operator::Return => {
             let fn_ty = ctx.module.funcs.get(ctx.func_id).ty();
             let expected = ctx.module.types.get(fn_ty).results();
-            let values = ctx.pop_operands(expected)?.into_boxed_slice();
-            let expr = ctx.func.alloc(Return { values });
-            ctx.unreachable(expr);
+            ctx.pop_operands(expected)?;
+            ctx.alloc_instr(Return {});
+            ctx.unreachable();
         }
         Operator::Unreachable => {
-            let expr = ctx.func.alloc(Unreachable {});
-            ctx.unreachable(expr);
+            ctx.alloc_instr(Unreachable {});
+            ctx.unreachable();
         }
         Operator::Block { ty } => {
             let results = ValType::from_wasmparser_type(ty)?;
-            ctx.push_control(BlockKind::Block, results.clone(), results);
+            let seq = ctx.push_control(BlockKind::Block, results.clone(), results);
+            ctx.alloc_instr_in_control(1, Block { seq })?;
         }
         Operator::Loop { ty } => {
             let t = ValType::from_wasmparser_type(ty)?;
-            ctx.push_control(BlockKind::Loop, vec![].into_boxed_slice(), t);
+            let seq = ctx.push_control(BlockKind::Loop, vec![].into_boxed_slice(), t);
+            ctx.alloc_instr_in_control(1, Loop { seq })?;
         }
         Operator::If { ty } => {
             let ty = ValType::from_wasmparser_type(ty)?;
-            let (_, condition) = ctx.pop_operand_expected(Some(I32))?;
+            ctx.pop_operand_expected(Some(I32))?;
 
             let consequent = ctx.push_control(BlockKind::IfElse, ty.clone(), ty.clone());
             ctx.if_else.push(context::IfElseState {
-                condition,
                 consequent,
                 alternative: None,
             });
         }
         Operator::End => {
-            let (results, block) = ctx.pop_control()?;
+            let (results, _block_id, kind) = ctx.pop_control()?;
 
-            let id: ExprId = match ctx.func.block(block).kind {
-                // If we just finished an if/else block then the actual
-                // expression which produces the value will be an `IfElse` node,
-                // not the block itself. Do some postprocessing here to create
-                // such a node.
-                BlockKind::IfElse => {
-                    let context::IfElseState {
-                        condition,
-                        consequent,
-                        alternative,
-                    } = ctx.if_else.pop().unwrap();
+            // If we just finished an if/else block then the actual
+            // instruction which produces the value will be an `IfElse` node,
+            // not the block itself. Do some postprocessing here to create
+            // such a node.
+            if let BlockKind::IfElse = kind {
+                let context::IfElseState {
+                    consequent,
+                    alternative,
+                } = ctx.if_else.pop().unwrap();
 
-                    let alternative = match alternative {
-                        Some(alt) => alt,
-                        None => {
-                            let alternative = ctx.push_control(
-                                BlockKind::IfElse,
-                                results.clone(),
-                                results.clone(),
-                            );
-                            ctx.pop_control()?;
-                            alternative
-                        }
-                    };
+                let alternative = match alternative {
+                    Some(alt) => alt,
+                    None => {
+                        let alternative =
+                            ctx.push_control(BlockKind::IfElse, results.clone(), results.clone());
+                        ctx.pop_control()?;
+                        alternative
+                    }
+                };
 
-                    ctx.func
-                        .alloc(IfElse {
-                            condition,
-                            consequent,
-                            alternative,
-                        })
-                        .into()
-                }
+                ctx.alloc_instr(IfElse {
+                    consequent,
+                    alternative,
+                });
+            }
 
-                // Otherwise the expression is the block itself.
-                _ => block.into(),
-            };
-            ctx.push_operands(&results, id);
+            ctx.push_operands(&results);
         }
         Operator::Else => {
-            let (results, consequent) = ctx.pop_control()?;
+            let (results, _consequent, kind) = ctx.pop_control()?;
+
             // An `else` instruction is only valid immediately inside an if/else
-            // block which is denoted by the `IfElse` block kind. When that's
-            // the case we still need to parse the alternative block, so
-            // allocate the block here to parse.
-            match ctx.func.block(consequent).kind {
+            // block which is denoted by the `IfElse` block kind.
+            match kind {
                 BlockKind::IfElse => {}
                 _ => bail!("`else` without a leading `if`"),
             }
+
+            // But we still need to parse the alternative block, so allocate the
+            // block here to parse.
             let alternative = ctx.push_control(BlockKind::IfElse, results.clone(), results);
             let last = ctx.if_else.last_mut().unwrap();
             if last.alternative.is_some() {
@@ -759,29 +688,22 @@ fn validate_instruction(ctx: &mut ValidationContext, inst: Operator) -> Result<(
         Operator::Br { relative_depth } => {
             let n = relative_depth as usize;
             let expected = ctx.control(n)?.label_types.clone();
-            let args = ctx.pop_operands(&expected)?.into_boxed_slice();
+            ctx.pop_operands(&expected)?;
 
-            let to_block = ctx.control(n)?.block;
-            let expr = ctx.func.alloc(Br {
-                block: to_block,
-                args,
-            });
-            ctx.unreachable(expr);
+            let block = ctx.control(n)?.block;
+            ctx.alloc_instr(Br { block });
+            ctx.unreachable();
         }
         Operator::BrIf { relative_depth } => {
             let n = relative_depth as usize;
-            let (_, condition) = ctx.pop_operand_expected(Some(I32))?;
+            ctx.pop_operand_expected(Some(I32))?;
 
             let expected = ctx.control(n)?.label_types.clone();
-            let args = ctx.pop_operands(&expected)?.into_boxed_slice();
+            ctx.pop_operands(&expected)?;
 
-            let to_block = ctx.control(n)?.block;
-            let expr = ctx.func.alloc(BrIf {
-                condition,
-                block: to_block,
-                args,
-            });
-            ctx.push_operands(&expected, expr.into());
+            let block = ctx.control(n)?.block;
+            ctx.alloc_instr(BrIf { block });
+            ctx.push_operands(&expected);
         }
         Operator::BrTable { table } => {
             let len = table.len();
@@ -814,17 +736,12 @@ fn validate_instruction(ctx: &mut ValidationContext, inst: Operator) -> Result<(
 
             let blocks = blocks.into_boxed_slice();
             let expected = label_types.unwrap().clone();
-            let (_, which) = ctx.pop_operand_expected(Some(I32))?;
+            ctx.pop_operand_expected(Some(I32))?;
 
-            let args = ctx.pop_operands(&expected)?.into_boxed_slice();
-            let expr = ctx.func.alloc(BrTable {
-                which,
-                blocks,
-                default,
-                args,
-            });
+            ctx.pop_operands(&expected)?;
+            ctx.alloc_instr(BrTable { blocks, default });
 
-            ctx.unreachable(expr);
+            ctx.unreachable();
         }
 
         Operator::MemorySize { reserved } => {
@@ -832,64 +749,46 @@ fn validate_instruction(ctx: &mut ValidationContext, inst: Operator) -> Result<(
                 bail!("reserved byte isn't zero");
             }
             let memory = ctx.indices.get_memory(0)?;
-            let expr = ctx.func.alloc(MemorySize { memory });
-            ctx.push_operand(Some(I32), expr);
+            ctx.alloc_instr(MemorySize { memory });
+            ctx.push_operand(Some(I32));
         }
         Operator::MemoryGrow { reserved } => {
             if reserved != 0 {
                 bail!("reserved byte isn't zero");
             }
-            let (_, pages) = ctx.pop_operand_expected(Some(I32))?;
+            ctx.pop_operand_expected(Some(I32))?;
             let memory = ctx.indices.get_memory(0)?;
-            let expr = ctx.func.alloc(MemoryGrow { memory, pages });
-            ctx.push_operand(Some(I32), expr);
+            ctx.alloc_instr(MemoryGrow { memory });
+            ctx.push_operand(Some(I32));
         }
         Operator::MemoryInit { segment } => {
-            let (_, len) = ctx.pop_operand_expected(Some(I32))?;
-            let (_, data_offset) = ctx.pop_operand_expected(Some(I32))?;
-            let (_, memory_offset) = ctx.pop_operand_expected(Some(I32))?;
+            ctx.pop_operand_expected(Some(I32))?;
+            ctx.pop_operand_expected(Some(I32))?;
+            ctx.pop_operand_expected(Some(I32))?;
             let memory = ctx.indices.get_memory(0)?;
             let data = ctx.indices.get_data(segment)?;
-            let expr = ctx.func.alloc(MemoryInit {
-                len,
-                data_offset,
-                memory_offset,
-                memory,
-                data,
-            });
-            ctx.add_to_current_frame_block(expr);
+            ctx.alloc_instr(MemoryInit { memory, data });
         }
         Operator::DataDrop { segment } => {
             let data = ctx.indices.get_data(segment)?;
-            let expr = ctx.func.alloc(DataDrop { data });
-            ctx.add_to_current_frame_block(expr);
+            ctx.alloc_instr(DataDrop { data });
         }
         Operator::MemoryCopy => {
-            let (_, len) = ctx.pop_operand_expected(Some(I32))?;
-            let (_, src_offset) = ctx.pop_operand_expected(Some(I32))?;
-            let (_, dst_offset) = ctx.pop_operand_expected(Some(I32))?;
+            ctx.pop_operand_expected(Some(I32))?;
+            ctx.pop_operand_expected(Some(I32))?;
+            ctx.pop_operand_expected(Some(I32))?;
             let memory = ctx.indices.get_memory(0)?;
-            let expr = ctx.func.alloc(MemoryCopy {
-                len,
-                src_offset,
-                dst_offset,
+            ctx.alloc_instr(MemoryCopy {
                 src: memory,
                 dst: memory,
             });
-            ctx.add_to_current_frame_block(expr);
         }
         Operator::MemoryFill => {
-            let (_, len) = ctx.pop_operand_expected(Some(I32))?;
-            let (_, value) = ctx.pop_operand_expected(Some(I32))?;
-            let (_, offset) = ctx.pop_operand_expected(Some(I32))?;
+            ctx.pop_operand_expected(Some(I32))?;
+            ctx.pop_operand_expected(Some(I32))?;
+            ctx.pop_operand_expected(Some(I32))?;
             let memory = ctx.indices.get_memory(0)?;
-            let expr = ctx.func.alloc(MemoryFill {
-                len,
-                offset,
-                value,
-                memory,
-            });
-            ctx.add_to_current_frame_block(expr);
+            ctx.alloc_instr(MemoryFill { memory });
         }
 
         Operator::Nop => {}
@@ -1174,42 +1073,37 @@ fn validate_instruction(ctx: &mut ValidationContext, inst: Operator) -> Result<(
             cmpxchg(ctx, memarg, I64, AtomicWidth::I64_32)?;
         }
         Operator::Wake { ref memarg } => {
-            let (_, count) = ctx.pop_operand_expected(Some(I32))?;
-            let (_, address) = ctx.pop_operand_expected(Some(I32))?;
+            ctx.pop_operand_expected(Some(I32))?;
+            ctx.pop_operand_expected(Some(I32))?;
             let memory = ctx.indices.get_memory(0)?;
-            let expr = ctx.func.alloc(AtomicNotify {
-                count,
-                address,
+            ctx.alloc_instr(AtomicNotify {
                 memory,
                 arg: mem_arg(memarg)?,
             });
-            ctx.push_operand(Some(I32), expr);
+            ctx.push_operand(Some(I32));
         }
         Operator::I32Wait { ref memarg } | Operator::I64Wait { ref memarg } => {
             let (ty, sixty_four) = match inst {
                 Operator::I32Wait { .. } => (I32, false),
                 _ => (I64, true),
             };
-            let (_, timeout) = ctx.pop_operand_expected(Some(I64))?;
-            let (_, expected) = ctx.pop_operand_expected(Some(ty))?;
-            let (_, address) = ctx.pop_operand_expected(Some(I32))?;
+            ctx.pop_operand_expected(Some(I64))?;
+            ctx.pop_operand_expected(Some(ty))?;
+            ctx.pop_operand_expected(Some(I32))?;
             let memory = ctx.indices.get_memory(0)?;
-            let expr = ctx.func.alloc(AtomicWait {
-                timeout,
-                expected,
+            ctx.alloc_instr(AtomicWait {
                 sixty_four,
-                address,
                 memory,
                 arg: mem_arg(memarg)?,
             });
-            ctx.push_operand(Some(I32), expr);
+            ctx.push_operand(Some(I32));
         }
 
         Operator::TableGet { table } => {
             let table = ctx.indices.get_table(table)?;
-            let (_, index) = ctx.pop_operand_expected(Some(I32))?;
-            let expr = ctx.func.alloc(TableGet { table, index });
-            ctx.push_operand(Some(Anyref), expr);
+            ctx.pop_operand_expected(Some(I32))?;
+            ctx.alloc_instr(TableGet { table });
+            ctx.push_operand(Some(Anyref));
         }
         Operator::TableSet { table } => {
             let table = ctx.indices.get_table(table)?;
@@ -1217,14 +1111,9 @@ fn validate_instruction(ctx: &mut ValidationContext, inst: Operator) -> Result<(
                 TableKind::Anyref(_) => Anyref,
                 TableKind::Function(_) => bail!("cannot set function table yet"),
             };
-            let (_, value) = ctx.pop_operand_expected(Some(expected_ty))?;
-            let (_, index) = ctx.pop_operand_expected(Some(I32))?;
-            let expr = ctx.func.alloc(TableSet {
-                table,
-                index,
-                value,
-            });
-            ctx.add_to_current_frame_block(expr);
+            ctx.pop_operand_expected(Some(expected_ty))?;
+            ctx.pop_operand_expected(Some(I32))?;
+            ctx.alloc_instr(TableSet { table });
         }
         Operator::TableGrow { table } => {
             let table = ctx.indices.get_table(table)?;
@@ -1232,47 +1121,39 @@ fn validate_instruction(ctx: &mut ValidationContext, inst: Operator) -> Result<(
                 TableKind::Anyref(_) => Anyref,
                 TableKind::Function(_) => bail!("cannot grow function table yet"),
             };
-            let (_, amount) = ctx.pop_operand_expected(Some(I32))?;
-            let (_, value) = ctx.pop_operand_expected(Some(expected_ty))?;
-            let expr = ctx.func.alloc(TableGrow {
-                table,
-                amount,
-                value,
-            });
-            ctx.push_operand(Some(I32), expr);
+            ctx.pop_operand_expected(Some(I32))?;
+            ctx.pop_operand_expected(Some(expected_ty))?;
+            ctx.alloc_instr(TableGrow { table });
+            ctx.push_operand(Some(I32));
         }
         Operator::TableSize { table } => {
             let table = ctx.indices.get_table(table)?;
-            let expr = ctx.func.alloc(TableSize { table });
-            ctx.push_operand(Some(I32), expr);
+            ctx.alloc_instr(TableSize { table });
+            ctx.push_operand(Some(I32));
         }
         Operator::RefNull => {
-            let expr = ctx.func.alloc(RefNull {});
-            ctx.push_operand(Some(Anyref), expr);
+            ctx.alloc_instr(RefNull {});
+            ctx.push_operand(Some(Anyref));
         }
         Operator::RefIsNull => {
-            let (_, value) = ctx.pop_operand_expected(Some(Anyref))?;
-            let expr = ctx.func.alloc(RefIsNull { value });
-            ctx.push_operand(Some(I32), expr);
+            ctx.pop_operand_expected(Some(Anyref))?;
+            ctx.alloc_instr(RefIsNull {});
+            ctx.push_operand(Some(I32));
         }
 
         // Operator::V8x16Shuffle { .. } => bail!("v8x16.shuffle not supported"),
         Operator::V8x16Swizzle => {
-            let (_, lanes) = ctx.pop_operand_expected(Some(V128))?;
-            let (_, indices) = ctx.pop_operand_expected(Some(V128))?;
-            let expr = ctx.func.alloc(V128Swizzle { lanes, indices });
-            ctx.push_operand(Some(V128), expr);
+            ctx.pop_operand_expected(Some(V128))?;
+            ctx.pop_operand_expected(Some(V128))?;
+            ctx.alloc_instr(V128Swizzle {});
+            ctx.push_operand(Some(V128));
         }
 
         Operator::V8x16Shuffle { lanes } => {
-            let (_, a) = ctx.pop_operand_expected(Some(V128))?;
-            let (_, b) = ctx.pop_operand_expected(Some(V128))?;
-            let expr = ctx.func.alloc(V128Shuffle {
-                indices: lanes,
-                a,
-                b,
-            });
-            ctx.push_operand(Some(V128), expr);
+            ctx.pop_operand_expected(Some(V128))?;
+            ctx.pop_operand_expected(Some(V128))?;
+            ctx.alloc_instr(V128Shuffle { indices: lanes });
+            ctx.push_operand(Some(V128));
         }
 
         Operator::I8x16Splat => one_op(ctx, I32, V128, UnaryOp::I8x16Splat)?,
@@ -1373,11 +1254,11 @@ fn validate_instruction(ctx: &mut ValidationContext, inst: Operator) -> Result<(
         Operator::V128Xor => binop(ctx, V128, BinaryOp::V128Xor)?,
 
         Operator::V128Bitselect => {
-            let (_, mask) = ctx.pop_operand_expected(Some(V128))?;
-            let (_, v2) = ctx.pop_operand_expected(Some(V128))?;
-            let (_, v1) = ctx.pop_operand_expected(Some(V128))?;
-            let expr = ctx.func.alloc(V128Bitselect { mask, v1, v2 });
-            ctx.push_operand(Some(V128), expr);
+            ctx.pop_operand_expected(Some(V128))?;
+            ctx.pop_operand_expected(Some(V128))?;
+            ctx.pop_operand_expected(Some(V128))?;
+            ctx.alloc_instr(V128Bitselect {});
+            ctx.push_operand(Some(V128));
         }
 
         Operator::I8x16Neg => unop(ctx, V128, UnaryOp::I8x16Neg)?,

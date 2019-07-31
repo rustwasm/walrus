@@ -14,7 +14,7 @@ use syn::Error;
 use syn::{parse_macro_input, Ident, Result, Token};
 
 #[proc_macro_attribute]
-pub fn walrus_expr(_attr: TokenStream, input: TokenStream) -> TokenStream {
+pub fn walrus_instr(_attr: TokenStream, input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
 
     let variants = match get_enum_variants(&input) {
@@ -22,7 +22,7 @@ pub fn walrus_expr(_attr: TokenStream, input: TokenStream) -> TokenStream {
         Err(e) => return e.to_compile_error().into(),
     };
 
-    assert_eq!(input.ident.to_string(), "Expr");
+    assert_eq!(input.ident.to_string(), "Instr");
 
     let types = create_types(&input.attrs, &variants);
     let visit = create_visit(&variants);
@@ -40,12 +40,14 @@ pub fn walrus_expr(_attr: TokenStream, input: TokenStream) -> TokenStream {
 struct WalrusVariant {
     syn: syn::Variant,
     fields: Vec<WalrusFieldOpts>,
+    opts: WalrusVariantOpts,
 }
 
 #[derive(Default)]
 struct WalrusVariantOpts {
     display_name: Option<syn::Ident>,
     display_extra: Option<syn::Ident>,
+    skip_builder: bool,
 }
 
 #[derive(Default)]
@@ -57,10 +59,10 @@ fn get_enum_variants(input: &DeriveInput) -> Result<Vec<WalrusVariant>> {
     let en = match &input.data {
         syn::Data::Enum(en) => en,
         syn::Data::Struct(_) => {
-            panic!("can only put #[walrus_expr] on an enum; found it on a struct")
+            panic!("can only put #[walrus_instr] on an enum; found it on a struct")
         }
         syn::Data::Union(_) => {
-            panic!("can only put #[walrus_expr] on an enum; found it on a union")
+            panic!("can only put #[walrus_instr] on an enum; found it on a union")
         }
     };
     en.variants
@@ -68,6 +70,7 @@ fn get_enum_variants(input: &DeriveInput) -> Result<Vec<WalrusVariant>> {
         .cloned()
         .map(|mut variant| {
             Ok(WalrusVariant {
+                opts: syn::parse(walrus_attrs(&mut variant.attrs))?,
                 fields: variant
                     .fields
                     .iter_mut()
@@ -111,6 +114,7 @@ impl Parse for WalrusVariantOpts {
         enum Attr {
             DisplayName(syn::Ident),
             DisplayExtra(syn::Ident),
+            SkipBuilder,
         }
 
         let attrs = Punctuated::<_, syn::token::Comma>::parse_terminated(input)?;
@@ -119,6 +123,7 @@ impl Parse for WalrusVariantOpts {
             match attr {
                 Attr::DisplayName(ident) => ret.display_name = Some(ident),
                 Attr::DisplayExtra(ident) => ret.display_extra = Some(ident),
+                Attr::SkipBuilder => ret.skip_builder = true,
             }
         }
         return Ok(ret);
@@ -135,6 +140,9 @@ impl Parse for WalrusVariantOpts {
                     input.parse::<Token![=]>()?;
                     let name = input.call(Ident::parse_any)?;
                     return Ok(Attr::DisplayExtra(name));
+                }
+                if attr == "skip_builder" {
+                    return Ok(Attr::SkipBuilder);
                 }
                 return Err(Error::new(attr.span(), "unexpected attribute"));
             }
@@ -165,11 +173,6 @@ fn create_types(attrs: &[syn::Attribute], variants: &[WalrusVariant]) -> impl qu
         .iter()
         .map(|v| {
             let name = &v.syn.ident;
-            let id_name = {
-                let mut s = name.to_string();
-                s.push_str("Id");
-                &syn::Ident::new(&s, Span::call_site())
-            };
             let attrs = &v.syn.attrs;
             let fields = v.syn.fields.iter().map(|f| {
                 let name = &f.ident;
@@ -180,67 +183,17 @@ fn create_types(attrs: &[syn::Attribute], variants: &[WalrusVariant]) -> impl qu
                     pub #name : #ty,
                 }
             });
-            let id_name_doc = format!("An identifier to a `{}` expression.", name);
-            let new_doc = format!(
-                "
-                Construct a `{}` from an `ExprId`.
-
-                It is the caller's responsibility to ensure that the
-                `Expr` referenced by the given `ExprId` is a `{}`.
-            ",
-                id_name, name
-            );
             quote! {
-                #[doc=#id_name_doc]
-                #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-                pub struct #id_name(ExprId);
-
-                impl From<#id_name> for ExprId {
-                    #[inline]
-                    fn from(id: #id_name) -> ExprId {
-                        id.0
-                    }
-                }
-
-                impl #id_name {
-                    #[doc=#new_doc]
-                    #[inline]
-                    pub fn new(id: ExprId) -> #id_name {
-                        #id_name(id)
-                    }
-                }
-
                 #( #attrs )*
                 #[derive(Clone, Debug)]
                 pub struct #name {
                     #( #fields )*
                 }
 
-                impl From<#name> for Expr {
+                impl From<#name> for Instr {
                     #[inline]
-                    fn from(x: #name) -> Expr {
-                        Expr::#name(x)
-                    }
-                }
-
-                impl Ast for #name {
-                    type Id = #id_name;
-
-                    #[inline]
-                    fn new_id(id: ExprId) -> #id_name {
-                        #id_name::new(id)
-                    }
-                }
-
-                impl<'expr> Visit<'expr> for #id_name {
-                    fn visit<V: Visitor<'expr>>(&self, v: &mut V) {
-                        v.visit_expr_id(&self.0);
-                    }
-                }
-
-                impl VisitMut for #id_name {
-                    fn visit_mut<V: VisitorMut>(&mut self, v: &mut V) {
-                        v.visit_expr_id_mut(&mut self.0);
+                    fn from(x: #name) -> Instr {
+                        Instr::#name(x)
                     }
                 }
             }
@@ -270,7 +223,7 @@ fn create_types(attrs: &[syn::Attribute], variants: &[WalrusVariant]) -> impl qu
 
             let ref_name_doc = format!(
                 "
-                If this expression is a `{}`, get a shared reference to it.
+                If this instruction is a `{}`, get a shared reference to it.
 
                 Returns `None` otherwise.
             ",
@@ -279,20 +232,20 @@ fn create_types(attrs: &[syn::Attribute], variants: &[WalrusVariant]) -> impl qu
 
             let mut_name_doc = format!(
                 "
-                If this expression is a `{}`, get an exclusive reference to it.
+                If this instruction is a `{}`, get an exclusive reference to it.
 
                 Returns `None` otherwise.
             ",
                 name
             );
 
-            let is_name_doc = format!("Is this expression a `{}`?", name);
+            let is_name_doc = format!("Is this instruction a `{}`?", name);
 
             let unwrap_name_doc = format!(
                 "
                 Get a shared reference to the underlying `{}`.
 
-                Panics if this expression is not a `{}`.
+                Panics if this instruction is not a `{}`.
             ",
                 name, name
             );
@@ -301,7 +254,7 @@ fn create_types(attrs: &[syn::Attribute], variants: &[WalrusVariant]) -> impl qu
                 "
                 Get an exclusive reference to the underlying `{}`.
 
-                Panics if this expression is not a `{}`.
+                Panics if this instruction is not a `{}`.
             ",
                 name, name
             );
@@ -310,7 +263,7 @@ fn create_types(attrs: &[syn::Attribute], variants: &[WalrusVariant]) -> impl qu
                 #[doc=#ref_name_doc]
                 #[inline]
                 fn #ref_name(&self) -> Option<&#name> {
-                    if let Expr::#name(ref x) = *self {
+                    if let Instr::#name(ref x) = *self {
                         Some(x)
                     } else {
                         None
@@ -320,7 +273,7 @@ fn create_types(attrs: &[syn::Attribute], variants: &[WalrusVariant]) -> impl qu
                 #[doc=#mut_name_doc]
                 #[inline]
                 pub fn #mut_name(&mut self) -> Option<&mut #name> {
-                    if let Expr::#name(ref mut x) = *self {
+                    if let Instr::#name(ref mut x) = *self {
                         Some(x)
                     } else {
                         None
@@ -364,11 +317,11 @@ fn create_types(attrs: &[syn::Attribute], variants: &[WalrusVariant]) -> impl qu
         #( #types )*
 
         #( #attrs )*
-        pub enum Expr {
+        pub enum Instr {
             #(#variants),*
         }
 
-        impl Expr {
+        impl Instr {
             #( #methods )*
         }
     }
@@ -406,11 +359,11 @@ fn visit_fields<'a>(
         let args = match &segment.arguments {
             syn::PathArguments::None => return (&segment.ident, false),
             syn::PathArguments::AngleBracketed(a) => &a.args,
-            _ => panic!("invalid path in #[walrus_expr]"),
+            _ => panic!("invalid path in #[walrus_instr]"),
         };
         let mut ty = match args.first().unwrap().into_value() {
             syn::GenericArgument::Type(ty) => ty,
-            _ => panic!("invalid path in #[walrus_expr]"),
+            _ => panic!("invalid path in #[walrus_instr]"),
         };
         if let syn::Type::Slice(t) = ty {
             ty = &t.elem;
@@ -420,7 +373,7 @@ fn visit_fields<'a>(
                 let segment = p.path.segments.last().unwrap().into_value();
                 (&segment.ident, true)
             }
-            _ => panic!("invalid path in #[walrus_expr]"),
+            _ => panic!("invalid path in #[walrus_instr]"),
         }
     }
 }
@@ -434,15 +387,11 @@ fn create_visit(variants: &[WalrusVariant]) -> impl quote::ToTokens {
 
     for variant in variants {
         let name = &variant.syn.ident;
-        let name_id = syn::Ident::new(&format!("{}Id", name), Span::call_site());
 
         let mut method_name = "visit_".to_string();
         method_name.push_str(&name.to_string().to_snake_case());
         let method_name = syn::Ident::new(&method_name, Span::call_site());
-        let method_id_name = syn::Ident::new(&format!("{}_id", method_name), Span::call_site());
         let method_name_mut = syn::Ident::new(&format!("{}_mut", method_name), Span::call_site());
-        let method_id_name_mut =
-            syn::Ident::new(&format!("{}_id_mut", method_name), Span::call_site());
 
         let recurse_fields = visit_fields(variant, true).map(|(method_name, field_name, list)| {
             if list {
@@ -471,8 +420,8 @@ fn create_visit(variants: &[WalrusVariant]) -> impl quote::ToTokens {
             });
 
         visit_impls.push(quote! {
-            impl<'expr> Visit<'expr> for #name {
-                fn visit<V: Visitor<'expr>>(&self, visitor: &mut V) {
+            impl<'instr> Visit<'instr> for #name {
+                fn visit<V: Visitor<'instr>>(&self, visitor: &mut V) {
                     #(#recurse_fields);*
                 }
             }
@@ -484,27 +433,16 @@ fn create_visit(variants: &[WalrusVariant]) -> impl quote::ToTokens {
         });
 
         let doc = format!("Visit `{}`.", name.to_string());
-        let doc_id = format!("Visit `{}Id`.", name.to_string());
         visitor_trait_methods.push(quote! {
             #[doc=#doc]
-            fn #method_name(&mut self, expr: &#name) {
-                expr.visit(self);
-            }
-
-            #[doc=#doc_id]
-            fn #method_id_name(&mut self, id: &#name_id) {
-                id.visit(self);
+            fn #method_name(&mut self, instr: &#name) {
+                instr.visit(self);
             }
         });
         visitor_mut_trait_methods.push(quote! {
             #[doc=#doc]
-            fn #method_name_mut(&mut self, expr: &mut #name) {
-                expr.visit_mut(self);
-            }
-
-            #[doc=#doc_id]
-            fn #method_id_name_mut(&mut self, id: &mut #name_id) {
-                id.visit_mut(self);
+            fn #method_name_mut(&mut self, instr: &mut #name) {
+                instr.visit_mut(self);
             }
         });
 
@@ -512,27 +450,34 @@ fn create_visit(variants: &[WalrusVariant]) -> impl quote::ToTokens {
         method_name.push_str(&name.to_string().to_snake_case());
         let method_name = syn::Ident::new(&method_name, Span::call_site());
         visit_impl.push(quote! {
-            Expr::#name(e) => visitor.#method_name(e),
+            Instr::#name(e) => visitor.#method_name(e),
         });
         visit_mut_impl.push(quote! {
-            Expr::#name(e) => visitor.#method_name_mut(e),
+            Instr::#name(e) => visitor.#method_name_mut(e),
         });
     }
 
     quote! {
-        /// A visitor walks over an IR expression tree.
-        pub trait Visitor<'expr>: Sized {
+        /// A visitor walks over an IR instruction tree.
+        pub trait Visitor<'instr>: Sized {
             /// Return the local function we're visiting
-            fn local_function(&self) -> &'expr crate::LocalFunction;
+            fn local_function(&self) -> &'instr crate::LocalFunction;
 
-            /// Visit `Expr`.
-            fn visit_expr(&mut self, expr: &'expr Expr) {
-                expr.visit(self)
+            /// Visit `Instr`.
+            fn visit_instr(&mut self, instr: &'instr Instr) {
+                instr.visit(self)
             }
 
-            /// Visit `ExprId`.
-            fn visit_expr_id(&mut self, expr: &ExprId) {
-                expr.visit(self);
+            /// Visit `InstrSeq`.
+            fn visit_instr_seq(&mut self, instr_seq: &'instr InstrSeq) {
+                for i in &instr_seq.instrs {
+                    self.visit_instr(i);
+                }
+            }
+
+            /// Visit `InstrSeqId`.
+            fn visit_instr_seq_id(&mut self, instr_seq_id: &InstrSeqId) {
+                instr_seq_id.visit(self);
             }
 
             /// Visit `Local`.
@@ -578,19 +523,26 @@ fn create_visit(variants: &[WalrusVariant]) -> impl quote::ToTokens {
             #( #visitor_trait_methods )*
         }
 
-        /// A visitor walks over a mutable IR expression tree.
+        /// A visitor walks over a mutable IR instruction tree.
         pub trait VisitorMut: Sized {
             /// Return the local function we're visiting
             fn local_function_mut(&mut self) -> &mut crate::LocalFunction;
 
-            /// Visit `Expr`.
-            fn visit_expr_mut(&mut self, expr: &mut Expr) {
-                expr.visit_mut(self)
+            /// Visit `Instr`.
+            fn visit_instr_mut(&mut self, instr: &mut Instr) {
+                instr.visit_mut(self);
             }
 
-            /// Visit `ExprId`.
-            fn visit_expr_id_mut(&mut self, expr: &mut ExprId) {
-                expr.visit_mut(self);
+            /// Visit `InstrSeq`.
+            fn visit_instr_seq_mut(&mut self, instr_seq: &mut InstrSeq) {
+                for i in &mut instr_seq.instrs {
+                    i.visit_mut(self);
+                }
+            }
+
+            /// Visit `InstrSeqId`.
+            fn visit_instr_seq_id_mut(&mut self, instr_seq_id: &mut InstrSeqId) {
+                // ...
             }
 
             /// Visit `Local`.
@@ -636,16 +588,15 @@ fn create_visit(variants: &[WalrusVariant]) -> impl quote::ToTokens {
             #( #visitor_mut_trait_methods )*
         }
 
-
-        impl<'expr> Visit<'expr> for Expr {
-            fn visit<V>(&self, visitor: &mut V) where V: Visitor<'expr> {
+        impl<'instr> Visit<'instr> for Instr {
+            fn visit<V>(&self, visitor: &mut V) where V: Visitor<'instr> {
                 match self {
                     #( #visit_impl )*
                 }
             }
         }
 
-        impl VisitMut for Expr {
+        impl VisitMut for Instr {
             fn visit_mut<V>(&mut self, visitor: &mut V) where V: VisitorMut {
                 match self {
                     #( #visit_mut_impl )*
@@ -660,9 +611,18 @@ fn create_visit(variants: &[WalrusVariant]) -> impl quote::ToTokens {
 fn create_builder(variants: &[WalrusVariant]) -> impl quote::ToTokens {
     let mut builder_methods = Vec::new();
     for variant in variants {
+        if variant.opts.skip_builder {
+            continue;
+        }
+
         let name = &variant.syn.ident;
 
         let mut method_name = name.to_string().to_snake_case();
+
+        let mut method_name_at = method_name.clone();
+        method_name_at.push_str("_at");
+        let method_name_at = syn::Ident::new(&method_name_at, Span::call_site());
+
         if method_name == "return" || method_name == "const" {
             method_name.push('_');
         } else if method_name == "block" {
@@ -680,15 +640,37 @@ fn create_builder(variants: &[WalrusVariant]) -> impl quote::ToTokens {
             args.push(quote! { #name: #ty });
         }
 
+        let doc = format!(
+            "Push a new `{}` instruction onto this builder's block.",
+            name.to_string()
+        );
+        let at_doc = format!(
+            "Splice a new `{}` instruction into this builder's block at the given index.\n\n\
+             # Panics\n\n\
+             Panics if `position > self.instrs.len()`.",
+            name.to_string()
+        );
+
+        let arg_names = &arg_names;
+        let args = &args;
+
         builder_methods.push(quote! {
-            pub fn #method_name(&mut self, #(#args),*) -> ExprId {
-                self.alloc(#name { #(#arg_names),* }).into()
+            #[inline]
+            #[doc=#doc]
+            pub fn #method_name(&mut self, #(#args),*) -> &mut Self {
+                self.instr(#name { #(#arg_names),* })
+            }
+
+            #[inline]
+            #[doc=#at_doc]
+            pub fn #method_name_at(&mut self, position: usize, #(#args),*) -> &mut Self {
+                self.instr_at(position, #name { #(#arg_names),* })
             }
         });
     }
     quote! {
         #[allow(missing_docs)]
-        impl crate::FunctionBuilder {
+        impl crate::InstrSeqBuilder<'_> {
             #(#builder_methods)*
         }
     }

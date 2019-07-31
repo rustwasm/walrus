@@ -1,7 +1,9 @@
 (module
   (func $dummy)
   (func (export "as-loop-last") (param i32)
-    (loop (call $dummy) (br_if 1 (local.get 0)))
+    (loop
+      (call $dummy)
+      (br_if 1 (local.get 0)))
   ))
 
 ;; CHECK:    (module

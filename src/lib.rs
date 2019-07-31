@@ -33,7 +33,7 @@ mod ty;
 
 pub use crate::emit::IdsToIndices;
 pub use crate::error::{ErrorKind, Result};
-pub use crate::function_builder::{BlockBuilder, FunctionBuilder};
+pub use crate::function_builder::{InstrSeqBuilder, FunctionBuilder};
 pub use crate::init_expr::InitExpr;
 pub use crate::ir::{Local, LocalId};
 pub use crate::module::*;

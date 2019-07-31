@@ -63,7 +63,7 @@ impl Function {
     /// Get this function's type's identifier.
     pub fn ty(&self) -> TypeId {
         match &self.kind {
-            FunctionKind::Local(l) => l.ty,
+            FunctionKind::Local(l) => l.ty(),
             FunctionKind::Import(i) => i.ty,
             FunctionKind::Uninitialized(t) => *t,
         }
@@ -90,8 +90,8 @@ impl FunctionKind {
     /// Get the underlying `FunctionKind::Import` or panic if this is not an
     /// import function
     pub fn unwrap_import(&self) -> &ImportedFunction {
-        match *self {
-            FunctionKind::Import(ref import) => import,
+        match self {
+            FunctionKind::Import(import) => import,
             _ => panic!("not an import function"),
         }
     }
@@ -99,8 +99,26 @@ impl FunctionKind {
     /// Get the underlying `FunctionKind::Local` or panic if this is not a local
     /// function.
     pub fn unwrap_local(&self) -> &LocalFunction {
-        match *self {
-            FunctionKind::Local(ref l) => l,
+        match self {
+            FunctionKind::Local(l) => l,
+            _ => panic!("not a local function"),
+        }
+    }
+
+    /// Get the underlying `FunctionKind::Import` or panic if this is not an
+    /// import function
+    pub fn unwrap_import_mut(&mut self) -> &mut ImportedFunction {
+        match self {
+            FunctionKind::Import(import) => import,
+            _ => panic!("not an import function"),
+        }
+    }
+
+    /// Get the underlying `FunctionKind::Local` or panic if this is not a local
+    /// function.
+    pub fn unwrap_local_mut(&mut self) -> &mut LocalFunction {
+        match self {
+            FunctionKind::Local(l) => l,
             _ => panic!("not a local function"),
         }
     }
@@ -263,7 +281,7 @@ impl ModuleFunctions {
         let mut cx = cx.start_section(Section::Function);
         cx.encoder.usize(functions.len());
         for (id, function, _size) in functions {
-            let index = cx.indices.get_type_index(function.ty);
+            let index = cx.indices.get_type_index(function.ty());
             cx.encoder.u32(index);
 
             // Assign an index to all local defined functions before we start

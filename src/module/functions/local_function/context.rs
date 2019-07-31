@@ -1,7 +1,7 @@
-//! Context needed when validating instructions and constructing our `Expr` IR.
+//! Context needed when validating instructions and constructing our `Instr` IR.
 
 use crate::error::{ErrorKind, Result};
-use crate::ir::{Block, BlockId, BlockKind, Drop, Expr, ExprId, WithSideEffects};
+use crate::ir::{BlockKind, Instr, InstrSeq, InstrSeqId};
 use crate::module::functions::{FunctionId, LocalFunction};
 use crate::module::Module;
 use crate::parse::IndicesToIds;
@@ -9,7 +9,7 @@ use crate::ty::ValType;
 use failure::Fail;
 
 #[derive(Debug)]
-pub struct ControlFrame {
+pub(crate) struct ControlFrame {
     /// The type of the associated label (used to type-check branches).
     pub label_types: Box<[ValType]>,
 
@@ -20,28 +20,30 @@ pub struct ControlFrame {
     /// that operands do not underflow the current block).
     pub height: usize,
 
-    /// If `Some`, then this frame is unreachable (used to handle
-    /// stack-polymorphic typing after branches), and the expression that makes
-    /// it unreachable is given.
-    pub unreachable: Option<ExprId>,
+    /// If `true`, then this frame is unreachable. This is used to handle
+    /// stack-polymorphic typing after unconditional branches.
+    pub unreachable: bool,
 
     /// The id of this control frame's block.
-    pub block: BlockId,
+    pub block: InstrSeqId,
+
+    /// This control frame's kind of block, eg loop vs block vs if/else.
+    pub kind: BlockKind,
 }
 
 /// The operand stack.
 ///
 /// `None` is used for `Unknown` stack-polymophic values.
 ///
-/// We also keep track of the expression that created the value at each stack
+/// We also keep track of the instruction that created the value at each stack
 /// slot.
-pub type OperandStack = Vec<(Option<ValType>, ExprId)>;
+pub(crate) type OperandStack = Vec<Option<ValType>>;
 
 /// The control frame stack.
-pub type ControlStack = Vec<ControlFrame>;
+pub(crate) type ControlStack = Vec<ControlFrame>;
 
 #[derive(Debug)]
-pub struct ValidationContext<'a> {
+pub(crate) struct ValidationContext<'a> {
     /// The module that we're adding a function for.
     pub module: &'a Module,
 
@@ -60,15 +62,14 @@ pub struct ValidationContext<'a> {
     /// The control frames stack.
     pub controls: &'a mut ControlStack,
 
-    /// If we're currently parsing an if/else expression, where we're at
+    /// If we're currently parsing an if/else instruction, where we're at
     pub if_else: Vec<IfElseState>,
 }
 
 #[derive(Debug)]
 pub struct IfElseState {
-    pub condition: ExprId,
-    pub consequent: BlockId,
-    pub alternative: Option<BlockId>,
+    pub consequent: InstrSeqId,
+    pub alternative: Option<InstrSeqId>,
 }
 
 impl<'a> ValidationContext<'a> {
@@ -92,33 +93,23 @@ impl<'a> ValidationContext<'a> {
         }
     }
 
-    pub fn push_operand<E>(&mut self, op: Option<ValType>, expr: E)
-    where
-        E: Copy + Into<ExprId>,
-    {
-        impl_push_operand(&mut self.operands, op, expr);
+    pub fn push_operand(&mut self, op: Option<ValType>) {
+        impl_push_operand(&mut self.operands, op);
     }
 
-    pub fn pop_operand(&mut self) -> Result<(Option<ValType>, ExprId)> {
+    pub fn pop_operand(&mut self) -> Result<Option<ValType>> {
         impl_pop_operand(&mut self.operands, &mut self.controls)
     }
 
-    pub fn pop_operand_expected(
-        &mut self,
-        expected: Option<ValType>,
-    ) -> Result<(Option<ValType>, ExprId)> {
+    pub fn pop_operand_expected(&mut self, expected: Option<ValType>) -> Result<Option<ValType>> {
         impl_pop_operand_expected(&mut self.operands, &mut self.controls, expected)
     }
 
-    pub fn push_operands(&mut self, types: &[ValType], expr: ExprId) {
-        if types.is_empty() && self.controls.len() > 0 {
-            self.add_to_current_frame_block(expr);
-        } else {
-            impl_push_operands(&mut self.operands, types, expr)
-        }
+    pub fn push_operands(&mut self, types: &[ValType]) {
+        impl_push_operands(&mut self.operands, types);
     }
 
-    pub fn pop_operands(&mut self, expected: &[ValType]) -> Result<Vec<ExprId>> {
+    pub fn pop_operands(&mut self, expected: &[ValType]) -> Result<()> {
         impl_pop_operands(&mut self.operands, &self.controls, expected)
     }
 
@@ -127,7 +118,7 @@ impl<'a> ValidationContext<'a> {
         kind: BlockKind,
         label_types: Box<[ValType]>,
         end_types: Box<[ValType]>,
-    ) -> BlockId {
+    ) -> InstrSeqId {
         impl_push_control(
             kind,
             self.func,
@@ -138,44 +129,14 @@ impl<'a> ValidationContext<'a> {
         )
     }
 
-    pub fn pop_control(&mut self) -> Result<(Box<[ValType]>, BlockId)> {
-        let (frame, exprs) = impl_pop_control(&mut self.controls, &mut self.operands)?;
-        if frame.unreachable.is_none() {
-            self.func
-                .block_mut(frame.block)
-                .exprs
-                .extend(exprs.iter().cloned());
-        }
-        Ok((frame.end_types, frame.block))
+    pub fn pop_control(&mut self) -> Result<(Box<[ValType]>, InstrSeqId, BlockKind)> {
+        let frame = impl_pop_control(&mut self.controls, &mut self.operands)?;
+        Ok((frame.end_types, frame.block, frame.kind))
     }
 
-    pub fn unreachable<E>(&mut self, expr: E)
-    where
-        E: Into<ExprId>,
-    {
-        let expr = expr.into();
-
+    pub fn unreachable(&mut self) {
         let frame = self.controls.last_mut().unwrap();
-
-        // If we're not unreachable yet then we need to commit this expression.
-        // Note that we also need to commit any previous expressions on the
-        // stack because they may have side effects. For any lingering operands
-        // synthesize `Drop` nodes for them here.
-        if frame.unreachable.is_none() {
-            let mut extra_exprs = Vec::new();
-            if self.operands.len() > frame.height {
-                for (_, operand) in self.operands[frame.height..].iter() {
-                    let drop = self.func.alloc(Drop { expr: *operand });
-                    extra_exprs.push(ExprId::from(drop));
-                }
-            }
-
-            let block = self.func.block_mut(frame.block);
-            block.exprs.extend(extra_exprs);
-            block.exprs.push(expr);
-        }
-
-        frame.unreachable = Some(expr);
+        frame.unreachable = true;
         let height = frame.height;
         self.operands.truncate(height);
     }
@@ -188,76 +149,41 @@ impl<'a> ValidationContext<'a> {
         Ok(&self.controls[idx])
     }
 
-    pub fn add_to_block<E>(&mut self, block: BlockId, expr: E)
-    where
-        E: Into<ExprId>,
-    {
-        self.func.block_mut(block).exprs.push(expr.into());
+    pub fn alloc_instr_in_block(&mut self, block: InstrSeqId, instr: impl Into<Instr>) {
+        self.func.block_mut(block).instrs.push(instr.into());
     }
 
-    pub fn add_to_frame_block<E>(&mut self, control_frame: usize, expr: E)
-    where
-        E: Into<ExprId>,
-    {
-        let ctrl = self.control(control_frame).unwrap();
-        if ctrl.unreachable.is_some() {
-            return;
+    pub fn alloc_instr_in_control(
+        &mut self,
+        control: usize,
+        instr: impl Into<Instr>,
+    ) -> Result<()> {
+        let frame = self.control(control)?;
+        if frame.unreachable {
+            return Ok(());
         }
-        let block = ctrl.block;
-        self.add_to_block(block, expr);
+        let block = frame.block;
+        self.alloc_instr_in_block(block, instr);
+        Ok(())
     }
 
-    pub fn add_to_current_frame_block<E>(&mut self, expr: E)
-    where
-        E: Into<ExprId>,
-    {
-        let control_height = self.controls.last().unwrap().height;
-        match self.operands.len() {
-            height if height == control_height => {
-                self.add_to_frame_block(0, expr);
-            }
-            height if height > control_height => {
-                let (ty, value) = self.operands.pop().unwrap();
-                let id = self.add_side_effect(value, expr.into());
-                self.operands.push((ty, id));
-            }
-            _ => panic!("operand stack should never be below control frame's height"),
-        }
-    }
-
-    pub fn add_side_effect(&mut self, value: ExprId, side_effect: ExprId) -> ExprId {
-        // If we can add it to an existing `WithSideEffects` expr for this value, then do that.
-        if let Expr::WithSideEffects(WithSideEffects { after, .. }) = self.func.get_mut(value) {
-            after.push(side_effect);
-            return value;
-        }
-
-        // Otherwise, allocate a new `WithSideEffects`.
-        self.func
-            .alloc(WithSideEffects {
-                before: Vec::new(),
-                value,
-                after: vec![side_effect],
-            })
-            .into()
+    pub fn alloc_instr(&mut self, instr: impl Into<Instr>) {
+        self.alloc_instr_in_control(0, instr).unwrap();
     }
 }
 
-fn impl_push_operand<E>(operands: &mut OperandStack, op: Option<ValType>, expr: E)
-where
-    E: Into<ExprId>,
-{
-    operands.push((op, expr.into()));
+fn impl_push_operand(operands: &mut OperandStack, op: Option<ValType>) {
+    operands.push(op);
 }
 
 fn impl_pop_operand(
     operands: &mut OperandStack,
     controls: &ControlStack,
-) -> Result<(Option<ValType>, ExprId)> {
-    if let Some(height) = controls.last().map(|f| f.height) {
-        if operands.len() == height {
-            if let Some(expr) = controls.last().unwrap().unreachable {
-                return Ok((None, expr));
+) -> Result<Option<ValType>> {
+    if let Some(f) = controls.last() {
+        if operands.len() == f.height {
+            if f.unreachable {
+                return Ok(None);
             }
             return Err(ErrorKind::InvalidWasm
                 .context("popped operand past control frame height in non-unreachable code")
@@ -271,26 +197,26 @@ fn impl_pop_operand_expected(
     operands: &mut OperandStack,
     controls: &ControlStack,
     expected: Option<ValType>,
-) -> Result<(Option<ValType>, ExprId)> {
+) -> Result<Option<ValType>> {
     match (impl_pop_operand(operands, controls)?, expected) {
-        ((None, id), expected) => Ok((expected, id)),
-        ((actual, id), None) => Ok((actual, id)),
-        ((Some(actual), id), Some(expected)) => {
+        (None, expected) => Ok(expected),
+        (actual, None) => Ok(actual),
+        (Some(actual), Some(expected)) => {
             if actual != expected {
                 Err(ErrorKind::InvalidWasm
                     .context(format!("expected type {}", expected))
                     .context(format!("found type {}", actual))
                     .into())
             } else {
-                Ok((Some(actual), id))
+                Ok(Some(actual))
             }
         }
     }
 }
 
-fn impl_push_operands(operands: &mut OperandStack, types: &[ValType], expr: ExprId) {
+fn impl_push_operands(operands: &mut OperandStack, types: &[ValType]) {
     for ty in types {
-        impl_push_operand(operands, Some(*ty), expr);
+        impl_push_operand(operands, Some(*ty));
     }
 }
 
@@ -298,13 +224,11 @@ fn impl_pop_operands(
     operands: &mut OperandStack,
     controls: &ControlStack,
     expected: &[ValType],
-) -> Result<Vec<ExprId>> {
-    let mut popped = vec![];
+) -> Result<()> {
     for ty in expected.iter().cloned().rev() {
-        let (_, e) = impl_pop_operand_expected(operands, controls, Some(ty))?;
-        popped.push(e);
+        impl_pop_operand_expected(operands, controls, Some(ty))?;
     }
-    Ok(popped)
+    Ok(())
 }
 
 fn impl_push_control(
@@ -314,14 +238,15 @@ fn impl_push_control(
     operands: &OperandStack,
     label_types: Box<[ValType]>,
     end_types: Box<[ValType]>,
-) -> BlockId {
-    let block = func.alloc(Block::new(kind, label_types.clone(), end_types.clone()));
+) -> InstrSeqId {
+    let block = func.add_block(|id| InstrSeq::new(id, label_types.clone(), end_types.clone()));
     let frame = ControlFrame {
         label_types,
         end_types,
         height: operands.len(),
-        unreachable: None,
+        unreachable: false,
         block,
+        kind,
     };
     controls.push(frame);
     block
@@ -330,11 +255,11 @@ fn impl_push_control(
 fn impl_pop_control(
     controls: &mut ControlStack,
     operands: &mut OperandStack,
-) -> Result<(ControlFrame, Vec<ExprId>)> {
+) -> Result<ControlFrame> {
     let frame = controls.last().ok_or_else(|| {
         ErrorKind::InvalidWasm.context("attempted to pop a frame from an empty control stack")
     })?;
-    let exprs = impl_pop_operands(operands, controls, &frame.end_types)?;
+    impl_pop_operands(operands, controls, &frame.end_types)?;
     if operands.len() != frame.height {
         return Err(ErrorKind::InvalidWasm
             .context(format!(
@@ -346,5 +271,5 @@ fn impl_pop_control(
             .into());
     }
     let frame = controls.pop().unwrap();
-    Ok((frame, exprs))
+    Ok(frame)
 }

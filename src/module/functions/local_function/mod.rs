@@ -119,28 +119,20 @@ impl LocalFunction {
 
     /// Get the size of this function, in number of instructions.
     pub fn size(&self) -> u64 {
-        struct SizeVisitor<'a> {
-            func: &'a LocalFunction,
-            instrs: u64,
+        let mut v = SizeVisitor::default();
+        dfs_in_order(&mut v, self, self.entry_block());
+        return v.size;
+
+        #[derive(Default)]
+        struct SizeVisitor {
+            size: u64,
         }
 
-        impl<'instr> Visitor<'instr> for SizeVisitor<'instr> {
-            fn local_function(&self) -> &'instr LocalFunction {
-                self.func
-            }
-
-            fn visit_instr(&mut self, e: &'instr Instr) {
-                self.instrs += 1;
-                e.visit(self);
+        impl<'instr> Visitor<'instr> for SizeVisitor {
+            fn start_instr_seq(&mut self, seq: &'instr InstrSeq) {
+                self.size += seq.len() as u64;
             }
         }
-
-        let mut v = SizeVisitor {
-            func: self,
-            instrs: 0,
-        };
-        self.entry_block().visit(&mut v);
-        v.instrs
     }
 
     /// Is this function's body a [constant
@@ -155,46 +147,33 @@ impl LocalFunction {
     /// Collect the set of data segments that are used in this function via
     /// `memory.init` or `data.drop` instructions.
     pub fn used_data_segments(&self) -> IdHashSet<Data> {
-        let mut visitor = DataSegmentsVisitor {
-            func: self,
-            segments: Default::default(),
-        };
-        self.entry_block().visit(&mut visitor);
+        let mut visitor = DataSegmentsVisitor::default();
+        dfs_in_order(&mut visitor, self, self.entry_block());
         return visitor.segments;
 
-        struct DataSegmentsVisitor<'a> {
-            func: &'a LocalFunction,
+        #[derive(Default)]
+        struct DataSegmentsVisitor {
             segments: IdHashSet<Data>,
         }
 
-        impl<'a> Visitor<'a> for DataSegmentsVisitor<'a> {
-            fn local_function(&self) -> &'a LocalFunction {
-                self.func
-            }
-
-            fn visit_data_id(&mut self, &id: &DataId) {
-                self.segments.insert(id);
+        impl<'a> Visitor<'a> for DataSegmentsVisitor {
+            fn visit_data_id(&mut self, id: &DataId) {
+                self.segments.insert(*id);
             }
         }
     }
 
     fn used_locals(&self) -> IdHashSet<Local> {
-        struct Used<'a> {
-            func: &'a LocalFunction,
-            locals: IdHashSet<Local>,
-        }
-        let mut locals = Used {
-            func: self,
-            locals: Default::default(),
-        };
-        self.entry_block().visit(&mut locals);
+        let mut locals = Used::default();
+        dfs_in_order(&mut locals, self, self.entry_block());
         return locals.locals;
 
-        impl<'a> Visitor<'a> for Used<'a> {
-            fn local_function(&self) -> &'a LocalFunction {
-                self.func
-            }
+        #[derive(Default)]
+        struct Used {
+            locals: IdHashSet<Local>,
+        }
 
+        impl<'a> Visitor<'a> for Used {
             fn visit_local_id(&mut self, id: &LocalId) {
                 self.locals.insert(*id);
             }
@@ -629,7 +608,7 @@ fn validate_instruction(ctx: &mut ValidationContext, inst: Operator) -> Result<(
             let ty = ValType::from_wasmparser_type(ty)?;
             ctx.pop_operand_expected(Some(I32))?;
 
-            let consequent = ctx.push_control(BlockKind::IfElse, ty.clone(), ty.clone());
+            let consequent = ctx.push_control(BlockKind::If, ty.clone(), ty.clone());
             ctx.if_else.push(context::IfElseState {
                 consequent,
                 alternative: None,
@@ -642,26 +621,33 @@ fn validate_instruction(ctx: &mut ValidationContext, inst: Operator) -> Result<(
             // instruction which produces the value will be an `IfElse` node,
             // not the block itself. Do some postprocessing here to create
             // such a node.
-            if let BlockKind::IfElse = kind {
-                let context::IfElseState {
-                    consequent,
-                    alternative,
-                } = ctx.if_else.pop().unwrap();
+            match kind {
+                BlockKind::If | BlockKind::Else => {
+                    let context::IfElseState {
+                        consequent,
+                        alternative,
+                    } = ctx.if_else.pop().unwrap();
 
-                let alternative = match alternative {
-                    Some(alt) => alt,
-                    None => {
-                        let alternative =
-                            ctx.push_control(BlockKind::IfElse, results.clone(), results.clone());
-                        ctx.pop_control()?;
-                        alternative
-                    }
-                };
+                    let alternative = match alternative {
+                        Some(alt) => {
+                            debug_assert_eq!(kind, BlockKind::Else);
+                            alt
+                        }
+                        None => {
+                            debug_assert_eq!(kind, BlockKind::If);
+                            let alternative =
+                                ctx.push_control(BlockKind::Else, results.clone(), results.clone());
+                            ctx.pop_control()?;
+                            alternative
+                        }
+                    };
 
-                ctx.alloc_instr(IfElse {
-                    consequent,
-                    alternative,
-                });
+                    ctx.alloc_instr(IfElse {
+                        consequent,
+                        alternative,
+                    });
+                }
+                _ => {}
             }
 
             ctx.push_operands(&results);
@@ -672,13 +658,13 @@ fn validate_instruction(ctx: &mut ValidationContext, inst: Operator) -> Result<(
             // An `else` instruction is only valid immediately inside an if/else
             // block which is denoted by the `IfElse` block kind.
             match kind {
-                BlockKind::IfElse => {}
+                BlockKind::If => {}
                 _ => bail!("`else` without a leading `if`"),
             }
 
             // But we still need to parse the alternative block, so allocate the
             // block here to parse.
-            let alternative = ctx.push_control(BlockKind::IfElse, results.clone(), results);
+            let alternative = ctx.push_control(BlockKind::Else, results.clone(), results);
             let last = ctx.if_else.last_mut().unwrap();
             if last.alternative.is_some() {
                 bail!("`else` without a leading `if`")

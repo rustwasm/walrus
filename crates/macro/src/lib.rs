@@ -1,4 +1,4 @@
-#![recursion_limit = "128"]
+#![recursion_limit = "256"]
 
 extern crate proc_macro;
 
@@ -401,7 +401,9 @@ fn create_visit(variants: &[WalrusVariant]) -> impl quote::ToTokens {
                     }
                 }
             } else {
-                quote! { visitor.#method_name(&self.#field_name); }
+                quote! {
+                    visitor.#method_name(&self.#field_name);
+                }
             }
         });
         let recurse_fields_mut =
@@ -415,17 +417,21 @@ fn create_visit(variants: &[WalrusVariant]) -> impl quote::ToTokens {
                         }
                     }
                 } else {
-                    quote! { visitor.#method_name(&mut self.#field_name); }
+                    quote! {
+                        visitor.#method_name(&mut self.#field_name);
+                    }
                 }
             });
 
         visit_impls.push(quote! {
             impl<'instr> Visit<'instr> for #name {
+                #[inline]
                 fn visit<V: Visitor<'instr>>(&self, visitor: &mut V) {
                     #(#recurse_fields);*
                 }
             }
             impl VisitMut for #name {
+                #[inline]
                 fn visit_mut<V: VisitorMut>(&mut self, visitor: &mut V) {
                     #(#recurse_fields_mut);*
                 }
@@ -435,12 +441,14 @@ fn create_visit(variants: &[WalrusVariant]) -> impl quote::ToTokens {
         let doc = format!("Visit `{}`.", name.to_string());
         visitor_trait_methods.push(quote! {
             #[doc=#doc]
+            #[inline]
             fn #method_name(&mut self, instr: &#name) {
-                instr.visit(self);
+                // ...
             }
         });
         visitor_mut_trait_methods.push(quote! {
             #[doc=#doc]
+            #[inline]
             fn #method_name_mut(&mut self, instr: &mut #name) {
                 instr.visit_mut(self);
             }
@@ -450,72 +458,111 @@ fn create_visit(variants: &[WalrusVariant]) -> impl quote::ToTokens {
         method_name.push_str(&name.to_string().to_snake_case());
         let method_name = syn::Ident::new(&method_name, Span::call_site());
         visit_impl.push(quote! {
-            Instr::#name(e) => visitor.#method_name(e),
+            Instr::#name(e) => {
+                visitor.#method_name(e);
+                e.visit(visitor);
+            }
         });
         visit_mut_impl.push(quote! {
-            Instr::#name(e) => visitor.#method_name_mut(e),
+            Instr::#name(e) => {
+                visitor.#method_name_mut(e);
+                e.visit_mut(visitor);
+            }
         });
     }
 
     quote! {
-        /// A visitor walks over an IR instruction tree.
+        /// A visitor is a set of callbacks that are called when a traversal
+        /// (such as `dfs_in_order`) is walking an instruction tree.
+        ///
+        /// ## Recursion
+        ///
+        /// Do *not* recursively get nested `InstrSeq`s for any `InstrSeqId` you
+        /// visit! You *will* blow the stack when processing large Wasm
+        /// files. `Visitor`s are _just_ heterogenously-typed callbacks, _not_
+        /// traversals themselves!
+        ///
+        /// Instead, use `walrus::ir::dfs_in_order` and other traversal drivers
+        /// that will walk the tree in a non-recursive, iterative fashion
+        ///
+        /// # Provided Methods
+        ///
+        /// Every `Visitor` trait method has a default, provided implementation
+        /// that does nothing.
         pub trait Visitor<'instr>: Sized {
-            /// Return the local function we're visiting
-            fn local_function(&self) -> &'instr crate::LocalFunction;
-
-            /// Visit `Instr`.
-            fn visit_instr(&mut self, instr: &'instr Instr) {
-                instr.visit(self)
+            /// Called before the traversal will start visiting each of the
+            /// instructions an instruction sequence.
+            ///
+            /// The order in which instruction sequences are visited is defined
+            /// by the traversal function, e.g. `walrus::ir::dfs_in_order`.
+            #[inline]
+            fn start_instr_seq(&mut self, instr_seq: &'instr InstrSeq) {
+                // ...
             }
 
-            /// Visit `InstrSeq`.
-            fn visit_instr_seq(&mut self, instr_seq: &'instr InstrSeq) {
-                for i in &instr_seq.instrs {
-                    self.visit_instr(i);
-                }
+            /// Called after the traversal finishes visiting each of the
+            /// instructions in an instruction sequence.
+            #[inline]
+            fn end_instr_seq(&mut self, instr_seq: &'instr InstrSeq) {
+                // ...
+            }
+
+            /// Visit `Instr`.
+            #[inline]
+            fn visit_instr(&mut self, instr: &'instr Instr) {
+                // ...
             }
 
             /// Visit `InstrSeqId`.
+            #[inline]
             fn visit_instr_seq_id(&mut self, instr_seq_id: &InstrSeqId) {
-                instr_seq_id.visit(self);
+                // ...
             }
 
-            /// Visit `Local`.
+            /// Visit `LocalId`.
+            #[inline]
             fn visit_local_id(&mut self, local: &crate::LocalId) {
                 // ...
             }
 
-            /// Visit `Memory`.
+            /// Visit `MemoryId`.
+            #[inline]
             fn visit_memory_id(&mut self, memory: &crate::MemoryId) {
                 // ...
             }
 
-            /// Visit `Table`.
+            /// Visit `TableId`.
+            #[inline]
             fn visit_table_id(&mut self, table: &crate::TableId) {
                 // ...
             }
 
             /// Visit `GlobalId`.
+            #[inline]
             fn visit_global_id(&mut self, global: &crate::GlobalId) {
                 // ...
             }
 
             /// Visit `FunctionId`.
+            #[inline]
             fn visit_function_id(&mut self, function: &crate::FunctionId) {
                 // ...
             }
 
             /// Visit `DataId`.
+            #[inline]
             fn visit_data_id(&mut self, function: &crate::DataId) {
                 // ...
             }
 
             /// Visit `TypeId`
+            #[inline]
             fn visit_type_id(&mut self, ty: &crate::TypeId) {
                 // ...
             }
 
             /// Visit `Value`.
+            #[inline]
             fn visit_value(&mut self, value: &crate::ir::Value) {
                 // ...
             }
@@ -523,64 +570,83 @@ fn create_visit(variants: &[WalrusVariant]) -> impl quote::ToTokens {
             #( #visitor_trait_methods )*
         }
 
-        /// A visitor walks over a mutable IR instruction tree.
+        /// A mutable version of `Visitor`.
+        ///
+        /// See `Visitor`'s documentation for details.
         pub trait VisitorMut: Sized {
-            /// Return the local function we're visiting
-            fn local_function_mut(&mut self) -> &mut crate::LocalFunction;
-
-            /// Visit `Instr`.
-            fn visit_instr_mut(&mut self, instr: &mut Instr) {
-                instr.visit_mut(self);
+            /// Called before the traversal will start visiting each of the
+            /// instructions an instruction sequence.
+            ///
+            /// The order in which instruction sequences are visited is defined
+            /// by the traversal function, e.g. `walrus::ir::dfs_pre_order_mut`.
+            #[inline]
+            fn start_instr_seq_mut(&mut self, instr_seq: &mut InstrSeq) {
+                // ...
             }
 
-            /// Visit `InstrSeq`.
-            fn visit_instr_seq_mut(&mut self, instr_seq: &mut InstrSeq) {
-                for i in &mut instr_seq.instrs {
-                    i.visit_mut(self);
-                }
+            /// Called after the traversal finishes visiting each of the
+            /// instructions in an instruction sequence.
+            #[inline]
+            fn end_instr_seq_mut(&mut self, instr_seq: &mut InstrSeq) {
+                // ...
+            }
+
+            /// Visit `Instr`.
+            #[inline]
+            fn visit_instr_mut(&mut self, instr: &mut Instr) {
+                // ...
             }
 
             /// Visit `InstrSeqId`.
+            #[inline]
             fn visit_instr_seq_id_mut(&mut self, instr_seq_id: &mut InstrSeqId) {
                 // ...
             }
 
             /// Visit `Local`.
+            #[inline]
             fn visit_local_id_mut(&mut self, local: &mut crate::LocalId) {
                 // ...
             }
 
             /// Visit `Memory`.
+            #[inline]
             fn visit_memory_id_mut(&mut self, memory: &mut crate::MemoryId) {
                 // ...
             }
 
             /// Visit `Table`.
+            #[inline]
             fn visit_table_id_mut(&mut self, table: &mut crate::TableId) {
                 // ...
             }
 
             /// Visit `GlobalId`.
+            #[inline]
             fn visit_global_id_mut(&mut self, global: &mut crate::GlobalId) {
                 // ...
             }
 
             /// Visit `FunctionId`.
+            #[inline]
             fn visit_function_id_mut(&mut self, function: &mut crate::FunctionId) {
                 // ...
             }
 
             /// Visit `DataId`.
+            #[inline]
             fn visit_data_id_mut(&mut self, function: &mut crate::DataId) {
                 // ...
             }
 
             /// Visit `TypeId`
+            #[inline]
             fn visit_type_id_mut(&mut self, ty: &mut crate::TypeId) {
                 // ...
             }
 
             /// Visit `Value`.
+            #[inline]
             fn visit_value_mut(&mut self, value: &mut crate::ir::Value) {
                 // ...
             }
@@ -589,6 +655,7 @@ fn create_visit(variants: &[WalrusVariant]) -> impl quote::ToTokens {
         }
 
         impl<'instr> Visit<'instr> for Instr {
+            #[inline]
             fn visit<V>(&self, visitor: &mut V) where V: Visitor<'instr> {
                 match self {
                     #( #visit_impl )*
@@ -597,6 +664,7 @@ fn create_visit(variants: &[WalrusVariant]) -> impl quote::ToTokens {
         }
 
         impl VisitMut for Instr {
+            #[inline]
             fn visit_mut<V>(&mut self, visitor: &mut V) where V: VisitorMut {
                 match self {
                     #( #visit_mut_impl )*

@@ -62,11 +62,14 @@ macro_rules! define_get_index {
                 /// Get the index for the given identifier.
                 #[inline]
                 pub fn $get_name(&self, id: $id_ty) -> u32 {
-                    self.$member.get(&id).cloned().expect(
-                        "Should never try and get the index for an identifier that has not already had \
+                    self.$member.get(&id).cloned().unwrap_or_else(|| panic!(
+                        "{}: Should never try and get the index for an identifier that has not already had \
                          its index set. This means that either we are attempting to get the index of \
-                         an unused identifier, or that we are emitting sections in the wrong order."
-                    )
+                         an unused identifier, or that we are emitting sections in the wrong order. \n\n\
+                         id = {:?}",
+                        stringify!($get_name),
+                        id,
+                    ))
                 }
             )*
         }

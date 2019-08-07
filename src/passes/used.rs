@@ -3,7 +3,7 @@ use crate::map::IdHashSet;
 use crate::{
     ActiveDataLocation, Data, DataId, DataKind, Element, ExportId, ExportItem, Function, InitExpr,
 };
-use crate::{FunctionId, FunctionKind, Global, GlobalId, LocalFunction};
+use crate::{FunctionId, FunctionKind, Global, GlobalId};
 use crate::{GlobalKind, ImportKind, Memory, MemoryId, Table, TableId};
 use crate::{Module, TableKind, Type, TypeId};
 
@@ -97,10 +97,8 @@ impl Used {
 
                 match &func.kind {
                     FunctionKind::Local(func) => {
-                        func.entry_block().visit(&mut UsedVisitor {
-                            func,
-                            stack: &mut stack,
-                        });
+                        let mut visitor = UsedVisitor { stack: &mut stack };
+                        dfs_in_order(&mut visitor, func, func.entry_block());
                     }
                     FunctionKind::Import(_) => {}
                     FunctionKind::Uninitialized(_) => unreachable!(),
@@ -204,15 +202,10 @@ impl UsedStack<'_> {
 }
 
 struct UsedVisitor<'a, 'b> {
-    func: &'a LocalFunction,
     stack: &'a mut UsedStack<'b>,
 }
 
-impl<'expr> Visitor<'expr> for UsedVisitor<'expr, '_> {
-    fn local_function(&self) -> &'expr LocalFunction {
-        self.func
-    }
-
+impl<'expr> Visitor<'expr> for UsedVisitor<'_, '_> {
     fn visit_function_id(&mut self, &func: &FunctionId) {
         self.stack.push_func(func);
     }

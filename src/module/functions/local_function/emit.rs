@@ -12,50 +12,112 @@ pub(crate) fn run(
     local_indices: &IdHashMap<Local, u32>,
     encoder: &mut Encoder,
 ) {
-    let mut v = Emit {
-        func,
+    let v = &mut Emit {
         indices,
         blocks: vec![],
+        block_kinds: vec![BlockKind::FunctionEntry],
         encoder,
         local_indices,
     };
-    v.visit_block_id(BlockKind::FunctionEntry, func.entry_block());
+    dfs_in_order(v, func, func.entry_block());
+
+    debug_assert!(v.blocks.is_empty());
+    debug_assert!(v.block_kinds.is_empty());
 }
 
 struct Emit<'a, 'b> {
-    // The function we are visiting.
-    func: &'a LocalFunction,
-
     // Needed so we can map locals to their indices.
     indices: &'a IdsToIndices,
     local_indices: &'a IdHashMap<Local, u32>,
 
     // Stack of blocks that we are currently emitting instructions for. A branch
-    // is only valid if its target is one of these blocks.
+    // is only valid if its target is one of these blocks. See also the
+    // `branch_target` method.
     blocks: Vec<InstrSeqId>,
+
+    // The kinds of blocks we have on the stack. This is parallel to `blocks`
+    // 99% of the time, except we push a new block kind in `visit_instr`, before
+    // we push the block in `start_instr_seq`, because this is when we know the
+    // kind.
+    block_kinds: Vec<BlockKind>,
 
     // The instruction sequence we are building up to emit.
     encoder: &'a mut Encoder<'b>,
 }
 
-impl Emit<'_, '_> {
-    fn visit(&mut self, instr: &Instr) {
+impl<'instr> Visitor<'instr> for Emit<'_, '_> {
+    fn start_instr_seq(&mut self, seq: &'instr InstrSeq) {
+        self.blocks.push(seq.id());
+        debug_assert_eq!(self.blocks.len(), self.block_kinds.len());
+
+        match self.block_kinds.last().unwrap() {
+            BlockKind::Block => {
+                self.encoder.byte(0x02); // block
+                self.block_type(&seq.results);
+            }
+            BlockKind::Loop => {
+                self.encoder.byte(0x03); // loop
+                self.block_type(&seq.results);
+            }
+            BlockKind::If => {
+                self.encoder.byte(0x04); // if
+                self.block_type(&seq.results);
+            }
+            // Function entries are implicitly started, and don't need any
+            // opcode to start them. `Else` blocks are started when `If` blocks
+            // end in an `else` opcode, which we handle in `end_instr_seq`
+            // below.
+            BlockKind::FunctionEntry | BlockKind::Else => {}
+        }
+    }
+
+    fn end_instr_seq(&mut self, seq: &'instr InstrSeq) {
+        let popped_block = self.blocks.pop();
+        debug_assert_eq!(popped_block, Some(seq.id()));
+
+        let popped_kind = self.block_kinds.pop();
+        debug_assert!(popped_kind.is_some());
+
+        debug_assert_eq!(self.blocks.len(), self.block_kinds.len());
+
+        if let BlockKind::If = popped_kind.unwrap() {
+            // We're about to visit the `else` block, so push its kind.
+            //
+            // TODO: don't emit `else` for empty else blocks
+            self.block_kinds.push(BlockKind::Else);
+            self.encoder.byte(0x05); // else
+        } else {
+            self.encoder.byte(0x0b); // end
+        }
+    }
+
+    fn visit_instr(&mut self, instr: &'instr Instr) {
         use self::Instr::*;
 
         match instr {
+            Block(_) => self.block_kinds.push(BlockKind::Block),
+            Loop(_) => self.block_kinds.push(BlockKind::Loop),
+
+            // Push the `if` block kind, and then when we finish encoding the
+            // `if` block, we'll pop the `if` kind and push the `else`
+            // kind. This allows us to maintain the `self.blocks.len() ==
+            // self.block_kinds.len()` invariant.
+            IfElse(_) => self.block_kinds.push(BlockKind::If),
+
+            BrTable(e) => {
+                self.encoder.byte(0x0e); // br_table
+                self.encoder.usize(e.blocks.len());
+                for b in e.blocks.iter() {
+                    let target = self.branch_target(*b);
+                    self.encoder.u32(target);
+                }
+                let default = self.branch_target(e.default);
+                self.encoder.u32(default);
+            }
+
             Const(e) => e.value.emit(self.encoder),
-            Block(e) => self.visit_block_id(BlockKind::Block, e.seq),
-            Loop(e) => self.visit_block_id(BlockKind::Loop, e.seq),
-            BrTable(e) => self.visit_br_table(e),
-            IfElse(e) => self.visit_if_else(e),
-
-            Drop(_) => {
-                self.encoder.byte(0x1a); // drop
-            }
-
-            Return(_) => {
-                self.encoder.byte(0x0f); // return
-            }
+            Drop(_) => self.encoder.byte(0x1a), // drop
+            Return(_) => self.encoder.byte(0x0f), // return
 
             MemorySize(e) => {
                 let idx = self.indices.get_memory_index(e.memory);
@@ -703,7 +765,9 @@ impl Emit<'_, '_> {
             }
         }
     }
+}
 
+impl Emit<'_, '_> {
     fn branch_target(&self, block: InstrSeqId) -> u32 {
         self.blocks
             .iter()
@@ -712,64 +776,6 @@ impl Emit<'_, '_> {
             .expect(
             "attempt to branch to invalid block; bad transformation pass introduced bad branching?",
         ) as u32
-    }
-
-    fn visit_block_id(&mut self, kind: BlockKind, block_id: InstrSeqId) {
-        self.visit_block(kind, self.func.block(block_id))
-    }
-
-    fn visit_block(&mut self, kind: BlockKind, block: &InstrSeq) {
-        self.blocks.push(block.id());
-
-        match kind {
-            BlockKind::Block => {
-                self.encoder.byte(0x02); // block
-                self.block_type(&block.results);
-            }
-            BlockKind::Loop => {
-                self.encoder.byte(0x03); // loop
-                self.block_type(&block.results);
-            }
-            BlockKind::FunctionEntry | BlockKind::IfElse => {}
-        }
-
-        for x in &block.instrs {
-            self.visit(x);
-        }
-
-        match kind {
-            BlockKind::Block | BlockKind::Loop | BlockKind::FunctionEntry => {
-                self.encoder.byte(0x0b); // end
-            }
-            BlockKind::IfElse => {}
-        }
-
-        self.blocks.pop();
-    }
-
-    fn visit_if_else(&mut self, e: &IfElse) {
-        self.encoder.byte(0x04); // if
-        let consequent = self.func.block(e.consequent);
-        self.block_type(&consequent.results);
-
-        self.visit_block(BlockKind::IfElse, consequent);
-
-        // TODO: don't emit `else` for empty else blocks
-        self.encoder.byte(0x05); // else
-        self.visit_block_id(BlockKind::IfElse, e.alternative);
-
-        self.encoder.byte(0x0b); // end
-    }
-
-    fn visit_br_table(&mut self, e: &BrTable) {
-        self.encoder.byte(0x0e); // br_table
-        self.encoder.usize(e.blocks.len());
-        for b in e.blocks.iter() {
-            let target = self.branch_target(*b);
-            self.encoder.u32(target);
-        }
-        let default = self.branch_target(e.default);
-        self.encoder.u32(default);
     }
 
     fn block_type(&mut self, ty: &[ValType]) {

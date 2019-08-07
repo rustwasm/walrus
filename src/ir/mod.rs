@@ -4,11 +4,13 @@
 //! the stack machine into an instruction tree. Additionally all control frames
 //! are representd as `Block`s.
 
+mod traversals;
+pub use self::traversals::*;
+
 use crate::encode::Encoder;
-use crate::{DataId, FunctionId, GlobalId, MemoryId, TableId, TypeId, ValType};
+use crate::{DataId, FunctionId, GlobalId, LocalFunction, MemoryId, TableId, TypeId, ValType};
 use id_arena::Id;
 use std::fmt;
-use std::mem;
 use std::ops::{Deref, DerefMut};
 use walrus_macro::walrus_instr;
 
@@ -105,8 +107,11 @@ pub(crate) enum BlockKind {
     /// A `loop` block.
     Loop,
 
-    /// An `if` or `else` bloack.
-    IfElse,
+    /// An `if` block
+    If,
+
+    /// An `Else` block
+    Else,
 
     /// The entry to a function.
     FunctionEntry,
@@ -1034,47 +1039,17 @@ impl Instr {
 }
 
 /// Anything that can be visited by a `Visitor`.
-pub trait Visit<'expr> {
+pub(crate) trait Visit<'expr> {
     /// Visit this thing with the given visitor.
     fn visit<V>(&self, visitor: &mut V)
     where
         V: Visitor<'expr>;
 }
 
-/// Anything that can be visited by a `Visitor`.
-pub trait VisitMut {
+/// Anything that can be mutably visited by a `VisitorMut`.
+pub(crate) trait VisitMut {
     /// Visit this thing with the given visitor.
     fn visit_mut<V>(&mut self, visitor: &mut V)
     where
         V: VisitorMut;
-}
-
-impl<'expr> Visit<'expr> for InstrSeqId {
-    fn visit<V>(&self, visitor: &mut V)
-    where
-        V: Visitor<'expr>,
-    {
-        visitor.visit_instr_seq(visitor.local_function().block(*self))
-    }
-}
-
-impl VisitMut for InstrSeqId {
-    fn visit_mut<V>(&mut self, visitor: &mut V)
-    where
-        V: VisitorMut,
-    {
-        // Temporarily take the block out of the function while we visit it, to
-        // appease the borrow checker.
-        let mut seq = mem::replace(
-            visitor.local_function_mut().block_mut(*self),
-            InstrSeq {
-                id: *self,
-                params: vec![].into_boxed_slice(),
-                results: vec![].into_boxed_slice(),
-                instrs: vec![],
-            },
-        );
-        visitor.visit_instr_seq_mut(&mut seq);
-        *visitor.local_function_mut().block_mut(*self) = seq;
-    }
 }

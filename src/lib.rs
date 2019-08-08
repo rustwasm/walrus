@@ -18,6 +18,7 @@ macro_rules! maybe_parallel {
 }
 
 mod arena_set;
+pub mod dot;
 mod emit;
 mod encode;
 mod error;
@@ -33,7 +34,7 @@ mod ty;
 
 pub use crate::emit::IdsToIndices;
 pub use crate::error::{ErrorKind, Result};
-pub use crate::function_builder::{InstrSeqBuilder, FunctionBuilder};
+pub use crate::function_builder::{FunctionBuilder, InstrSeqBuilder};
 pub use crate::init_expr::InitExpr;
 pub use crate::ir::{Local, LocalId};
 pub use crate::module::*;

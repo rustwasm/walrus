@@ -116,7 +116,7 @@ impl<'instr> Visitor<'instr> for Emit<'_, '_> {
             }
 
             Const(e) => e.value.emit(self.encoder),
-            Drop(_) => self.encoder.byte(0x1a), // drop
+            Drop(_) => self.encoder.byte(0x1a),   // drop
             Return(_) => self.encoder.byte(0x0f), // return
 
             MemorySize(e) => {
@@ -769,11 +769,7 @@ impl<'instr> Visitor<'instr> for Emit<'_, '_> {
 
 impl Emit<'_, '_> {
     fn branch_target(&self, block: InstrSeqId) -> u32 {
-        self.blocks
-            .iter()
-            .rev()
-            .position(|b| *b == block)
-            .expect(
+        self.blocks.iter().rev().position(|b| *b == block).expect(
             "attempt to branch to invalid block; bad transformation pass introduced bad branching?",
         ) as u32
     }

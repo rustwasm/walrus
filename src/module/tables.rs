@@ -44,6 +44,7 @@ impl TableKind {
             _ => panic!("not a Function"),
         }
     }
+
     /// Unwrap `TableKind` to get inner `Anyref`. Panics if `TableKind` is anything other than `Anyref`
     pub fn unwrap_anyref(&self) -> &AnyrefTable {
         match *self {

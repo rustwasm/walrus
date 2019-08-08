@@ -1,3 +1,4 @@
+use std::env;
 use std::path::Path;
 
 fn run(wat: &Path) -> Result<(), failure::Error> {
@@ -17,6 +18,10 @@ fn run(wat: &Path) -> Result<(), failure::Error> {
         })
         .collect();
     assert_eq!(local_funcs.len(), 1);
+
+    if env::var("WALRUS_TESTS_DOT").is_ok() {
+        module.write_graphviz_dot(wat.with_extension("dot"))?;
+    }
 
     Ok(())
 }

@@ -481,10 +481,13 @@ impl InstrSeqBuilder<'_> {
             builder.id
         };
 
-        self.instr_at(position, IfElse {
-            consequent,
-            alternative,
-        })
+        self.instr_at(
+            position,
+            IfElse {
+                consequent,
+                alternative,
+            },
+        )
     }
 }
 

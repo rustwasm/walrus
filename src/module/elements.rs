@@ -14,7 +14,9 @@ pub type ElementId = Id<Element>;
 #[derive(Debug)]
 pub struct Element {
     id: Id<Element>,
-    members: Vec<FunctionId>,
+
+    /// The function members of this passive elements segment.
+    pub members: Vec<FunctionId>,
 }
 
 impl Element {

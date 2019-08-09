@@ -5,7 +5,7 @@
 
 use crate::ir::*;
 use crate::ValType;
-use crate::{Function, FunctionKind, InitExpr, LocalFunction, Result};
+use crate::{Function, FunctionKind, InitExpr, Result};
 use crate::{Global, GlobalKind, Memory, MemoryId, Module, Table, TableKind};
 use failure::{bail, ResultExt};
 use std::collections::HashSet;
@@ -59,10 +59,9 @@ pub fn run(module: &Module) -> Result<()> {
             let mut cx = Validate {
                 errs: &mut errs,
                 function,
-                local,
                 module,
             };
-            local.entry_block().visit(&mut cx);
+            dfs_in_order(&mut cx, local, local.entry_block());
             errs
         })
         .collect::<Vec<_>>();
@@ -167,7 +166,6 @@ fn validate_value(value: Value, ty: ValType) -> Result<()> {
 struct Validate<'a> {
     errs: &'a mut Vec<failure::Error>,
     function: &'a Function,
-    local: &'a LocalFunction,
     module: &'a Module,
 }
 
@@ -205,17 +203,12 @@ impl Validate<'_> {
 }
 
 impl<'a> Visitor<'a> for Validate<'a> {
-    fn local_function(&self) -> &'a LocalFunction {
-        self.local
-    }
-
     fn visit_load(&mut self, e: &Load) {
         if e.kind.atomic() {
             self.require_atomic(e.memory, &e.arg, e.kind.width());
         } else {
             self.memarg(&e.arg, e.kind.width());
         }
-        e.visit(self);
     }
 
     fn visit_store(&mut self, e: &Store) {
@@ -224,28 +217,23 @@ impl<'a> Visitor<'a> for Validate<'a> {
         } else {
             self.memarg(&e.arg, e.kind.width());
         }
-        e.visit(self);
     }
 
     fn visit_atomic_rmw(&mut self, e: &AtomicRmw) {
         self.require_atomic(e.memory, &e.arg, e.width.bytes());
-        e.visit(self);
     }
 
     fn visit_cmpxchg(&mut self, e: &Cmpxchg) {
         self.require_atomic(e.memory, &e.arg, e.width.bytes());
-        e.visit(self);
     }
 
     fn visit_atomic_notify(&mut self, e: &AtomicNotify) {
         self.require_shared(e.memory);
         // TODO: should alignment or things be validated?
-        e.visit(self);
     }
 
     fn visit_atomic_wait(&mut self, e: &AtomicWait) {
         let width = if e.sixty_four { 8 } else { 4 };
         self.require_atomic(e.memory, &e.arg, width);
-        e.visit(self);
     }
 }

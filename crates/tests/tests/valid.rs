@@ -1,7 +1,5 @@
 use std::env;
-use std::fs;
 use std::path::Path;
-use walrus::dot::Dot;
 
 fn run(wat: &Path) -> Result<(), failure::Error> {
     static INIT_LOGS: std::sync::Once = std::sync::Once::new();
@@ -21,11 +19,8 @@ fn run(wat: &Path) -> Result<(), failure::Error> {
         .collect();
     assert_eq!(local_funcs.len(), 1);
 
-    let f = &local_funcs.first().unwrap();
     if env::var("WALRUS_TESTS_DOT").is_ok() {
-        let mut file = String::new();
-        f.dot(&mut file);
-        fs::write(wat.with_extension("dot"), file)?;
+        module.write_graphviz_dot(wat.with_extension("dot"))?;
     }
 
     Ok(())

@@ -3,7 +3,7 @@ use crate::map::IdHashSet;
 use crate::{
     ActiveDataLocation, Data, DataId, DataKind, Element, ExportId, ExportItem, Function, InitExpr,
 };
-use crate::{FunctionId, FunctionKind, Global, GlobalId, LocalFunction};
+use crate::{FunctionId, FunctionKind, Global, GlobalId};
 use crate::{GlobalKind, ImportKind, Memory, MemoryId, Table, TableId};
 use crate::{Module, TableKind, Type, TypeId};
 
@@ -97,10 +97,8 @@ impl Used {
 
                 match &func.kind {
                     FunctionKind::Local(func) => {
-                        func.entry_block().visit(&mut UsedVisitor {
-                            func,
-                            stack: &mut stack,
-                        });
+                        let mut visitor = UsedVisitor { stack: &mut stack };
+                        dfs_in_order(&mut visitor, func, func.entry_block());
                     }
                     FunctionKind::Import(_) => {}
                     FunctionKind::Uninitialized(_) => unreachable!(),
@@ -168,30 +166,35 @@ struct UsedStack<'a> {
 
 impl UsedStack<'_> {
     fn push_func(&mut self, f: FunctionId) {
+        log::trace!("function is used: {:?}", f);
         if self.used.funcs.insert(f) {
             self.functions.push(f);
         }
     }
 
     fn push_table(&mut self, f: TableId) {
+        log::trace!("table is used: {:?}", f);
         if self.used.tables.insert(f) {
             self.tables.push(f);
         }
     }
 
     fn push_global(&mut self, f: GlobalId) {
+        log::trace!("global is used: {:?}", f);
         if self.used.globals.insert(f) {
             self.globals.push(f);
         }
     }
 
     fn push_memory(&mut self, f: MemoryId) {
+        log::trace!("memory is used: {:?}", f);
         if self.used.memories.insert(f) {
             self.memories.push(f);
         }
     }
 
     fn push_data(&mut self, d: DataId) {
+        log::trace!("data is used: {:?}", d);
         if self.used.data.insert(d) {
             self.datas.push(d);
         }
@@ -199,15 +202,10 @@ impl UsedStack<'_> {
 }
 
 struct UsedVisitor<'a, 'b> {
-    func: &'a LocalFunction,
     stack: &'a mut UsedStack<'b>,
 }
 
-impl<'expr> Visitor<'expr> for UsedVisitor<'expr, '_> {
-    fn local_function(&self) -> &'expr LocalFunction {
-        self.func
-    }
-
+impl<'expr> Visitor<'expr> for UsedVisitor<'_, '_> {
     fn visit_function_id(&mut self, &func: &FunctionId) {
         self.stack.push_func(func);
     }

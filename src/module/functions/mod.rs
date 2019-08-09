@@ -2,7 +2,6 @@
 
 mod local_function;
 
-use crate::dot::Dot;
 use crate::emit::{Emit, EmitContext, Section};
 use crate::encode::Encoder;
 use crate::error::Result;
@@ -19,9 +18,6 @@ use std::cmp;
 use rayon::prelude::*;
 
 pub use self::local_function::LocalFunction;
-
-// have generated impls from the `#[walrus_expr]` macro
-pub(crate) use self::local_function::DotExpr;
 
 /// A function identifier.
 pub type FunctionId = Id<Function>;
@@ -67,19 +63,9 @@ impl Function {
     /// Get this function's type's identifier.
     pub fn ty(&self) -> TypeId {
         match &self.kind {
-            FunctionKind::Local(l) => l.ty,
+            FunctionKind::Local(l) => l.ty(),
             FunctionKind::Import(i) => i.ty,
             FunctionKind::Uninitialized(t) => *t,
-        }
-    }
-}
-
-impl Dot for Function {
-    fn dot(&self, out: &mut String) {
-        match &self.kind {
-            FunctionKind::Import(i) => i.dot(out),
-            FunctionKind::Local(l) => l.dot(out),
-            FunctionKind::Uninitialized(_) => unreachable!(),
         }
     }
 }
@@ -104,8 +90,8 @@ impl FunctionKind {
     /// Get the underlying `FunctionKind::Import` or panic if this is not an
     /// import function
     pub fn unwrap_import(&self) -> &ImportedFunction {
-        match *self {
-            FunctionKind::Import(ref import) => import,
+        match self {
+            FunctionKind::Import(import) => import,
             _ => panic!("not an import function"),
         }
     }
@@ -113,8 +99,26 @@ impl FunctionKind {
     /// Get the underlying `FunctionKind::Local` or panic if this is not a local
     /// function.
     pub fn unwrap_local(&self) -> &LocalFunction {
-        match *self {
-            FunctionKind::Local(ref l) => l,
+        match self {
+            FunctionKind::Local(l) => l,
+            _ => panic!("not a local function"),
+        }
+    }
+
+    /// Get the underlying `FunctionKind::Import` or panic if this is not an
+    /// import function
+    pub fn unwrap_import_mut(&mut self) -> &mut ImportedFunction {
+        match self {
+            FunctionKind::Import(import) => import,
+            _ => panic!("not an import function"),
+        }
+    }
+
+    /// Get the underlying `FunctionKind::Local` or panic if this is not a local
+    /// function.
+    pub fn unwrap_local_mut(&mut self) -> &mut LocalFunction {
+        match self {
+            FunctionKind::Local(l) => l,
             _ => panic!("not a local function"),
         }
     }
@@ -127,12 +131,6 @@ pub struct ImportedFunction {
     pub import: ImportId,
     /// The type signature of this imported function.
     pub ty: TypeId,
-}
-
-impl Dot for ImportedFunction {
-    fn dot(&self, out: &mut String) {
-        out.push_str("digraph {{ imported_function; }}");
-    }
 }
 
 /// The set of functions within a module.
@@ -283,7 +281,7 @@ impl ModuleFunctions {
         let mut cx = cx.start_section(Section::Function);
         cx.encoder.usize(functions.len());
         for (id, function, _size) in functions {
-            let index = cx.indices.get_type_index(function.ty);
+            let index = cx.indices.get_type_index(function.ty());
             cx.encoder.u32(index);
 
             // Assign an index to all local defined functions before we start

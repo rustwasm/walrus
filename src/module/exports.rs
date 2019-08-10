@@ -5,6 +5,8 @@ use crate::parse::IndicesToIds;
 use crate::tombstone_arena::{Id, Tombstone, TombstoneArena};
 use crate::{FunctionId, GlobalId, MemoryId, Module, Result, TableId};
 
+use std::collections::HashMap;
+
 /// The id of an export.
 pub type ExportId = Id<Export>;
 
@@ -49,6 +51,10 @@ pub enum ExportItem {
 pub struct ModuleExports {
     /// The arena containing this module's exports.
     arena: TombstoneArena<Export>,
+    fn_id_to_export_id: HashMap<FunctionId, ExportId>,
+    tbl_id_to_export_id: HashMap<TableId, ExportId>,
+    mem_id_to_export_id: HashMap<MemoryId, ExportId>,
+    global_id_to_export_id: HashMap<GlobalId, ExportId>,
 }
 
 impl ModuleExports {
@@ -62,8 +68,17 @@ impl ModuleExports {
         &mut self.arena[id]
     }
 
+    fn get_safe(&self, id: ExportId) -> Option<&Export> {
+        self.arena.get(id)
+    }
+
+    fn get_mut_safe(&mut self, id: ExportId) -> Option<&mut Export> {
+        self.arena.get_mut(id)
+    }
+
     /// Delete an export entry from this module.
     pub fn delete(&mut self, id: ExportId) {
+        self.remove_mapping(id);
         self.arena.delete(id);
     }
 
@@ -79,17 +94,69 @@ impl ModuleExports {
 
     /// Add a new export to this module
     pub fn add(&mut self, name: &str, item: impl Into<ExportItem>) -> ExportId {
-        self.arena.alloc_with_id(|id| Export {
+        let export_item: ExportItem = item.into();
+        let export_id: ExportId = self.arena.alloc_with_id(|id| Export {
             id,
             name: name.to_string(),
-            item: item.into(),
-        })
+            item: export_item,
+        });
+        self.insert_mapping(export_item, export_id);
+        export_id
     }
 
     #[doc(hidden)]
     #[deprecated(note = "Use `ModuleExports::delete` instead")]
     pub fn remove_root(&mut self, id: ExportId) {
         self.delete(id);
+    }
+
+    fn insert_mapping(&mut self, item: ExportItem, id: ExportId) -> Option<ExportId> {
+        match item {
+            ExportItem::Function(f) => self.fn_id_to_export_id.insert(f, id),
+            ExportItem::Table(t) => self.tbl_id_to_export_id.insert(t, id),
+            ExportItem::Memory(m) => self.mem_id_to_export_id.insert(m, id),
+            ExportItem::Global(g) => self.global_id_to_export_id.insert(g, id),
+        }
+    }
+
+    fn remove_mapping(&mut self, id: ExportId) -> Option<ExportId> {
+        match self.get_mut_safe(id) {
+            Some(export) => match export.item {
+                ExportItem::Function(f) => self.fn_id_to_export_id.remove(&f),
+                ExportItem::Table(t) => self.tbl_id_to_export_id.remove(&t),
+                ExportItem::Memory(m) => self.mem_id_to_export_id.remove(&m),
+                ExportItem::Global(g) => self.global_id_to_export_id.remove(&g),
+            },
+            None => None,
+        }
+    }
+
+    /// Get a reference to a function export given its function id.
+    pub fn get_exported_func(&self, f: FunctionId) -> Option<&Export> {
+        self.fn_id_to_export_id
+            .get(&f)
+            .and_then(|id| self.get_safe(*id))
+    }
+
+    /// Get a reference to a table export given its table id.
+    pub fn get_exported_table(&self, t: TableId) -> Option<&Export> {
+        self.tbl_id_to_export_id
+            .get(&t)
+            .and_then(|id| self.get_safe(*id))
+    }
+
+    /// Get a reference to a memory export given its export id.
+    pub fn get_exported_memory(&self, m: MemoryId) -> Option<&Export> {
+        self.mem_id_to_export_id
+            .get(&m)
+            .and_then(|id| self.get_safe(*id))
+    }
+
+    /// Get a reference to a global export given its global id.
+    pub fn get_exported_global(&self, g: GlobalId) -> Option<&Export> {
+        self.global_id_to_export_id
+            .get(&g)
+            .and_then(|id| self.get_safe(*id))
     }
 }
 

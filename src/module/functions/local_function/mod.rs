@@ -836,6 +836,13 @@ fn validate_instruction(ctx: &mut ValidationContext, inst: Operator) -> Result<(
             store(ctx, memarg, I64, StoreKind::I64_32 { atomic: false })?
         }
 
+        Operator::Fence { flags } => {
+            if flags != 0 {
+                bail!("fence with nonzero flags not supported yet");
+            }
+            ctx.alloc_instr(AtomicFence { });
+        }
+
         Operator::I32AtomicLoad { memarg } => {
             load(ctx, memarg, I32, LoadKind::I32 { atomic: true })?
         }

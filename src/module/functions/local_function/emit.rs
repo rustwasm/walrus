@@ -716,6 +716,12 @@ impl<'instr> Visitor<'instr> for Emit<'_, '_> {
                 self.memarg(e.memory, &e.arg);
             }
 
+            AtomicFence(_e) => {
+                self.encoder.byte(0xfe);
+                self.encoder.byte(0x03);
+                self.encoder.byte(0x00);
+            }
+
             TableGet(e) => {
                 self.encoder.byte(0x25);
                 let idx = self.indices.get_table_index(e.table);

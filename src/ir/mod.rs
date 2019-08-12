@@ -384,6 +384,9 @@ pub enum Instr {
         sixty_four: bool,
     },
 
+    /// The `atomic.fence` instruction
+    AtomicFence {},
+
     /// `table.get`
     TableGet {
         /// The table we're fetching from.
@@ -1033,6 +1036,7 @@ impl Instr {
             | Instr::V128Swizzle(..)
             | Instr::V128Shuffle(..)
             | Instr::LoadSplat(..)
+            | Instr::AtomicFence(..)
             | Instr::Drop(..) => false,
         }
     }

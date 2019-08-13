@@ -1,11 +1,11 @@
 //! Exported items in a wasm module.
 
 use crate::emit::{Emit, EmitContext, Section};
+use crate::map::IdHashMap;
 use crate::parse::IndicesToIds;
 use crate::tombstone_arena::{Id, Tombstone, TombstoneArena};
+use crate::{Function, Global, Memory, Table};
 use crate::{FunctionId, GlobalId, MemoryId, Module, Result, TableId};
-
-use std::collections::HashMap;
 
 /// The id of an export.
 pub type ExportId = Id<Export>;
@@ -51,10 +51,10 @@ pub enum ExportItem {
 pub struct ModuleExports {
     /// The arena containing this module's exports.
     arena: TombstoneArena<Export>,
-    fn_id_to_export_id: HashMap<FunctionId, ExportId>,
-    tbl_id_to_export_id: HashMap<TableId, ExportId>,
-    mem_id_to_export_id: HashMap<MemoryId, ExportId>,
-    global_id_to_export_id: HashMap<GlobalId, ExportId>,
+    fn_id_to_export_id: IdHashMap<Function, ExportId>,
+    tbl_id_to_export_id: IdHashMap<Table, ExportId>,
+    mem_id_to_export_id: IdHashMap<Memory, ExportId>,
+    global_id_to_export_id: IdHashMap<Global, ExportId>,
 }
 
 impl ModuleExports {

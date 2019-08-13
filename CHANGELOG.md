@@ -32,6 +32,67 @@ Released YYYY-MM-DD.
 
 --------------------------------------------------------------------------------
 
+## 0.11.0
+
+Released 2019-08-13.
+
+### Added
+
+* `walrus::Module::write_graphviz_dot`: You can now render a whole Wasm module
+  as a GraphViz Dot file (previously you could only do one function at a time)
+  and it will also show the relationships between all the various Wasm
+  structures (previously it only showed the relationships between instructions).
+
+### Changed
+
+* The intermediate representation for instructions (`walrus::ir::*`) has been
+  overhauled. `Expr` has been renamed to `Instr`, and an operator no longer
+  points to its operands as nested children in the AST. Instead of representing
+  every instruction as a node in an AST, now there is a tree of instruction
+  sequences. An instruction sequence is a vector of `Instr`s that relate to each
+  other implicitly via their effect on the stack. A nested `block ... end`,
+  `loop ... end`, or `if ... else ... end` form new nested instruction
+  sequences.
+
+* The `Visitor` and `VisitorMut` traits and traversing the IR has also been
+  overhauled:
+
+    * Visitors are no longer recursive, and should never recursively call
+      `self.visit_foo()` from inside `self.visit_bar()`. Not in the default
+      provided trait methods and not in any user-written overrides of those
+      trait methods.
+
+    * There are now *traversal functions* which take a visitor, a
+      `LocalFunction`, and a start `InstrSeqId`, and then perform some kind of
+      traversal over the function's IR from the given start sequence. These
+      traversal functions are *not* recursive, and are implemented with explicit
+      work lists and while loops. This avoids blowing the stack on deeply nested
+      Wasm inputs. Although we can still OOM, we leave fixing that to future
+      PRs. Right now there are only two traversals, because that is all we've
+      needed so far: an in-order DFS for immutable visitors (needs to be
+      in-order so we can encode instructions in the right order) and a pre-order
+      DFS for mutable visitors (pre-order is the easiest traversal to implement
+      iteratively). We can add more traversals as we need them.
+
+### Removed
+
+* The `Dot` trait has been made internal. Use the new
+  `walrus::Module::write_graphviz_dot` method instead.
+
+* The `Visit` trait is no longer exported in the public API, and has been made
+  internal. Use the new traversal functions instead (`walrus::ir::dfs_in_order`
+  and `walrus::ir::dfs_pre_order_mut`).
+
+--------------------------------------------------------------------------------
+
+## 0.10.0
+
+--------------------------------------------------------------------------------
+
+## 0.9.0
+
+--------------------------------------------------------------------------------
+
 ## 0.8.0
 
 Released 2019-06-05.

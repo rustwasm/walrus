@@ -158,7 +158,7 @@ fn walrus_attrs(attrs: &mut Vec<syn::Attribute>) -> TokenStream {
             continue;
         }
         let attr = attrs.remove(i);
-        let group = match attr.tts.into_iter().next().unwrap() {
+        let group = match attr.tokens.into_iter().next().unwrap() {
             proc_macro2::TokenTree::Group(g) => g,
             _ => panic!("#[walrus(...)] expected"),
         };
@@ -355,13 +355,13 @@ fn visit_fields<'a>(
             syn::Type::Path(p) => &p.path,
             _ => panic!("field types must be paths"),
         };
-        let segment = path.segments.last().unwrap().into_value();
+        let segment = path.segments.last().unwrap();
         let args = match &segment.arguments {
             syn::PathArguments::None => return (&segment.ident, false),
             syn::PathArguments::AngleBracketed(a) => &a.args,
             _ => panic!("invalid path in #[walrus_instr]"),
         };
-        let mut ty = match args.first().unwrap().into_value() {
+        let mut ty = match args.first().unwrap() {
             syn::GenericArgument::Type(ty) => ty,
             _ => panic!("invalid path in #[walrus_instr]"),
         };
@@ -370,7 +370,7 @@ fn visit_fields<'a>(
         }
         match ty {
             syn::Type::Path(p) => {
-                let segment = p.path.segments.last().unwrap().into_value();
+                let segment = p.path.segments.last().unwrap();
                 (&segment.ident, true)
             }
             _ => panic!("invalid path in #[walrus_instr]"),

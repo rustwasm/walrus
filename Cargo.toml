@@ -23,7 +23,7 @@ path = "benches/benches.rs"
 harness = false
 
 [dependencies]
-failure = "0.1.2"
+failure = { version = "0.1.2", default-features = false, features = ['std'] }
 id-arena = "2.2.1"
 leb128 = "0.2.3"
 log = "0.4"

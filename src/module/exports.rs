@@ -68,14 +68,6 @@ impl ModuleExports {
         &mut self.arena[id]
     }
 
-    fn get_safe(&self, id: ExportId) -> Option<&Export> {
-        self.arena.get(id)
-    }
-
-    fn get_mut_safe(&mut self, id: ExportId) -> Option<&mut Export> {
-        self.arena.get_mut(id)
-    }
-
     /// Delete an export entry from this module.
     pub fn delete(&mut self, id: ExportId) {
         self.remove_mapping(id);
@@ -120,43 +112,33 @@ impl ModuleExports {
     }
 
     fn remove_mapping(&mut self, id: ExportId) -> Option<ExportId> {
-        match self.get_mut_safe(id) {
-            Some(export) => match export.item {
-                ExportItem::Function(f) => self.fn_id_to_export_id.remove(&f),
-                ExportItem::Table(t) => self.tbl_id_to_export_id.remove(&t),
-                ExportItem::Memory(m) => self.mem_id_to_export_id.remove(&m),
-                ExportItem::Global(g) => self.global_id_to_export_id.remove(&g),
-            },
-            None => None,
+        let export = self.get_mut(id); // can throw
+        match export.item {
+            ExportItem::Function(f) => self.fn_id_to_export_id.remove(&f),
+            ExportItem::Table(t) => self.tbl_id_to_export_id.remove(&t),
+            ExportItem::Memory(m) => self.mem_id_to_export_id.remove(&m),
+            ExportItem::Global(g) => self.global_id_to_export_id.remove(&g),
         }
     }
 
     /// Get a reference to a function export given its function id.
     pub fn get_exported_func(&self, f: FunctionId) -> Option<&Export> {
-        self.fn_id_to_export_id
-            .get(&f)
-            .and_then(|id| self.get_safe(*id))
+        self.fn_id_to_export_id.get(&f).map(|id| self.get(*id)) // self.get can throw
     }
 
     /// Get a reference to a table export given its table id.
     pub fn get_exported_table(&self, t: TableId) -> Option<&Export> {
-        self.tbl_id_to_export_id
-            .get(&t)
-            .and_then(|id| self.get_safe(*id))
+        self.tbl_id_to_export_id.get(&t).map(|id| self.get(*id)) // self.get can throw
     }
 
     /// Get a reference to a memory export given its export id.
     pub fn get_exported_memory(&self, m: MemoryId) -> Option<&Export> {
-        self.mem_id_to_export_id
-            .get(&m)
-            .and_then(|id| self.get_safe(*id))
+        self.mem_id_to_export_id.get(&m).map(|id| self.get(*id)) // self.get can throw
     }
 
     /// Get a reference to a global export given its global id.
     pub fn get_exported_global(&self, g: GlobalId) -> Option<&Export> {
-        self.global_id_to_export_id
-            .get(&g)
-            .and_then(|id| self.get_safe(*id))
+        self.global_id_to_export_id.get(&g).map(|id| self.get(*id)) // self.get can throw
     }
 }
 

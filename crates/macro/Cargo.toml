@@ -14,9 +14,9 @@ Internal macros used by the `walrus` crate, not for public consumption.
 
 [dependencies]
 heck = "0.3.0"
-proc-macro2 = "0.4.20"
-quote = "0.6.8"
-syn = { version = "0.15.11", features = ['extra-traits'] }
+proc-macro2 = "1.0"
+quote = "1.0"
+syn = { version = "1.0", features = ['extra-traits'] }
 
 [lib]
 proc_macro = true

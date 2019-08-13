@@ -235,3 +235,39 @@ impl From<TableId> for ExportItem {
         ExportItem::Table(id)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{FunctionBuilder, Module};
+
+    #[test]
+    fn get_exported_func() {
+        let mut module = Module::default();
+        let mut builder = FunctionBuilder::new(&mut module.types, &[], &[]);
+        builder.func_body().i32_const(1234).drop();
+        let function_id = builder.finish(vec![], &mut module.funcs);
+        module.exports.add("dummy", function_id);
+
+        let actual: Option<&Export> = module.exports.get_exported_func(function_id);
+
+        let export: &Export = actual.expect("Expected Some(Export) got None");
+        assert_eq!(export.name, "dummy");
+        match export.item {
+            ExportItem::Function(f) => assert_eq!(f, function_id),
+            _ => panic!("Expected a Function"),
+        }
+    }
+
+    #[test]
+    fn get_exported_func_should_return_none_for_unknown_function_id() {
+        let mut module = Module::default();
+        let mut builder = FunctionBuilder::new(&mut module.types, &[], &[]);
+        builder.func_body().i32_const(1234).drop();
+        let function_id = builder.finish(vec![], &mut module.funcs);
+
+        let actual: Option<&Export> = module.exports.get_exported_func(function_id);
+
+        assert!(actual.is_none());
+    }
+}

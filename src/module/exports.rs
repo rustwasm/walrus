@@ -242,6 +242,11 @@ mod tests {
     use crate::{FunctionBuilder, Module};
     use id_arena::Arena;
 
+    fn generate_id<T>() -> Id<T> {
+        let arena: Arena<T> = Arena::new();
+        arena.next_id()
+    }
+
     #[test]
     fn get_exported_func() {
         let mut module = Module::default();
@@ -263,19 +268,15 @@ mod tests {
     #[test]
     fn get_exported_func_should_return_none_for_unknown_function_id() {
         let module = Module::default();
-        let arena: Arena<Function> = Arena::new();
-        let id: FunctionId = arena.next_id();
-
+        let id: FunctionId = generate_id();
         let actual: Option<&Export> = module.exports.get_exported_func(id);
-
         assert!(actual.is_none());
     }
 
     #[test]
     fn get_exported_table() {
         let mut module = Module::default();
-        let arena: Arena<Table> = Arena::new();
-        let id: TableId = arena.next_id();
+        let id: TableId = generate_id();
         module.exports.add("dummy", id);
 
         let actual: Option<&Export> = module.exports.get_exported_table(id);
@@ -291,8 +292,7 @@ mod tests {
     #[test]
     fn get_exported_table_should_return_non_for_unknown_table_id() {
         let module = Module::default();
-        let arena: Arena<Table> = Arena::new();
-        let id: TableId = arena.next_id();
+        let id: TableId = generate_id();
         let actual: Option<&Export> = module.exports.get_exported_table(id);
         assert!(actual.is_none());
     }
@@ -300,8 +300,7 @@ mod tests {
     #[test]
     fn get_exported_memory() {
         let mut module = Module::default();
-        let arena: Arena<Memory> = Arena::new();
-        let id: MemoryId = arena.next_id();
+        let id: MemoryId = generate_id();
         module.exports.add("dummy", id);
 
         let actual: Option<&Export> = module.exports.get_exported_memory(id);
@@ -317,8 +316,7 @@ mod tests {
     #[test]
     fn get_exported_memory_should_return_none_for_unknown_memory_id() {
         let module = Module::default();
-        let arena: Arena<Memory> = Arena::new();
-        let id: MemoryId = arena.next_id();
+        let id: MemoryId = generate_id();
         let actual: Option<&Export> = module.exports.get_exported_memory(id);
         assert!(actual.is_none());
     }
@@ -326,8 +324,7 @@ mod tests {
     #[test]
     fn get_exported_global() {
         let mut module = Module::default();
-        let arena: Arena<Global> = Arena::new();
-        let id: GlobalId = arena.next_id();
+        let id: GlobalId = generate_id();
         module.exports.add("dummy", id);
 
         let actual: Option<&Export> = module.exports.get_exported_global(id);
@@ -343,8 +340,7 @@ mod tests {
     #[test]
     fn get_exported_global_should_return_none_for_unknown_global_id() {
         let module = Module::default();
-        let arena: Arena<Global> = Arena::new();
-        let id: GlobalId = arena.next_id();
+        let id: GlobalId = generate_id();
         let actual: Option<&Export> = module.exports.get_exported_global(id);
         assert!(actual.is_none());
     }

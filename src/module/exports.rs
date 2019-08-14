@@ -240,34 +240,113 @@ impl From<TableId> for ExportItem {
 mod tests {
     use super::*;
     use crate::{FunctionBuilder, Module};
+    use id_arena::Arena;
 
     #[test]
     fn get_exported_func() {
         let mut module = Module::default();
         let mut builder = FunctionBuilder::new(&mut module.types, &[], &[]);
         builder.func_body().i32_const(1234).drop();
-        let function_id = builder.finish(vec![], &mut module.funcs);
-        module.exports.add("dummy", function_id);
+        let id: FunctionId = builder.finish(vec![], &mut module.funcs);
+        module.exports.add("dummy", id);
 
-        let actual: Option<&Export> = module.exports.get_exported_func(function_id);
+        let actual: Option<&Export> = module.exports.get_exported_func(id);
 
         let export: &Export = actual.expect("Expected Some(Export) got None");
         assert_eq!(export.name, "dummy");
         match export.item {
-            ExportItem::Function(f) => assert_eq!(f, function_id),
-            _ => panic!("Expected a Function"),
+            ExportItem::Function(f) => assert_eq!(f, id),
+            _ => panic!("Expected a Function variant"),
         }
     }
 
     #[test]
     fn get_exported_func_should_return_none_for_unknown_function_id() {
-        let mut module = Module::default();
-        let mut builder = FunctionBuilder::new(&mut module.types, &[], &[]);
-        builder.func_body().i32_const(1234).drop();
-        let function_id = builder.finish(vec![], &mut module.funcs);
+        let module = Module::default();
+        let arena: Arena<Function> = Arena::new();
+        let id: FunctionId = arena.next_id();
 
-        let actual: Option<&Export> = module.exports.get_exported_func(function_id);
+        let actual: Option<&Export> = module.exports.get_exported_func(id);
 
         assert!(actual.is_none());
     }
+
+    #[test]
+    fn get_exported_table() {
+        let mut module = Module::default();
+        let arena: Arena<Table> = Arena::new();
+        let id: TableId = arena.next_id();
+        module.exports.add("dummy", id);
+
+        let actual: Option<&Export> = module.exports.get_exported_table(id);
+
+        let export: &Export = actual.expect("Expected Some(Export) got None");
+        assert_eq!(export.name, "dummy");
+        match export.item {
+            ExportItem::Table(f) => assert_eq!(f, id),
+            _ => panic!("Expected a Table variant"),
+        }
+    }
+
+    #[test]
+    fn get_exported_table_should_return_non_for_unknown_table_id() {
+        let module = Module::default();
+        let arena: Arena<Table> = Arena::new();
+        let id: TableId = arena.next_id();
+        let actual: Option<&Export> = module.exports.get_exported_table(id);
+        assert!(actual.is_none());
+    }
+
+    #[test]
+    fn get_exported_memory() {
+        let mut module = Module::default();
+        let arena: Arena<Memory> = Arena::new();
+        let id: MemoryId = arena.next_id();
+        module.exports.add("dummy", id);
+
+        let actual: Option<&Export> = module.exports.get_exported_memory(id);
+
+        let export: &Export = actual.expect("Expected Some(Export) got None");
+        assert_eq!(export.name, "dummy");
+        match export.item {
+            ExportItem::Memory(f) => assert_eq!(f, id),
+            _ => panic!("Expected a Memory variant"),
+        }
+    }
+
+    #[test]
+    fn get_exported_memory_should_return_none_for_unknown_memory_id() {
+        let module = Module::default();
+        let arena: Arena<Memory> = Arena::new();
+        let id: MemoryId = arena.next_id();
+        let actual: Option<&Export> = module.exports.get_exported_memory(id);
+        assert!(actual.is_none());
+    }
+
+    #[test]
+    fn get_exported_global() {
+        let mut module = Module::default();
+        let arena: Arena<Global> = Arena::new();
+        let id: GlobalId = arena.next_id();
+        module.exports.add("dummy", id);
+
+        let actual: Option<&Export> = module.exports.get_exported_global(id);
+
+        let export: &Export = actual.expect("Expected Some(Export) got None");
+        assert_eq!(export.name, "dummy");
+        match export.item {
+            ExportItem::Global(f) => assert_eq!(f, id),
+            _ => panic!("Expected a Global variant"),
+        }
+    }
+
+    #[test]
+    fn get_exported_global_should_return_none_for_unknown_global_id() {
+        let module = Module::default();
+        let arena: Arena<Global> = Arena::new();
+        let id: GlobalId = arena.next_id();
+        let actual: Option<&Export> = module.exports.get_exported_global(id);
+        assert!(actual.is_none());
+    }
+
 }

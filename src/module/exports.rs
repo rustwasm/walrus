@@ -1,10 +1,8 @@
 //! Exported items in a wasm module.
 
 use crate::emit::{Emit, EmitContext, Section};
-use crate::map::IdHashMap;
 use crate::parse::IndicesToIds;
 use crate::tombstone_arena::{Id, Tombstone, TombstoneArena};
-use crate::{Function, Global, Memory, Table};
 use crate::{FunctionId, GlobalId, MemoryId, Module, Result, TableId};
 
 /// The id of an export.
@@ -51,10 +49,6 @@ pub enum ExportItem {
 pub struct ModuleExports {
     /// The arena containing this module's exports.
     arena: TombstoneArena<Export>,
-    fn_id_to_export_id: IdHashMap<Function, ExportId>,
-    tbl_id_to_export_id: IdHashMap<Table, ExportId>,
-    mem_id_to_export_id: IdHashMap<Memory, ExportId>,
-    global_id_to_export_id: IdHashMap<Global, ExportId>,
 }
 
 impl ModuleExports {
@@ -70,7 +64,6 @@ impl ModuleExports {
 
     /// Delete an export entry from this module.
     pub fn delete(&mut self, id: ExportId) {
-        self.remove_mapping(id);
         self.arena.delete(id);
     }
 
@@ -86,14 +79,11 @@ impl ModuleExports {
 
     /// Add a new export to this module
     pub fn add(&mut self, name: &str, item: impl Into<ExportItem>) -> ExportId {
-        let export_item: ExportItem = item.into();
-        let export_id: ExportId = self.arena.alloc_with_id(|id| Export {
+        self.arena.alloc_with_id(|id| Export {
             id,
             name: name.to_string(),
-            item: export_item,
-        });
-        self.insert_mapping(export_item, export_id);
-        export_id
+            item: item.into(),
+        })
     }
 
     #[doc(hidden)]
@@ -102,43 +92,36 @@ impl ModuleExports {
         self.delete(id);
     }
 
-    fn insert_mapping(&mut self, item: ExportItem, id: ExportId) -> Option<ExportId> {
-        match item {
-            ExportItem::Function(f) => self.fn_id_to_export_id.insert(f, id),
-            ExportItem::Table(t) => self.tbl_id_to_export_id.insert(t, id),
-            ExportItem::Memory(m) => self.mem_id_to_export_id.insert(m, id),
-            ExportItem::Global(g) => self.global_id_to_export_id.insert(g, id),
-        }
-    }
-
-    fn remove_mapping(&mut self, id: ExportId) -> Option<ExportId> {
-        let export = self.get_mut(id); // can throw
-        match export.item {
-            ExportItem::Function(f) => self.fn_id_to_export_id.remove(&f),
-            ExportItem::Table(t) => self.tbl_id_to_export_id.remove(&t),
-            ExportItem::Memory(m) => self.mem_id_to_export_id.remove(&m),
-            ExportItem::Global(g) => self.global_id_to_export_id.remove(&g),
-        }
-    }
-
     /// Get a reference to a function export given its function id.
     pub fn get_exported_func(&self, f: FunctionId) -> Option<&Export> {
-        self.fn_id_to_export_id.get(&f).map(|id| self.get(*id)) // self.get can throw
+        self.iter().find(|e| match e.item {
+            ExportItem::Function(f0) => f0 == f,
+            _ => false,
+        })
     }
 
     /// Get a reference to a table export given its table id.
     pub fn get_exported_table(&self, t: TableId) -> Option<&Export> {
-        self.tbl_id_to_export_id.get(&t).map(|id| self.get(*id)) // self.get can throw
+        self.iter().find(|e| match e.item {
+            ExportItem::Table(t0) => t0 == t,
+            _ => false,
+        })
     }
 
     /// Get a reference to a memory export given its export id.
     pub fn get_exported_memory(&self, m: MemoryId) -> Option<&Export> {
-        self.mem_id_to_export_id.get(&m).map(|id| self.get(*id)) // self.get can throw
+        self.iter().find(|e| match e.item {
+            ExportItem::Memory(m0) => m0 == m,
+            _ => false,
+        })
     }
 
     /// Get a reference to a global export given its global id.
     pub fn get_exported_global(&self, g: GlobalId) -> Option<&Export> {
-        self.global_id_to_export_id.get(&g).map(|id| self.get(*id)) // self.get can throw
+        self.iter().find(|e| match e.item {
+            ExportItem::Global(g0) => g0 == g,
+            _ => false,
+        })
     }
 }
 
@@ -358,7 +341,7 @@ mod tests {
     }
 
     #[test]
-    fn other_ways_to_delete() {
+    fn iter_mut_can_update_export_item() {
         let mut module = Module::default();
 
         let mut builder = FunctionBuilder::new(&mut module.types, &[], &[]);
@@ -374,24 +357,21 @@ mod tests {
         let export_id: ExportId = module.exports.add("dummy", fn_id0);
         assert!(module.exports.get_exported_func(fn_id0).is_some());
 
-        println!("fn_id0: {:?}, fn_id1: {:?}", fn_id0, fn_id1);
-
-        module
-            .exports
-            .iter()
-            .for_each(|x: &Export| println!("--- {:?}", x));
         module
             .exports
             .iter_mut()
             .for_each(|x: &mut Export| x.item = ExportItem::Function(fn_id1));
-        module
+
+        assert!(module.exports.get_exported_func(fn_id0).is_none());
+        let actual: &Export = module
             .exports
-            .iter()
-            .for_each(|x: &Export| println!("--- {:?}", x));
-
-        let x = module.exports.get_exported_func(fn_id0);
-        println!("--- x: {:?}", x);
-
-        assert!(module.exports.get_exported_func(fn_id1).is_some());
+            .get_exported_func(fn_id1)
+            .expect("Expected Some(Export) got None");
+        assert_eq!(actual.id, export_id);
+        assert_eq!(actual.name, "dummy");
+        match actual.item {
+            ExportItem::Function(f) => assert_eq!(f, fn_id1),
+            _ => panic!("Expected a Function variant"),
+        }
     }
 }

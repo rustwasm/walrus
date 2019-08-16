@@ -274,7 +274,7 @@ mod tests {
     }
 
     #[test]
-    fn get_exported_table_should_return_non_for_unknown_table_id() {
+    fn get_exported_table_should_return_none_for_unknown_table_id() {
         let module = Module::default();
         let id: TableId = always_the_same_id();
         let actual: Option<&Export> = module.exports.get_exported_table(id);

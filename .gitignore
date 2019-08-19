@@ -7,3 +7,5 @@ crates/tests/tests/**/*.dot
 crates/tests/tests/**/*.out
 crates/tests/tests/**/*.out.wasm
 crates/tests/tests/**/*.out.wat
+
+.vscode

@@ -6,15 +6,15 @@ edition = "2018"
 publish = false
 
 [build-dependencies]
-walkdir = "2.2.5"
+walkdir = "2.2.9"
 
 [dev-dependencies]
-failure = "0.1.2"
+failure = "0.1.5"
 walrus = { path = "../.." }
 walrus-tests-utils = { path = "../tests-utils" }
-tempfile = "3"
-serde_json = { version = "1", features = ['preserve_order'] }
-serde = { version = "1", features = ['derive'] }
+tempfile = "3.1.0"
+serde_json = { version = "1.0.40", features = ['preserve_order'] }
+serde = { version = "1.0.99", features = ['derive'] }
 env_logger = "0.6.2"
 
 [features]

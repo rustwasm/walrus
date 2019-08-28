@@ -13,10 +13,10 @@ Internal macros used by the `walrus` crate, not for public consumption.
 """
 
 [dependencies]
-heck = "0.3.0"
-proc-macro2 = "1.0"
-quote = "1.0"
-syn = { version = "1.0", features = ['extra-traits'] }
+heck = "0.3.1"
+proc-macro2 = "1.0.1"
+quote = "1.0.2"
+syn = { version = "1.0.5", features = ['extra-traits'] }
 
 [lib]
 proc_macro = true

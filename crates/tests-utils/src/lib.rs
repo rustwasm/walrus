@@ -3,7 +3,7 @@ use std::ffi::OsStr;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::sync::{Once, ONCE_INIT};
+use std::sync::Once;
 
 pub type Result<T> = std::result::Result<T, failure::Error>;
 
@@ -36,7 +36,7 @@ fn require_wat2wasm() {
 
 /// Compile the `.wat` file at the given path into a `.wasm`.
 pub fn wat2wasm(path: &Path) -> Result<Vec<u8>> {
-    static CHECK: Once = ONCE_INIT;
+    static CHECK: Once = Once::new();
     CHECK.call_once(require_wat2wasm);
 
     let file = tempfile::NamedTempFile::new().context("could not create named temp file")?;
@@ -71,7 +71,7 @@ fn require_wasm2wat() {
 
 /// Disassemble the `.wasm` file at the given path into a `.wat`.
 pub fn wasm2wat(path: &Path) -> Result<String> {
-    static CHECK: Once = ONCE_INIT;
+    static CHECK: Once = Once::new();
     CHECK.call_once(require_wasm2wat);
 
     let mut cmd = Command::new("wasm2wat");
@@ -96,7 +96,7 @@ fn require_wasm_interp() {
 
 /// Run `wasm-interp` on the given wat file.
 pub fn wasm_interp(path: &Path) -> Result<String> {
-    static CHECK: Once = ONCE_INIT;
+    static CHECK: Once = Once::new();
     CHECK.call_once(require_wasm_interp);
 
     let mut cmd = Command::new("wasm-interp");
@@ -130,7 +130,7 @@ where
     A: IntoIterator<Item = S>,
     S: AsRef<OsStr>,
 {
-    static CHECK: Once = ONCE_INIT;
+    static CHECK: Once = Once::new();
     CHECK.call_once(require_wasm_opt);
 
     let tmp = tempfile::NamedTempFile::new().unwrap();

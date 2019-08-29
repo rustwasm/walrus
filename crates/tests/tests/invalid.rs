@@ -8,7 +8,7 @@ fn run(wat: &Path) -> Result<(), failure::Error> {
         env_logger::init();
     });
 
-    let wasm = walrus_tests_utils::wat2wasm(wat)?;
+    let wasm = walrus_tests_utils::wat2wasm(wat, &["--no-check"])?;
 
     // NB: reading the module will do the validation.
     if let Ok(_) = walrus::Module::from_buffer(&wasm) {

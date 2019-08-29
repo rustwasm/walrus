@@ -36,7 +36,7 @@ fn require_wat2wasm() {
 }
 
 /// Compile the `.wat` file at the given path into a `.wasm`.
-pub fn wat2wasm(path: &Path) -> Result<Vec<u8>> {
+pub fn wat2wasm(path: &Path, extra_args: &[&str]) -> Result<Vec<u8>> {
     static CHECK: Once = Once::new();
     CHECK.call_once(require_wat2wasm);
 
@@ -50,7 +50,8 @@ pub fn wat2wasm(path: &Path) -> Result<Vec<u8>> {
         .args(FEATURES)
         .arg("--debug-names")
         .arg("-o")
-        .arg(file.path());
+        .arg(file.path())
+        .args(extra_args);
     println!("running: {:?}", cmd);
     let output = cmd.output().context("could not spawn wat2wasm")?;
 

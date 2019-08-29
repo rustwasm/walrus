@@ -87,7 +87,7 @@ impl<G: TestCaseGenerator> Config<G> {
 
     fn wat2wasm(&self, wat: &str) -> Result<Vec<u8>> {
         fs::write(self.scratch.path(), wat).context("failed to write to scratch file")?;
-        wat2wasm(self.scratch.path())
+        wat2wasm(self.scratch.path(), &[])
     }
 
     fn interp(&self, wasm: &[u8]) -> Result<String> {
@@ -400,7 +400,7 @@ impl TestCaseGenerator for WasmOptTtf {
                 // Only generate programs that wat2wasm can handle.
                 let tmp = tempfile::NamedTempFile::new().unwrap();
                 fs::write(tmp.path(), &wat).unwrap();
-                wat2wasm(tmp.path()).is_ok()
+                wat2wasm(tmp.path(), &[]).is_ok()
             } {
                 return String::from_utf8(wat).unwrap();
             }

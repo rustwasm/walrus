@@ -7,7 +7,7 @@ fn run(wat_path: &Path) -> Result<(), failure::Error> {
         env_logger::init();
     });
 
-    let wasm = wat2wasm(wat_path)?;
+    let wasm = wat2wasm(wat_path, &[])?;
     let module = walrus::Module::from_buffer(&wasm)?;
 
     assert!(module.imports.find("doggo", "husky").is_some());

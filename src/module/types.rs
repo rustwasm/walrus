@@ -63,6 +63,17 @@ impl ModuleTypes {
             results.to_vec().into_boxed_slice(),
         ))
     }
+
+    /// Find the existing type for the given parameters and results.
+    pub fn find(&self, params: &[ValType], results: &[ValType]) -> Option<TypeId> {
+        self.arena.iter().find_map(|(id, ty)| {
+            if ty.params() == params && ty.results() == results {
+                Some(id)
+            } else {
+                None
+            }
+        })
+    }
 }
 
 impl Module {

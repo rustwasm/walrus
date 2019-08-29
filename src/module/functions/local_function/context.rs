@@ -1,11 +1,12 @@
 //! Context needed when validating instructions and constructing our `Instr` IR.
 
 use crate::error::{ErrorKind, Result};
-use crate::ir::{BlockKind, Instr, InstrSeq, InstrSeqId};
+use crate::ir::{BlockKind, Instr, InstrSeq, InstrSeqId, InstrSeqType};
 use crate::module::functions::{FunctionId, LocalFunction};
 use crate::module::Module;
 use crate::parse::IndicesToIds;
 use crate::ty::ValType;
+use crate::ModuleTypes;
 use failure::Fail;
 
 #[derive(Debug)]
@@ -118,8 +119,9 @@ impl<'a> ValidationContext<'a> {
         kind: BlockKind,
         label_types: Box<[ValType]>,
         end_types: Box<[ValType]>,
-    ) -> InstrSeqId {
+    ) -> Result<InstrSeqId> {
         impl_push_control(
+            &self.module.types,
             kind,
             self.func,
             self.controls,
@@ -232,14 +234,21 @@ fn impl_pop_operands(
 }
 
 fn impl_push_control(
+    types: &ModuleTypes,
     kind: BlockKind,
     func: &mut LocalFunction,
     controls: &mut ControlStack,
     operands: &OperandStack,
     label_types: Box<[ValType]>,
     end_types: Box<[ValType]>,
-) -> InstrSeqId {
-    let block = func.add_block(|id| InstrSeq::new(id, label_types.clone(), end_types.clone()));
+) -> Result<InstrSeqId> {
+    let ty = InstrSeqType::existing(types, &[], &end_types).ok_or_else(|| {
+        failure::format_err!(
+            "attempted to push a control frame for an instruction \
+             sequence with a type that does not exist"
+        )
+    })?;
+    let block = func.add_block(|id| InstrSeq::new(id, ty));
     let frame = ControlFrame {
         label_types,
         end_types,
@@ -249,7 +258,7 @@ fn impl_push_control(
         kind,
     };
     controls.push(frame);
-    block
+    Ok(block)
 }
 
 fn impl_pop_control(

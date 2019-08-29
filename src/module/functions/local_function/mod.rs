@@ -10,7 +10,8 @@ use crate::ir::*;
 use crate::map::{IdHashMap, IdHashSet};
 use crate::parse::IndicesToIds;
 use crate::{
-    Data, DataId, FunctionBuilder, FunctionId, Module, Result, TableKind, TypeId, ValType,
+    Data, DataId, FunctionBuilder, FunctionId, Module, ModuleTypes, Result, TableKind, TypeId,
+    ValType,
 };
 use failure::{bail, ResultExt};
 use std::collections::BTreeMap;
@@ -61,7 +62,7 @@ impl LocalFunction {
 
         let mut ctx = ValidationContext::new(module, indices, id, &mut func, operands, controls);
 
-        let entry = ctx.push_control(BlockKind::FunctionEntry, result.clone(), result);
+        let entry = ctx.push_control(BlockKind::FunctionEntry, result.clone(), result)?;
         ctx.func.builder.entry = Some(entry);
         for inst in body {
             let inst = inst?;
@@ -239,11 +240,12 @@ impl LocalFunction {
     /// Emit this function's instruction sequence.
     pub(crate) fn emit_instructions(
         &self,
+        types: &ModuleTypes,
         indices: &IdsToIndices,
         local_indices: &IdHashMap<Local, u32>,
         dst: &mut Encoder,
     ) {
-        emit::run(self, indices, local_indices, dst)
+        emit::run(types, self, indices, local_indices, dst)
     }
 }
 
@@ -596,19 +598,19 @@ fn validate_instruction(ctx: &mut ValidationContext, inst: Operator) -> Result<(
         }
         Operator::Block { ty } => {
             let results = ValType::from_wasmparser_type(ty)?;
-            let seq = ctx.push_control(BlockKind::Block, results.clone(), results);
+            let seq = ctx.push_control(BlockKind::Block, results.clone(), results)?;
             ctx.alloc_instr_in_control(1, Block { seq })?;
         }
         Operator::Loop { ty } => {
             let t = ValType::from_wasmparser_type(ty)?;
-            let seq = ctx.push_control(BlockKind::Loop, vec![].into_boxed_slice(), t);
+            let seq = ctx.push_control(BlockKind::Loop, vec![].into_boxed_slice(), t)?;
             ctx.alloc_instr_in_control(1, Loop { seq })?;
         }
         Operator::If { ty } => {
             let ty = ValType::from_wasmparser_type(ty)?;
             ctx.pop_operand_expected(Some(I32))?;
 
-            let consequent = ctx.push_control(BlockKind::If, ty.clone(), ty.clone());
+            let consequent = ctx.push_control(BlockKind::If, ty.clone(), ty.clone())?;
             ctx.if_else.push(context::IfElseState {
                 consequent,
                 alternative: None,
@@ -635,8 +637,11 @@ fn validate_instruction(ctx: &mut ValidationContext, inst: Operator) -> Result<(
                         }
                         None => {
                             debug_assert_eq!(kind, BlockKind::If);
-                            let alternative =
-                                ctx.push_control(BlockKind::Else, results.clone(), results.clone());
+                            let alternative = ctx.push_control(
+                                BlockKind::Else,
+                                results.clone(),
+                                results.clone(),
+                            )?;
                             ctx.pop_control()?;
                             alternative
                         }
@@ -664,7 +669,7 @@ fn validate_instruction(ctx: &mut ValidationContext, inst: Operator) -> Result<(
 
             // But we still need to parse the alternative block, so allocate the
             // block here to parse.
-            let alternative = ctx.push_control(BlockKind::Else, results.clone(), results);
+            let alternative = ctx.push_control(BlockKind::Else, results.clone(), results)?;
             let last = ctx.if_else.last_mut().unwrap();
             if last.alternative.is_some() {
                 bail!("`else` without a leading `if`")
@@ -840,7 +845,7 @@ fn validate_instruction(ctx: &mut ValidationContext, inst: Operator) -> Result<(
             if flags != 0 {
                 bail!("fence with nonzero flags not supported yet");
             }
-            ctx.alloc_instr(AtomicFence { });
+            ctx.alloc_instr(AtomicFence {});
         }
 
         Operator::I32AtomicLoad { memarg } => {

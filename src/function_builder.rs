@@ -28,9 +28,8 @@ impl FunctionBuilder {
     ) -> FunctionBuilder {
         let ty = types.add(params, results);
         let mut builder = FunctionBuilder::without_entry(ty);
-        let entry = builder
-            .dangling_instr_seq(Box::new([]), results.to_vec().into_boxed_slice())
-            .id;
+        let entry_ty = types.add(&[], results);
+        let entry = builder.dangling_instr_seq(entry_ty).id;
         builder.entry = Some(entry);
         builder
     }
@@ -65,7 +64,7 @@ impl FunctionBuilder {
     /// let mut module = walrus::Module::default();
     /// let mut builder = walrus::FunctionBuilder::new(&mut module.types, &[], &[]);
     ///
-    /// let mut block = builder.dangling_instr_seq(Box::new([]), Box::new([]));
+    /// let mut block = builder.dangling_instr_seq(None);
     /// let id = block.id();
     /// // Build up the block some.
     /// block
@@ -107,7 +106,7 @@ impl FunctionBuilder {
     /// let mut builder = walrus::FunctionBuilder::new(&mut module.types, &[], &[]);
     ///
     /// // Create an empty, dangling instruction sequemce.
-    /// let mut seq = builder.dangling_instr_seq(Box::new([]), Box::new([]));
+    /// let mut seq = builder.dangling_instr_seq(None);
     /// let seq_id = seq.id();
     ///
     /// // Do stuff with the sequence...
@@ -120,14 +119,9 @@ impl FunctionBuilder {
     ///     .func_body()
     ///     .instr(Block { seq: seq_id });
     /// ```
-    pub fn dangling_instr_seq(
-        &mut self,
-        params: Box<[ValType]>,
-        results: Box<[ValType]>,
-    ) -> InstrSeqBuilder {
-        let id = self
-            .arena
-            .alloc_with_id(|id| InstrSeq::new(id, params, results));
+    pub fn dangling_instr_seq(&mut self, ty: impl Into<InstrSeqType>) -> InstrSeqBuilder {
+        let ty = ty.into();
+        let id = self.arena.alloc_with_id(|id| InstrSeq::new(id, ty));
         InstrSeqBuilder { id, builder: self }
     }
 
@@ -239,7 +233,7 @@ impl InstrSeqBuilder<'_> {
     /// //     end
     /// builder
     ///     .func_body()
-    ///     .block(Box::new([]), Box::new([]), |block| {
+    ///     .block(None, |block| {
     ///         block
     ///             .i32_const(1337)
     ///             .drop();
@@ -247,11 +241,10 @@ impl InstrSeqBuilder<'_> {
     /// ```
     pub fn block(
         &mut self,
-        params: Box<[ValType]>,
-        results: Box<[ValType]>,
+        ty: impl Into<InstrSeqType>,
         make_block: impl FnOnce(&mut InstrSeqBuilder),
     ) -> &mut Self {
-        let mut builder = self.dangling_instr_seq(params, results);
+        let mut builder = self.dangling_instr_seq(ty);
         make_block(&mut builder);
         let seq = builder.id;
         self.instr(Block { seq })
@@ -278,7 +271,7 @@ impl InstrSeqBuilder<'_> {
     /// //     end
     /// builder
     ///     .func_body()
-    ///     .block_at(0, Box::new([]), Box::new([]), |block| {
+    ///     .block_at(0, None, |block| {
     ///         block
     ///             .i32_const(1337)
     ///             .drop();
@@ -287,11 +280,10 @@ impl InstrSeqBuilder<'_> {
     pub fn block_at(
         &mut self,
         position: usize,
-        params: Box<[ValType]>,
-        results: Box<[ValType]>,
+        ty: impl Into<InstrSeqType>,
         make_block: impl FnOnce(&mut InstrSeqBuilder),
     ) -> &mut Self {
-        let mut builder = self.dangling_instr_seq(params, results);
+        let mut builder = self.dangling_instr_seq(ty);
         make_block(&mut builder);
         let seq = builder.id;
         self.instr_at(position, Block { seq })
@@ -313,7 +305,7 @@ impl InstrSeqBuilder<'_> {
     /// //     end
     /// builder
     ///     .func_body()
-    ///     .loop_(Box::new([]), |loop_| {
+    ///     .loop_(None, |loop_| {
     ///         loop_
     ///             .i32_const(1337)
     ///             .drop();
@@ -321,10 +313,10 @@ impl InstrSeqBuilder<'_> {
     /// ```
     pub fn loop_(
         &mut self,
-        results: Box<[ValType]>,
+        ty: impl Into<InstrSeqType>,
         make_loop: impl FnOnce(&mut InstrSeqBuilder),
     ) -> &mut Self {
-        let mut builder = self.dangling_instr_seq(Box::new([]), results);
+        let mut builder = self.dangling_instr_seq(ty);
         make_loop(&mut builder);
         let seq = builder.id;
         self.instr(Loop { seq })
@@ -352,7 +344,7 @@ impl InstrSeqBuilder<'_> {
     /// //     end
     /// builder
     ///     .func_body()
-    ///     .loop_at(0, Box::new([]), |loop_| {
+    ///     .loop_at(0, None, |loop_| {
     ///         loop_
     ///             .i32_const(1337)
     ///             .drop();
@@ -361,10 +353,10 @@ impl InstrSeqBuilder<'_> {
     pub fn loop_at(
         &mut self,
         position: usize,
-        results: Box<[ValType]>,
+        ty: impl Into<InstrSeqType>,
         make_loop: impl FnOnce(&mut InstrSeqBuilder),
     ) -> &mut Self {
-        let mut builder = self.dangling_instr_seq(Box::new([]), results);
+        let mut builder = self.dangling_instr_seq(ty);
         make_loop(&mut builder);
         let seq = builder.id;
         self.instr_at(position, Loop { seq })
@@ -391,8 +383,7 @@ impl InstrSeqBuilder<'_> {
     ///     //   (else (i32.const 34)))
     ///     .call(flip_coin)
     ///     .if_else(
-    ///         Box::new([]),
-    ///         Box::new([ValType::I32]),
+    ///         ValType::I32,
     ///         |then| {
     ///             then.i32_const(12);
     ///         },
@@ -403,19 +394,20 @@ impl InstrSeqBuilder<'_> {
     /// ```
     pub fn if_else(
         &mut self,
-        params: Box<[ValType]>,
-        results: Box<[ValType]>,
+        ty: impl Into<InstrSeqType>,
         consequent: impl FnOnce(&mut InstrSeqBuilder),
         alternative: impl FnOnce(&mut InstrSeqBuilder),
     ) -> &mut Self {
+        let ty = ty.into();
+
         let consequent = {
-            let mut builder = self.dangling_instr_seq(params.clone(), results.clone());
+            let mut builder = self.dangling_instr_seq(ty);
             consequent(&mut builder);
             builder.id
         };
 
         let alternative = {
-            let mut builder = self.dangling_instr_seq(params, results);
+            let mut builder = self.dangling_instr_seq(ty);
             alternative(&mut builder);
             builder.id
         };
@@ -451,8 +443,7 @@ impl InstrSeqBuilder<'_> {
     ///     .func_body()
     ///     .if_else_at(
     ///         1,
-    ///         Box::new([]),
-    ///         Box::new([ValType::I32]),
+    ///         ValType::I32,
     ///         |then| {
     ///             then.i32_const(12);
     ///         },
@@ -464,19 +455,20 @@ impl InstrSeqBuilder<'_> {
     pub fn if_else_at(
         &mut self,
         position: usize,
-        params: Box<[ValType]>,
-        results: Box<[ValType]>,
+        ty: impl Into<InstrSeqType>,
         consequent: impl FnOnce(&mut InstrSeqBuilder),
         alternative: impl FnOnce(&mut InstrSeqBuilder),
     ) -> &mut Self {
+        let ty = ty.into();
+
         let consequent = {
-            let mut builder = self.dangling_instr_seq(params.clone(), results.clone());
+            let mut builder = self.dangling_instr_seq(ty);
             consequent(&mut builder);
             builder.id
         };
 
         let alternative = {
-            let mut builder = self.dangling_instr_seq(params, results);
+            let mut builder = self.dangling_instr_seq(ty);
             alternative(&mut builder);
             builder.id
         };

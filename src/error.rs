@@ -1,7 +1,7 @@
 //! Error types and utilities.
 
-use std::fmt;
 pub use failure::Error;
+use std::fmt;
 
 /// Either `Ok(T)` or `Err(failure::Error)`.
 pub type Result<T> = ::std::result::Result<T, failure::Error>;
@@ -19,9 +19,7 @@ pub enum ErrorKind {
 impl fmt::Display for ErrorKind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            ErrorKind::InvalidWasm => {
-                "The input WebAssembly is invalid".fmt(f)
-            }
+            ErrorKind::InvalidWasm => "The input WebAssembly is invalid".fmt(f),
         }
     }
 }

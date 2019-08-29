@@ -452,7 +452,7 @@ impl Emit for ModuleFunctions {
                 let mut wasm = Vec::new();
                 let mut encoder = Encoder::new(&mut wasm);
                 let (used_locals, local_indices) = func.emit_locals(cx.module, &mut encoder);
-                func.emit_instructions(cx.indices, &local_indices, &mut encoder);
+                func.emit_instructions(&cx.module.types, cx.indices, &local_indices, &mut encoder);
                 (wasm, id, used_locals, local_indices)
             })
             .collect::<Vec<_>>();

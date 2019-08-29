@@ -4,15 +4,17 @@ use crate::ir::*;
 use crate::map::IdHashMap;
 use crate::module::functions::LocalFunction;
 use crate::module::memories::MemoryId;
-use crate::ty::ValType;
+use crate::ModuleTypes;
 
 pub(crate) fn run(
+    types: &ModuleTypes,
     func: &LocalFunction,
     indices: &IdsToIndices,
     local_indices: &IdHashMap<Local, u32>,
     encoder: &mut Encoder,
 ) {
     let v = &mut Emit {
+        types,
         indices,
         blocks: vec![],
         block_kinds: vec![BlockKind::FunctionEntry],
@@ -26,6 +28,9 @@ pub(crate) fn run(
 }
 
 struct Emit<'a, 'b> {
+    // Needed so that we can encode block types.
+    types: &'a ModuleTypes,
+
     // Needed so we can map locals to their indices.
     indices: &'a IdsToIndices,
     local_indices: &'a IdHashMap<Local, u32>,
@@ -53,15 +58,15 @@ impl<'instr> Visitor<'instr> for Emit<'_, '_> {
         match self.block_kinds.last().unwrap() {
             BlockKind::Block => {
                 self.encoder.byte(0x02); // block
-                self.block_type(&seq.results);
+                self.block_type(seq.ty);
             }
             BlockKind::Loop => {
                 self.encoder.byte(0x03); // loop
-                self.block_type(&seq.results);
+                self.block_type(seq.ty);
             }
             BlockKind::If => {
                 self.encoder.byte(0x04); // if
-                self.block_type(&seq.results);
+                self.block_type(seq.ty);
             }
             // Function entries are implicitly started, and don't need any
             // opcode to start them. `Else` blocks are started when `If` blocks
@@ -780,14 +785,17 @@ impl Emit<'_, '_> {
         ) as u32
     }
 
-    fn block_type(&mut self, ty: &[ValType]) {
-        match ty.len() {
-            0 => self.encoder.byte(0x40),
-            1 => ty[0].emit(self.encoder),
-            _ => panic!(
-                "multiple return values not yet supported; write a transformation to \
-                 rewrite them into single value returns"
-            ),
+    fn block_type(&mut self, ty: InstrSeqType) {
+        match ty {
+            InstrSeqType::Simple(None) => self.encoder.byte(0x40),
+            InstrSeqType::Simple(Some(ty)) => ty.emit(self.encoder),
+            InstrSeqType::MultiValue(_) => {
+                let _ = self.types;
+                panic!(
+                    "multiple return values not yet supported; write a transformation to \
+                     rewrite them into single value returns"
+                )
+            }
         }
     }
 

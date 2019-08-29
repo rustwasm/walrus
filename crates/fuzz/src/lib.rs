@@ -3,7 +3,7 @@
 #![deny(missing_docs)]
 
 use failure::ResultExt;
-use rand::{Rng, SeedableRng};
+use rand::{rngs::SmallRng, Rng, SeedableRng};
 use std::cmp;
 use std::fmt;
 use std::fs;
@@ -25,20 +25,28 @@ pub trait TestCaseGenerator {
     /// The name of this test case generator.
     const NAME: &'static str;
 
-    /// Generate a string of WAT deterministically using the given RNG seed and
-    /// fuel.
-    fn generate(seed: u64, fuel: usize) -> String;
+    /// Generate a string of WAT deterministically using the given RNG and fuel.
+    fn generate(rng: &mut impl Rng, fuel: usize) -> String;
 }
 
 /// Configuration for fuzzing.
-pub struct Config<G: TestCaseGenerator> {
+pub struct Config<G, R>
+where
+    G: TestCaseGenerator,
+    R: Rng,
+{
     _generator: PhantomData<G>,
+    rng: R,
     fuel: usize,
     timeout: u64,
     scratch: tempfile::NamedTempFile,
 }
 
-impl<G: TestCaseGenerator> Config<G> {
+impl<G, R> Config<G, R>
+where
+    G: TestCaseGenerator,
+    R: Rng,
+{
     /// The default fuel level.
     pub const DEFAULT_FUEL: usize = 64;
 
@@ -46,7 +54,7 @@ impl<G: TestCaseGenerator> Config<G> {
     pub const DEFAULT_TIMEOUT_SECS: u64 = 5;
 
     /// Construct a new fuzzing configuration.
-    pub fn new() -> Config<G> {
+    pub fn new(rng: R) -> Config<G, R> {
         static INIT_LOGS: std::sync::Once = std::sync::Once::new();
         INIT_LOGS.call_once(|| {
             env_logger::init();
@@ -66,6 +74,7 @@ impl<G: TestCaseGenerator> Config<G> {
 
         Config {
             _generator: PhantomData,
+            rng,
             fuel,
             timeout,
             scratch,
@@ -75,14 +84,14 @@ impl<G: TestCaseGenerator> Config<G> {
     /// Set the fuel level.
     ///
     /// `fuel` must be greater than zero.
-    pub fn set_fuel(mut self, fuel: usize) -> Config<G> {
+    pub fn set_fuel(mut self, fuel: usize) -> Config<G, R> {
         assert!(fuel > 0);
         self.fuel = fuel;
         self
     }
 
-    fn gen_wat(&self, seed: u64) -> String {
-        G::generate(seed, self.fuel)
+    fn gen_wat(&mut self) -> String {
+        G::generate(&mut self.rng, self.fuel)
     }
 
     fn wat2wasm(&self, wat: &str) -> Result<Vec<u8>> {
@@ -104,7 +113,7 @@ impl<G: TestCaseGenerator> Config<G> {
         Ok(buf)
     }
 
-    fn run_one(&self, wat: &str) -> Result<()> {
+    fn test_wat(&self, wat: &str) -> Result<()> {
         let wasm = self.wat2wasm(&wat)?;
         let expected = self.interp(&wasm)?;
 
@@ -124,21 +133,27 @@ impl<G: TestCaseGenerator> Config<G> {
         .into())
     }
 
-    /// Generate a wasm file and then compare its output in the reference
+    /// Generate a single wasm file and then compare its output in the reference
     /// interpreter before and after round tripping it through `walrus`.
+    ///
+    /// Does not attempt to reduce any failing test cases.
+    pub fn run_one(&mut self) -> Result<()> {
+        let wat = self.gen_wat();
+        self.test_wat(&wat)
+            .with_context(|_| format!("wat = {}", wat))?;
+        Ok(())
+    }
+
+    /// Generate and test as many wasm files as we can within the configured
+    /// timeout budget.
     ///
     /// Returns the reduced failing test case, if any.
     pub fn run(&mut self) -> Result<()> {
         let start = time::Instant::now();
         let timeout = time::Duration::from_secs(self.timeout);
-        let mut seed = rand::thread_rng().gen();
         let mut failing = Ok(());
         loop {
-            let wat = self.gen_wat(seed);
-            match self
-                .run_one(&wat)
-                .with_context(|_| format!("wat = {}", wat))
-            {
+            match self.run_one() {
                 Ok(()) => {
                     // We reduced fuel as far as we could, so return the last
                     // failing test case.
@@ -152,14 +167,12 @@ impl<G: TestCaseGenerator> Config<G> {
                         return Ok(());
                     }
 
-                    // This RNG seed did not produce a failing test case, so choose
-                    // a new one.
-                    seed = rand::thread_rng().gen();
+                    // This did not produce a failing test case, so generate a
+                    // new one.
                     continue;
                 }
 
                 Err(e) => {
-                    let e: failure::Error = e.into();
                     print_err(&e);
                     failing = Err(e);
 
@@ -218,7 +231,7 @@ Here is a standalone test case:
 ----------------8<----------------8<----------------8<----------------
 #[test]
 fn test_name() {{
-    walrus_fuzz::assert_round_trip_execution_is_same::<{generator}>(\"\\
+    walrus_fuzz::assert_round_trip_execution_is_same(\"\\
 {wat}\");
 }}
 ----------------8<----------------8<----------------8<----------------
@@ -226,7 +239,6 @@ fn test_name() {{
             wat = self.wat,
             before = self.expected,
             after = self.actual,
-            generator = self.generator,
         )
     }
 }
@@ -235,25 +247,24 @@ impl std::error::Error for FailingTestCase {}
 
 /// Assert that the given WAT has the same execution trace before and after
 /// round tripping it through walrus.
-pub fn assert_round_trip_execution_is_same<G: TestCaseGenerator>(wat: &str) {
-    let config = Config::<G>::new();
-    if let Err(e) = config.run_one(wat) {
+pub fn assert_round_trip_execution_is_same(wat: &str) {
+    let config = Config::<WasmOptTtf, SmallRng>::new(SmallRng::seed_from_u64(0));
+    if let Err(e) = config.test_wat(wat) {
         print_err(&e);
         panic!("round trip execution is not the same!");
     }
 }
 
 /// A simple WAT generator.
-pub struct WatGen {
-    rng: rand::rngs::SmallRng,
+pub struct WatGen<R: Rng> {
+    rng: R,
     wat: String,
 }
 
-impl TestCaseGenerator for WatGen {
+impl<R: Rng> TestCaseGenerator for WatGen<R> {
     const NAME: &'static str = "WatGen";
 
-    fn generate(seed: u64, fuel: usize) -> String {
-        let rng = rand::rngs::SmallRng::seed_from_u64(seed);
+    fn generate(rng: &mut impl Rng, fuel: usize) -> String {
         let wat = String::new();
         let mut g = WatGen { rng, wat };
         g.prefix();
@@ -263,7 +274,7 @@ impl TestCaseGenerator for WatGen {
     }
 }
 
-impl WatGen {
+impl<R: Rng> WatGen<R> {
     fn prefix(&mut self) {
         self.wat.push_str(
             "\
@@ -374,9 +385,7 @@ pub struct WasmOptTtf;
 impl TestCaseGenerator for WasmOptTtf {
     const NAME: &'static str = "WasmOptTtf";
 
-    fn generate(seed: u64, fuel: usize) -> String {
-        let mut rng = rand::rngs::SmallRng::seed_from_u64(seed);
-
+    fn generate(rng: &mut impl Rng, fuel: usize) -> String {
         loop {
             let input: Vec<u8> = (0..fuel).map(|_| rng.gen()).collect();
 
@@ -418,6 +427,7 @@ fn print_err(e: &failure::Error) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rand::rngs::SmallRng;
 
     fn get_timeout() -> Option<u64> {
         use std::str::FromStr;
@@ -428,7 +438,9 @@ mod tests {
 
     #[test]
     fn watgen_fuzz() {
-        let mut config = Config::<WatGen>::new();
+        let mut config = Config::<WatGen<SmallRng>, SmallRng>::new(SmallRng::seed_from_u64(
+            rand::thread_rng().gen(),
+        ));
         if let Some(t) = get_timeout() {
             config.timeout = t;
         }
@@ -440,7 +452,8 @@ mod tests {
 
     #[test]
     fn wasm_opt_ttf_fuzz() {
-        let mut config = Config::<WasmOptTtf>::new();
+        let mut config =
+            Config::<WasmOptTtf, SmallRng>::new(SmallRng::seed_from_u64(rand::thread_rng().gen()));
         if let Some(t) = get_timeout() {
             config.timeout = t;
         }
@@ -452,7 +465,7 @@ mod tests {
 
     #[test]
     fn fuzz0() {
-        super::assert_round_trip_execution_is_same::<WasmOptTtf>(
+        super::assert_round_trip_execution_is_same(
             r#"
             (module
              (memory 1)
@@ -466,7 +479,7 @@ mod tests {
 
     #[test]
     fn fuzz1() {
-        super::assert_round_trip_execution_is_same::<WasmOptTtf>(
+        super::assert_round_trip_execution_is_same(
             r#"
             (module
               (func (result i32) (local i32)

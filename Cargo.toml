@@ -40,7 +40,7 @@ criterion = "0.3.0"
 
 [workspace]
 members = [
-    "./crates/fuzz",
+    "./crates/fuzz-utils",
     "./crates/macro",
     "./crates/tests",
     "./crates/tests-utils",

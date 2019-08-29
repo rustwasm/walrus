@@ -1,0 +1,37 @@
+[package]
+name = "walrus-fuzz"
+version = "0.0.1"
+authors = ["Automatically generated"]
+publish = false
+edition = "2018"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+bufrng = "1.0.1"
+
+[dependencies.walrus]
+path = ".."
+
+[dependencies.walrus-fuzz-utils]
+path = "../crates/fuzz-utils"
+
+[dependencies.libfuzzer-sys]
+git = "https://github.com/rust-fuzz/libfuzzer-sys.git"
+
+# Prevent this from interfering with workspaces.
+[workspace]
+members = ["."]
+
+[[bin]]
+name = "watgen"
+path = "fuzz_targets/watgen.rs"
+
+[[bin]]
+name = "wasm-opt-ttf"
+path = "fuzz_targets/wasm-opt-ttf.rs"
+
+[[bin]]
+name = "raw"
+path = "fuzz_targets/raw.rs"

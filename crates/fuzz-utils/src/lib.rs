@@ -386,6 +386,9 @@ impl TestCaseGenerator for WasmOptTtf {
     const NAME: &'static str = "WasmOptTtf";
 
     fn generate(rng: &mut impl Rng, fuel: usize) -> String {
+        // The wat we generated in the last iteration of the loop below, if any.
+        let mut last_wat = None;
+
         loop {
             let input: Vec<u8> = (0..fuel).map(|_| rng.gen()).collect();
 
@@ -394,6 +397,15 @@ impl TestCaseGenerator for WasmOptTtf {
 
             let wat =
                 match walrus_tests_utils::wasm_opt(input_tmp.path(), vec!["-ttf", "--emit-text"]) {
+                    Ok(ref w) if Some(w) == last_wat.as_ref() => {
+                        // We're stuck in a loop generating the same wat that
+                        // `wat2wasm` can't handle over and over. This is
+                        // typically because we're using an RNG that is derived
+                        // from some fuzzer's output, and it is yielding all
+                        // zeros or something. Just return the most basic wat
+                        // module.
+                        return "(module)".to_string();
+                    }
                     Ok(w) => w,
                     Err(e) => {
                         // Sometimes `wasm-opt -ttf` fails to generate wasm
@@ -409,15 +421,24 @@ impl TestCaseGenerator for WasmOptTtf {
                 // Only generate programs that wat2wasm can handle.
                 let tmp = tempfile::NamedTempFile::new().unwrap();
                 fs::write(tmp.path(), &wat).unwrap();
-                wat2wasm(tmp.path(), &[]).is_ok()
+                wat2wasm(tmp.path(), &[]).is_err()
             } {
-                return String::from_utf8(wat).unwrap();
+                eprintln!(
+                    "Warning: `wasm-opt -fff` generated wat that wat2wasm cannot handle; \
+                     skipping. wat =\n{}",
+                    String::from_utf8_lossy(&wat)
+                );
+                last_wat = Some(wat);
+                continue;
             }
+
+            return String::from_utf8(wat).unwrap();
         }
     }
 }
 
-fn print_err(e: &failure::Error) {
+/// Print a `failure::Error` with its chain.
+pub fn print_err(e: &failure::Error) {
     eprintln!("Error:");
     for c in e.iter_chain() {
         eprintln!("  - {}", c);
@@ -486,5 +507,16 @@ mod tests {
                 local.get 0))
             "#,
         );
+    }
+
+    #[test]
+    fn fuzz2() {
+        // This was causing us to infinite loop in `WasmOptTtf::generate`.
+        let rng = bufrng::BufRng::new(&[0]);
+        let mut config = Config::<WasmOptTtf, bufrng::BufRng>::new(rng).set_fuel(1);
+        if let Err(e) = config.run_one() {
+            print_err(&e);
+            panic!("Found an error! {}", e);
+        }
     }
 }

@@ -144,16 +144,22 @@ impl Module {
 impl Emit for ModuleTypes {
     fn emit(&self, cx: &mut EmitContext) {
         log::debug!("emitting type section");
-        let tys = self
+
+        let mut tys = self
             .arena
             .iter()
             .filter(|(_, ty)| !ty.is_for_function_entry())
             .collect::<Vec<_>>();
+
         if tys.is_empty() {
             return;
         }
+
         let mut cx = cx.start_section(Section::Type);
         cx.encoder.usize(tys.len());
+
+        // Sort for deterministic ordering.
+        tys.sort_by_key(|&(_, ty)| ty);
 
         for (id, ty) in tys {
             cx.indices.push_type(id);

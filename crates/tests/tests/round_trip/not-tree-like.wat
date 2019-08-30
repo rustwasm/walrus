@@ -9,19 +9,19 @@
     i32.add
   ))
 
-;; CHECK: (module
-;; NEXT:    (type (;0;) (func (param i32) (result i32)))
-;; NEXT:    (type (;1;) (func (result i32)))
-;; NEXT:    (import "env" "blackbox" (func $blackbox (type 0)))
-;; NEXT:    (func (;1;) (type 1) (result i32)
-;; NEXT:      i32.const 1
-;; NEXT:      call $blackbox
-;; NEXT:      i32.const 2
-;; NEXT:      call $blackbox
-;; NEXT:      drop
-;; NEXT:      i32.const 3
-;; NEXT:      call $blackbox
-;; NEXT:      i32.add)
-;; NEXT:    (export "$f" (func 1)))
-
-
+(; CHECK-ALL:
+  (module
+    (type (;0;) (func (result i32)))
+    (type (;1;) (func (param i32) (result i32)))
+    (import "env" "blackbox" (func $blackbox (type 1)))
+    (func (;1;) (type 0) (result i32)
+      i32.const 1
+      call $blackbox
+      i32.const 2
+      call $blackbox
+      drop
+      i32.const 3
+      call $blackbox
+      i32.add)
+    (export "$f" (func 1)))
+;)

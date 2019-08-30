@@ -5,6 +5,7 @@ use crate::encode::Encoder;
 use crate::error::Result;
 use crate::tombstone_arena::Tombstone;
 use id_arena::Id;
+use std::cmp::Ordering;
 use std::fmt;
 use std::hash;
 
@@ -41,6 +42,20 @@ impl PartialEq for Type {
 }
 
 impl Eq for Type {}
+
+impl PartialOrd for Type {
+    fn partial_cmp(&self, rhs: &Type) -> Option<Ordering> {
+        Some(self.cmp(rhs))
+    }
+}
+
+impl Ord for Type {
+    fn cmp(&self, rhs: &Type) -> Ordering {
+        self.params()
+            .cmp(rhs.params())
+            .then_with(|| self.results().cmp(rhs.results()))
+    }
+}
 
 impl hash::Hash for Type {
     #[inline]

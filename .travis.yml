@@ -40,7 +40,7 @@ matrix:
     # we do `cargo test`.
     #
     # We run these first because they take the longest.
-    - name: "fuzz (stable)"
+    - name: "fuzz-utils (stable)"
       rust: stable
       env:
         # 300 seconds = 5 minutes.
@@ -67,6 +67,12 @@ matrix:
       script:
         |
           which cargo-fuzz || cargo install cargo-fuzz
+
+          (for (( ; ; )); do
+              tail -n 100 fuzz.log || true
+              sleep 10
+          done) &
+
           # When the fuzzing fails, the logs are too big for Travis, so just
           # show the relevant tail portion of the log.
           cargo fuzz run wasm-opt-ttf -- -max_total_time=300 > fuzz.log 2>&1 || {

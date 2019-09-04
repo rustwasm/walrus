@@ -235,13 +235,13 @@ impl Module {
     where
         P: AsRef<Path>,
     {
-        let buffer = self.emit_wasm()?;
+        let buffer = self.emit_wasm();
         fs::write(path, buffer).context("failed to write wasm module")?;
         Ok(())
     }
 
     /// Emit this module into an in-memory wasm buffer.
-    pub fn emit_wasm(&self) -> Result<Vec<u8>> {
+    pub fn emit_wasm(&self) -> Vec<u8> {
         log::debug!("start emit");
 
         let indices = &mut IdsToIndices::default();
@@ -293,7 +293,7 @@ impl Module {
         }
 
         log::debug!("emission finished");
-        Ok(wasm)
+        wasm
     }
 
     /// Returns an iterator over all functions in this module

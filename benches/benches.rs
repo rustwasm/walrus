@@ -10,7 +10,7 @@ fn criterion_benchmark(c: &mut Criterion) {
                 let input_wasm = black_box(input_wasm);
                 let mut module = Module::from_buffer(input_wasm).unwrap();
                 walrus::passes::gc::run(&mut module);
-                let output_wasm = module.emit_wasm().unwrap();
+                let output_wasm = module.emit_wasm();
                 black_box(output_wasm);
             });
         }),

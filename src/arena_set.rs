@@ -32,7 +32,7 @@ impl<T: Clone + Eq + Hash> ArenaSet<T> {
     }
 
     /// Get the id that will be used for the next unique item added to this set.
-    pub fn next_id(&mut self) -> Id<T> {
+    pub fn next_id(&self) -> Id<T> {
         self.arena.next_id()
     }
 

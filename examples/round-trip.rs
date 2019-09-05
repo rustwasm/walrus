@@ -18,7 +18,7 @@ fn try_main() -> Result<(), failure::Error> {
         failure::format_err!("must provide the input wasm file as the first argument")
     })?;
     let m = walrus::Module::from_file(&a)?;
-    let wasm = m.emit_wasm()?;
+    let wasm = m.emit_wasm();
     if let Some(destination) = std::env::args().nth(2) {
         std::fs::write(destination, wasm)?;
     }

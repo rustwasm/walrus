@@ -1,17 +1,18 @@
 //! Context needed when validating instructions and constructing our `Instr` IR.
 
 use crate::error::{ErrorKind, Result};
-use crate::ir::{BlockKind, Instr, InstrSeq, InstrSeqId};
+use crate::ir::{BlockKind, Instr, InstrSeq, InstrSeqId, InstrSeqType};
 use crate::module::functions::{FunctionId, LocalFunction};
 use crate::module::Module;
 use crate::parse::IndicesToIds;
 use crate::ty::ValType;
+use crate::{ModuleTypes, TypeId};
 use failure::Fail;
 
 #[derive(Debug)]
 pub(crate) struct ControlFrame {
-    /// The type of the associated label (used to type-check branches).
-    pub label_types: Box<[ValType]>,
+    /// The parameter types of the block (checked before entering the block).
+    pub start_types: Box<[ValType]>,
 
     /// The result type of the block (used to check its result).
     pub end_types: Box<[ValType]>,
@@ -29,6 +30,17 @@ pub(crate) struct ControlFrame {
 
     /// This control frame's kind of block, eg loop vs block vs if/else.
     pub kind: BlockKind,
+}
+
+impl ControlFrame {
+    /// Get the expected types on the stack for branches to this block.
+    pub fn label_types(&self) -> &[ValType] {
+        if let BlockKind::Loop = self.kind {
+            &self.start_types
+        } else {
+            &self.end_types
+        }
+    }
 }
 
 /// The operand stack.
@@ -116,22 +128,40 @@ impl<'a> ValidationContext<'a> {
     pub fn push_control(
         &mut self,
         kind: BlockKind,
-        label_types: Box<[ValType]>,
+        start_types: Box<[ValType]>,
         end_types: Box<[ValType]>,
-    ) -> InstrSeqId {
+    ) -> Result<InstrSeqId> {
         impl_push_control(
+            &self.module.types,
             kind,
             self.func,
             self.controls,
             self.operands,
-            label_types,
+            start_types,
             end_types,
         )
     }
 
-    pub fn pop_control(&mut self) -> Result<(Box<[ValType]>, InstrSeqId, BlockKind)> {
+    pub fn push_control_with_ty(&mut self, kind: BlockKind, ty: TypeId) -> InstrSeqId {
+        let (start_types, end_types) = self.module.types.params_results(ty);
+        let start_types: Box<[_]> = start_types.into();
+        let end_types: Box<[_]> = end_types.into();
+        impl_push_control_with_ty(
+            &self.module.types,
+            kind,
+            self.func,
+            self.controls,
+            self.operands,
+            ty.into(),
+            start_types,
+            end_types,
+        )
+    }
+
+    pub fn pop_control(&mut self) -> Result<(ControlFrame, InstrSeqId)> {
         let frame = impl_pop_control(&mut self.controls, &mut self.operands)?;
-        Ok((frame.end_types, frame.block, frame.kind))
+        let block = frame.block;
+        Ok((frame, block))
     }
 
     pub fn unreachable(&mut self) {
@@ -173,6 +203,7 @@ impl<'a> ValidationContext<'a> {
 }
 
 fn impl_push_operand(operands: &mut OperandStack, op: Option<ValType>) {
+    log::trace!("push operand: {:?}", op);
     operands.push(op);
 }
 
@@ -183,6 +214,7 @@ fn impl_pop_operand(
     if let Some(f) = controls.last() {
         if operands.len() == f.height {
             if f.unreachable {
+                log::trace!("pop operand: None");
                 return Ok(None);
             }
             return Err(ErrorKind::InvalidWasm
@@ -190,7 +222,9 @@ fn impl_pop_operand(
                 .into());
         }
     }
-    Ok(operands.pop().unwrap())
+    let op = operands.pop().unwrap();
+    log::trace!("pop operand: {:?}", op);
+    Ok(op)
 }
 
 fn impl_pop_operand_expected(
@@ -232,23 +266,63 @@ fn impl_pop_operands(
 }
 
 fn impl_push_control(
+    types: &ModuleTypes,
     kind: BlockKind,
     func: &mut LocalFunction,
     controls: &mut ControlStack,
-    operands: &OperandStack,
-    label_types: Box<[ValType]>,
+    operands: &mut OperandStack,
+    start_types: Box<[ValType]>,
+    end_types: Box<[ValType]>,
+) -> Result<InstrSeqId> {
+    let ty = InstrSeqType::existing(types, &start_types, &end_types).ok_or_else(|| {
+        failure::format_err!(
+            "attempted to push a control frame for an instruction \
+             sequence with a type that does not exist"
+        )
+        .context(format!("type: {:?} -> {:?}", &start_types, &end_types))
+    })?;
+
+    Ok(impl_push_control_with_ty(
+        types,
+        kind,
+        func,
+        controls,
+        operands,
+        ty,
+        start_types,
+        end_types,
+    ))
+}
+
+fn impl_push_control_with_ty(
+    types: &ModuleTypes,
+    kind: BlockKind,
+    func: &mut LocalFunction,
+    controls: &mut ControlStack,
+    operands: &mut OperandStack,
+    ty: InstrSeqType,
+    start_types: Box<[ValType]>,
     end_types: Box<[ValType]>,
 ) -> InstrSeqId {
-    let block = func.add_block(|id| InstrSeq::new(id, label_types.clone(), end_types.clone()));
-    let frame = ControlFrame {
-        label_types,
+    if let InstrSeqType::MultiValue(ty) = ty {
+        debug_assert_eq!(types.params(ty), &start_types[..]);
+        debug_assert_eq!(types.results(ty), &end_types[..]);
+    }
+
+    let height = operands.len();
+    impl_push_operands(operands, &start_types);
+
+    let block = func.add_block(|id| InstrSeq::new(id, ty));
+
+    controls.push(ControlFrame {
+        start_types,
         end_types,
-        height: operands.len(),
+        height,
         unreachable: false,
         block,
         kind,
-    };
-    controls.push(frame);
+    });
+
     block
 }
 

@@ -4,7 +4,6 @@ use crate::ir::*;
 use crate::map::IdHashMap;
 use crate::module::functions::LocalFunction;
 use crate::module::memories::MemoryId;
-use crate::ty::ValType;
 
 pub(crate) fn run(
     func: &LocalFunction,
@@ -53,15 +52,15 @@ impl<'instr> Visitor<'instr> for Emit<'_, '_> {
         match self.block_kinds.last().unwrap() {
             BlockKind::Block => {
                 self.encoder.byte(0x02); // block
-                self.block_type(&seq.results);
+                self.block_type(seq.ty);
             }
             BlockKind::Loop => {
                 self.encoder.byte(0x03); // loop
-                self.block_type(&seq.results);
+                self.block_type(seq.ty);
             }
             BlockKind::If => {
                 self.encoder.byte(0x04); // if
-                self.block_type(&seq.results);
+                self.block_type(seq.ty);
             }
             // Function entries are implicitly started, and don't need any
             // opcode to start them. `Else` blocks are started when `If` blocks
@@ -780,14 +779,15 @@ impl Emit<'_, '_> {
         ) as u32
     }
 
-    fn block_type(&mut self, ty: &[ValType]) {
-        match ty.len() {
-            0 => self.encoder.byte(0x40),
-            1 => ty[0].emit(self.encoder),
-            _ => panic!(
-                "multiple return values not yet supported; write a transformation to \
-                 rewrite them into single value returns"
-            ),
+    fn block_type(&mut self, ty: InstrSeqType) {
+        match ty {
+            InstrSeqType::Simple(None) => self.encoder.byte(0x40),
+            InstrSeqType::Simple(Some(ty)) => ty.emit(self.encoder),
+            InstrSeqType::MultiValue(ty) => {
+                let index = self.indices.get_type_index(ty);
+                assert!(index < std::i32::MAX as u32);
+                self.encoder.i32(index as i32);
+            }
         }
     }
 

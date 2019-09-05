@@ -58,9 +58,9 @@ fn main() -> walrus::Result<()> {
         // (local.set $res (i32.const 1))
         .i32_const(1)
         .local_set(res)
-        .block(Box::new([]), Box::new([]), |done| {
+        .block(None, |done| {
             let done_id = done.id();
-            done.loop_(Box::new([]), |loop_| {
+            done.loop_(None, |loop_| {
                 let loop_id = loop_.id();
                 loop_
                     // (call $log (local.get $res))
@@ -71,8 +71,7 @@ fn main() -> walrus::Result<()> {
                     .i32_const(0)
                     .binop(BinaryOp::I32Eq)
                     .if_else(
-                        Box::new([]),
-                        Box::new([]),
+                        None,
                         |then| {
                             // (then (br $done))
                             then.br(done_id);

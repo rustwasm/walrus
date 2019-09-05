@@ -75,6 +75,7 @@ pub fn dfs_in_order<'instr>(
             // instructions in this sequence yet, and it is the first time we
             // are entering it, so let the visitor know.
             visitor.start_instr_seq(seq);
+            seq.visit(visitor);
         }
 
         'traversing_instrs: for (index, instr) in seq.instrs.iter().enumerate().skip(index) {
@@ -189,6 +190,7 @@ pub fn dfs_pre_order_mut(
     while let Some(seq_id) = stack.pop() {
         let seq = func.block_mut(seq_id);
         visitor.start_instr_seq_mut(seq);
+        seq.visit_mut(visitor);
 
         for instr in &mut seq.instrs {
             visitor.visit_instr_mut(instr);
@@ -292,19 +294,19 @@ mod tests {
     }
 
     fn make_test_func(module: &mut crate::Module) -> &mut LocalFunction {
+        let block_ty = module.types.add(&[], &[]);
         let mut builder = crate::FunctionBuilder::new(&mut module.types, &[], &[]);
 
         builder
             .func_body()
             .i32_const(1)
             .drop()
-            .block(Box::new([]), Box::new([]), |block| {
+            .block(block_ty, |block| {
                 block
                     .i32_const(2)
                     .drop()
                     .if_else(
-                        Box::new([]),
-                        Box::new([]),
+                        block_ty,
                         |then| {
                             then.i32_const(3).drop();
                         },

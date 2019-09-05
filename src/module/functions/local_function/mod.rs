@@ -61,7 +61,10 @@ impl LocalFunction {
 
         let mut ctx = ValidationContext::new(module, indices, id, &mut func, operands, controls);
 
-        let entry = ctx.push_control(BlockKind::FunctionEntry, result.clone(), result);
+        let ty = module.types.find_for_function_entry(&result).expect(
+            "the function entry type should have already been created before parsing the body",
+        );
+        let entry = ctx.push_control_with_ty(BlockKind::FunctionEntry, ty);
         ctx.func.builder.entry = Some(entry);
         for inst in body {
             let inst = inst?;
@@ -247,9 +250,37 @@ impl LocalFunction {
     }
 }
 
+fn block_result_tys(
+    ctx: &ValidationContext,
+    ty: wasmparser::TypeOrFuncType,
+) -> Result<Box<[ValType]>> {
+    match ty {
+        wasmparser::TypeOrFuncType::Type(ty) => ValType::from_wasmparser_type(ty).map(Into::into),
+        wasmparser::TypeOrFuncType::FuncType(idx) => {
+            let ty = ctx.indices.get_type(idx)?;
+            Ok(ctx.module.types.results(ty).into())
+        }
+    }
+}
+
+fn block_param_tys(
+    ctx: &ValidationContext,
+    ty: wasmparser::TypeOrFuncType,
+) -> Result<Box<[ValType]>> {
+    match ty {
+        wasmparser::TypeOrFuncType::Type(_) => Ok([][..].into()),
+        wasmparser::TypeOrFuncType::FuncType(idx) => {
+            let ty = ctx.indices.get_type(idx)?;
+            Ok(ctx.module.types.params(ty).into())
+        }
+    }
+}
+
 fn validate_instruction(ctx: &mut ValidationContext, inst: Operator) -> Result<()> {
     use crate::ir::ExtendedLoad::*;
     use crate::ValType::*;
+
+    log::trace!("validate instruction: {:?}", inst);
 
     let const_ = |ctx: &mut ValidationContext, ty, value| {
         ctx.alloc_instr(Const { value });
@@ -595,33 +626,40 @@ fn validate_instruction(ctx: &mut ValidationContext, inst: Operator) -> Result<(
             ctx.unreachable();
         }
         Operator::Block { ty } => {
-            let results = ValType::from_wasmparser_type(ty)?;
-            let seq = ctx.push_control(BlockKind::Block, results.clone(), results);
+            let param_tys = block_param_tys(ctx, ty)?;
+            let result_tys = block_result_tys(ctx, ty)?;
+            ctx.pop_operands(&param_tys)?;
+            let seq = ctx.push_control(BlockKind::Block, param_tys, result_tys)?;
             ctx.alloc_instr_in_control(1, Block { seq })?;
         }
         Operator::Loop { ty } => {
-            let t = ValType::from_wasmparser_type(ty)?;
-            let seq = ctx.push_control(BlockKind::Loop, vec![].into_boxed_slice(), t);
+            let result_tys = block_result_tys(ctx, ty)?;
+            let param_tys = block_param_tys(ctx, ty)?;
+            ctx.pop_operands(&param_tys)?;
+            let seq = ctx.push_control(BlockKind::Loop, param_tys, result_tys)?;
             ctx.alloc_instr_in_control(1, Loop { seq })?;
         }
         Operator::If { ty } => {
-            let ty = ValType::from_wasmparser_type(ty)?;
-            ctx.pop_operand_expected(Some(I32))?;
+            let result_tys = block_result_tys(ctx, ty)?;
+            let param_tys = block_param_tys(ctx, ty)?;
 
-            let consequent = ctx.push_control(BlockKind::If, ty.clone(), ty.clone());
+            ctx.pop_operand_expected(Some(I32))?;
+            ctx.pop_operands(&param_tys)?;
+
+            let consequent = ctx.push_control(BlockKind::If, param_tys, result_tys)?;
             ctx.if_else.push(context::IfElseState {
                 consequent,
                 alternative: None,
             });
         }
         Operator::End => {
-            let (results, _block_id, kind) = ctx.pop_control()?;
+            let (frame, _block) = ctx.pop_control()?;
 
             // If we just finished an if/else block then the actual
             // instruction which produces the value will be an `IfElse` node,
             // not the block itself. Do some postprocessing here to create
             // such a node.
-            match kind {
+            match frame.kind {
                 BlockKind::If | BlockKind::Else => {
                     let context::IfElseState {
                         consequent,
@@ -630,13 +668,16 @@ fn validate_instruction(ctx: &mut ValidationContext, inst: Operator) -> Result<(
 
                     let alternative = match alternative {
                         Some(alt) => {
-                            debug_assert_eq!(kind, BlockKind::Else);
+                            debug_assert_eq!(frame.kind, BlockKind::Else);
                             alt
                         }
                         None => {
-                            debug_assert_eq!(kind, BlockKind::If);
-                            let alternative =
-                                ctx.push_control(BlockKind::Else, results.clone(), results.clone());
+                            debug_assert_eq!(frame.kind, BlockKind::If);
+                            let alternative = ctx.push_control(
+                                BlockKind::Else,
+                                frame.start_types.clone(),
+                                frame.end_types.clone(),
+                            )?;
                             ctx.pop_control()?;
                             alternative
                         }
@@ -650,21 +691,21 @@ fn validate_instruction(ctx: &mut ValidationContext, inst: Operator) -> Result<(
                 _ => {}
             }
 
-            ctx.push_operands(&results);
+            ctx.push_operands(&frame.end_types);
         }
         Operator::Else => {
-            let (results, _consequent, kind) = ctx.pop_control()?;
-
+            let (frame, _consequent) = ctx.pop_control()?;
             // An `else` instruction is only valid immediately inside an if/else
             // block which is denoted by the `IfElse` block kind.
-            match kind {
+            match frame.kind {
                 BlockKind::If => {}
                 _ => bail!("`else` without a leading `if`"),
             }
 
             // But we still need to parse the alternative block, so allocate the
             // block here to parse.
-            let alternative = ctx.push_control(BlockKind::Else, results.clone(), results);
+            let alternative =
+                ctx.push_control(BlockKind::Else, frame.start_types, frame.end_types)?;
             let last = ctx.if_else.last_mut().unwrap();
             if last.alternative.is_some() {
                 bail!("`else` without a leading `if`")
@@ -673,7 +714,7 @@ fn validate_instruction(ctx: &mut ValidationContext, inst: Operator) -> Result<(
         }
         Operator::Br { relative_depth } => {
             let n = relative_depth as usize;
-            let expected = ctx.control(n)?.label_types.clone();
+            let expected = ctx.control(n)?.label_types().to_vec();
             ctx.pop_operands(&expected)?;
 
             let block = ctx.control(n)?.block;
@@ -684,7 +725,7 @@ fn validate_instruction(ctx: &mut ValidationContext, inst: Operator) -> Result<(
             let n = relative_depth as usize;
             ctx.pop_operand_expected(Some(I32))?;
 
-            let expected = ctx.control(n)?.label_types.clone();
+            let expected = ctx.control(n)?.label_types().to_vec();
             ctx.pop_operands(&expected)?;
 
             let block = ctx.control(n)?.block;
@@ -695,6 +736,7 @@ fn validate_instruction(ctx: &mut ValidationContext, inst: Operator) -> Result<(
             let len = table.len();
             let mut blocks = Vec::with_capacity(len);
             let mut label_types = None;
+            let label_types_ref = &mut label_types;
             let mut iter = table.into_iter();
             let mut next = || {
                 let n = match iter.next() {
@@ -702,10 +744,10 @@ fn validate_instruction(ctx: &mut ValidationContext, inst: Operator) -> Result<(
                     None => bail!("malformed `br_table"),
                 };
                 let control = ctx.control(n as usize)?;
-                match label_types {
-                    None => label_types = Some(&control.label_types),
+                match label_types_ref {
+                    None => *label_types_ref = Some(control.label_types().to_vec()),
                     Some(n) => {
-                        if n != &control.label_types {
+                        if &n[..] != control.label_types() {
                             bail!("br_table jump with non-uniform label types")
                         }
                     }
@@ -840,7 +882,7 @@ fn validate_instruction(ctx: &mut ValidationContext, inst: Operator) -> Result<(
             if flags != 0 {
                 bail!("fence with nonzero flags not supported yet");
             }
-            ctx.alloc_instr(AtomicFence { });
+            ctx.alloc_instr(AtomicFence {});
         }
 
         Operator::I32AtomicLoad { memarg } => {
@@ -1134,7 +1176,6 @@ fn validate_instruction(ctx: &mut ValidationContext, inst: Operator) -> Result<(
             ctx.push_operand(Some(I32));
         }
 
-        // Operator::V8x16Shuffle { .. } => bail!("v8x16.shuffle not supported"),
         Operator::V8x16Swizzle => {
             ctx.pop_operand_expected(Some(V128))?;
             ctx.pop_operand_expected(Some(V128))?;

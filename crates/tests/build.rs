@@ -57,4 +57,5 @@ fn main() {
     generate_tests("round_trip");
     generate_tests("spec-tests");
     generate_tests("function_imports");
+    generate_tests("invalid");
 }

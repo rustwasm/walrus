@@ -11,8 +11,6 @@
     i32.const 42)
   (export "f" (func $f)))
 
-;; CHECK-ALL: (module
-
 (; CHECK-ALL:
   (module
     (type (;0;) (func (result i32)))

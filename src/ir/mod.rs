@@ -8,7 +8,9 @@ mod traversals;
 pub use self::traversals::*;
 
 use crate::encode::Encoder;
-use crate::{DataId, FunctionId, GlobalId, LocalFunction, MemoryId, TableId, TypeId, ValType};
+use crate::{
+    DataId, FunctionId, GlobalId, LocalFunction, MemoryId, ModuleTypes, TableId, TypeId, ValType,
+};
 use id_arena::Id;
 use std::fmt;
 use std::ops::{Deref, DerefMut};
@@ -43,21 +45,89 @@ impl Local {
     }
 }
 
-/// TODO FITZGEN
+/// The identifier for a `InstrSeq` within some `LocalFunction`.
 pub type InstrSeqId = Id<InstrSeq>;
+
+/// The type of an instruction sequence.
+///
+// NB: We purposefully match the encoding for block types here, with MVP Wasm
+// types inlined and multi-value types outlined. If we tried to simplify this
+// type representation by always using `TypeId`, then the `used` pass would
+// think that a bunch of types that are only internally used by `InstrSeq`s are
+// generally used, and we would emit them in the module's "Types" section. We
+// don't want to bloat the modules we emit, nor do we want to make the used/GC
+// passes convoluted, so we intentionally let the shape of this type guide us.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum InstrSeqType {
+    /// MVP Wasm blocks/loops/ifs can only push zero or one resulting value onto
+    /// the stack. They cannot take parameters on the stack.
+    Simple(Option<ValType>),
+    /// The multi-value extension to Wasm allows arbitrary stack parameters and
+    /// results, which are expressed via the same mechanism as function types.
+    MultiValue(TypeId),
+}
+
+impl InstrSeqType {
+    /// Construct a new `InstrSeqType` of the correct form for the given
+    /// parameter and result types.
+    pub fn new(types: &mut ModuleTypes, params: &[ValType], results: &[ValType]) -> InstrSeqType {
+        match (params.len(), results.len()) {
+            (0, 0) => InstrSeqType::Simple(None),
+            (0, 1) => InstrSeqType::Simple(Some(results[0])),
+            _ => InstrSeqType::MultiValue(types.add(params, results)),
+        }
+    }
+
+    /// Construct an `InstrSeqType` with a signature that is known to either be
+    /// `Simple` or uses a `Type` that has already been inserted into the
+    /// `ModuleTypes`.
+    ///
+    /// Returns `None` if this is an instruction sequence signature that
+    /// requires multi-value and `ModuleTypes` does not already have a `Type`
+    /// for it.
+    pub fn existing(
+        types: &ModuleTypes,
+        params: &[ValType],
+        results: &[ValType],
+    ) -> Option<InstrSeqType> {
+        Some(match (params.len(), results.len()) {
+            (0, 0) => InstrSeqType::Simple(None),
+            (0, 1) => InstrSeqType::Simple(Some(results[0])),
+            _ => InstrSeqType::MultiValue(types.find(params, results)?),
+        })
+    }
+}
+
+impl From<Option<ValType>> for InstrSeqType {
+    #[inline]
+    fn from(x: Option<ValType>) -> InstrSeqType {
+        InstrSeqType::Simple(x)
+    }
+}
+
+impl From<ValType> for InstrSeqType {
+    #[inline]
+    fn from(x: ValType) -> InstrSeqType {
+        InstrSeqType::Simple(Some(x))
+    }
+}
+
+impl From<TypeId> for InstrSeqType {
+    #[inline]
+    fn from(x: TypeId) -> InstrSeqType {
+        InstrSeqType::MultiValue(x)
+    }
+}
 
 /// A sequence of instructions.
 #[derive(Debug)]
 pub struct InstrSeq {
     id: InstrSeqId,
 
-    /// The types of the expected values on the stack when entering this
-    /// block.
-    pub params: Box<[ValType]>,
-
-    /// The types of the resulting values added to the stack after this
-    /// block is evaluated.
-    pub results: Box<[ValType]>,
+    /// This block's type: its the types of values that are expected on the
+    /// stack when entering this instruction sequence and the types that are
+    /// left on the stack afterwards.
+    pub ty: InstrSeqType,
 
     /// The instructions that make up the body of this block.
     pub instrs: Vec<Instr>,
@@ -81,14 +151,9 @@ impl DerefMut for InstrSeq {
 
 impl InstrSeq {
     /// Construct a new instruction sequence.
-    pub(crate) fn new(id: InstrSeqId, params: Box<[ValType]>, results: Box<[ValType]>) -> InstrSeq {
+    pub(crate) fn new(id: InstrSeqId, ty: InstrSeqType) -> InstrSeq {
         let instrs = vec![];
-        InstrSeq {
-            id,
-            params,
-            results,
-            instrs,
-        }
+        InstrSeq { id, ty, instrs }
     }
 
     /// Get the id of this instruction sequence.
@@ -144,17 +209,17 @@ pub(crate) enum BlockKind {
 #[walrus_instr]
 #[derive(Clone, Debug)]
 pub enum Instr {
-    /// A block of multiple instructions, and also a control frame.
+    /// `block ... end`
     #[walrus(skip_builder)]
     Block {
         /// The id of this `block` instruction's inner `InstrSeq`.
         seq: InstrSeqId,
     },
 
-    /// TODO FITZGEN
+    /// `loop ... end`
     #[walrus(skip_builder)]
     Loop {
-        /// TODO FITZGEN
+        /// The id of this `loop` instruction's inner `InstrSeq`.
         seq: InstrSeqId,
     },
 
@@ -1043,11 +1108,11 @@ impl Instr {
 }
 
 /// Anything that can be visited by a `Visitor`.
-pub(crate) trait Visit<'expr> {
+pub(crate) trait Visit<'instr> {
     /// Visit this thing with the given visitor.
     fn visit<V>(&self, visitor: &mut V)
     where
-        V: Visitor<'expr>;
+        V: Visitor<'instr>;
 }
 
 /// Anything that can be mutably visited by a `VisitorMut`.
@@ -1056,4 +1121,26 @@ pub(crate) trait VisitMut {
     fn visit_mut<V>(&mut self, visitor: &mut V)
     where
         V: VisitorMut;
+}
+
+impl<'instr> Visit<'instr> for InstrSeq {
+    fn visit<V>(&self, visitor: &mut V)
+    where
+        V: Visitor<'instr>,
+    {
+        if let InstrSeqType::MultiValue(ref ty) = self.ty {
+            visitor.visit_type_id(ty);
+        }
+    }
+}
+
+impl VisitMut for InstrSeq {
+    fn visit_mut<V>(&mut self, visitor: &mut V)
+    where
+        V: VisitorMut,
+    {
+        if let InstrSeqType::MultiValue(ref mut ty) = self.ty {
+            visitor.visit_type_id_mut(ty);
+        }
+    }
 }

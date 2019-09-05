@@ -8,7 +8,7 @@ fn run(wat_path: &Path) -> Result<(), failure::Error> {
         env_logger::init();
     });
 
-    let wasm = wat2wasm(wat_path)?;
+    let wasm = wat2wasm(wat_path, &[])?;
     let mut module = walrus::Module::from_buffer(&wasm)?;
 
     if env::var("WALRUS_TESTS_DOT").is_ok() {

@@ -1,0 +1,53 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="API documentation for the Rust `dfs_pre_order_mut` fn in crate `walrus`."><meta name="keywords" content="rust, rustlang, rust-lang, dfs_pre_order_mut"><title>walrus::ir::dfs_pre_order_mut - Rust</title><link rel="stylesheet" type="text/css" href="../../normalize.css"><link rel="stylesheet" type="text/css" href="../../rustdoc.css" id="mainThemeStyle"><link rel="stylesheet" type="text/css" href="../../dark.css"><link rel="stylesheet" type="text/css" href="../../light.css" id="themeStyle"><script src="../../storage.js"></script><noscript><link rel="stylesheet" href="../../noscript.css"></noscript><link rel="shortcut icon" href="../../favicon.ico"><style type="text/css">#crate-search{background-image:url("../../down-arrow.svg");}</style></head><body class="rustdoc fn"><!--[if lte IE 8]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="sidebar-menu">&#9776;</div><a href='../../walrus/index.html'><div class='logo-container'><img src='../../rust-logo.png' alt='logo'></div></a><div class="sidebar-elems"><p class='location'><a href='../index.html'>walrus</a>::<wbr><a href='index.html'>ir</a></p><script>window.sidebarCurrent = {name: 'dfs_pre_order_mut', ty: 'fn', relpath: ''};</script><script defer src="sidebar-items.js"></script></div></nav><div class="theme-picker"><button id="theme-picker" aria-label="Pick another theme!"><img src="../../brush.svg" width="18" alt="Pick another theme!"></button><div id="theme-choices"></div></div><script src="../../theme.js"></script><nav class="sub"><form class="search-form js-only"><div class="search-container"><div><select id="crate-search"><option value="All crates">All crates</option></select><input class="search-input" name="search" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"></div><a id="settings-menu" href="../../settings.html"><img src="../../wheel.svg" width="18" alt="Change settings"></a></div></form></nav><section id="main" class="content"><h1 class='fqn'><span class='out-of-band'><span id='render-detail'><a id="toggle-all-docs" href="javascript:void(0)" title="collapse all docs">[<span class='inner'>&#x2212;</span>]</a></span><a class='srclink' href='../../src/walrus/ir/traversals.rs.html#183-218' title='goto source code'>[src]</a></span><span class='in-band'>Function <a href='../index.html'>walrus</a>::<wbr><a href='index.html'>ir</a>::<wbr><a class="fn" href=''>dfs_pre_order_mut</a></span></h1><pre class='rust fn'>pub fn dfs_pre_order_mut(<br>&nbsp;&nbsp;&nbsp;&nbsp;visitor: &amp;mut impl <a class="trait" href="../../walrus/ir/trait.VisitorMut.html" title="trait walrus::ir::VisitorMut">VisitorMut</a>, <br>&nbsp;&nbsp;&nbsp;&nbsp;func: &amp;mut <a class="struct" href="../../walrus/struct.LocalFunction.html" title="struct walrus::LocalFunction">LocalFunction</a>, <br>&nbsp;&nbsp;&nbsp;&nbsp;start: <a class="type" href="../../walrus/ir/type.InstrSeqId.html" title="type walrus::ir::InstrSeqId">InstrSeqId</a><br>)</pre><div class='docblock'><p>Perform an intra-procedural, depth-first, pre-order, mutable traversal of
+the IR.</p>
+<ul>
+<li>
+<p><em>Intra-procedural</em>: Only traverses IR within a function. Does not cross
+function boundaries (although it will report edges to other functions via
+<code>visit_function_id</code> calls on the visitor, so you can use this as a
+building block for making global, inter-procedural analyses).</p>
+</li>
+<li>
+<p><em>Depth-first, pre-order</em>: Visits instructions and instruction sequences in
+a top-down manner, where all instructions in a parent sequences are
+visited before child sequences. See <a href="https://en.wikipedia.org/wiki/Tree_traversal#Pre-order_(NLR)">Wikipedia</a> for details.</p>
+</li>
+</ul>
+<p>Calls <code>visitor</code> methods for every instruction, instruction sequence, and
+resource that the traversal visits.</p>
+<p>The traversals begins at the <code>start</code> instruction sequence and goes from
+there. To traverse everything in a function, pass <code>func.entry_block()</code> as
+<code>start</code>.</p>
+<p>This implementation is iterative — not recursive — and so it
+will not blow the call stack on deeply nested Wasm (although it may still
+OOM).</p>
+<h1 id="example" class="section-header"><a href="#example">Example</a></h1>
+<p>This example walks the IR and adds one to all <code>i32.const</code>'s values.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered">
+<span class="kw">use</span> <span class="ident">walrus</span>::<span class="ident">LocalFunction</span>;
+<span class="kw">use</span> <span class="ident">walrus</span>::<span class="ident">ir</span>::<span class="kw-2">*</span>;
+
+<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Default</span>)]</span>
+<span class="kw">struct</span> <span class="ident">AddOneToI32Consts</span>;
+
+<span class="kw">impl</span> <span class="ident">VisitorMut</span> <span class="kw">for</span> <span class="ident">AddOneToI32Consts</span> {
+    <span class="kw">fn</span> <span class="ident">visit_const_mut</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>, <span class="ident">c</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">Const</span>) {
+        <span class="kw">match</span> <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">c</span>.<span class="ident">value</span> {
+            <span class="ident">Value</span>::<span class="ident">I32</span>(<span class="ident">x</span>) <span class="op">=</span><span class="op">&gt;</span> {
+                <span class="kw-2">*</span><span class="ident">x</span> <span class="op">+</span><span class="op">=</span> <span class="number">1</span>;
+            }
+            <span class="kw">_</span> <span class="op">=</span><span class="op">&gt;</span> {},
+        }
+    }
+}
+
+<span class="comment">// Get a function from somewhere.</span>
+<span class="kw">let</span> <span class="ident">my_func</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">LocalFunction</span> <span class="op">=</span> <span class="ident">get_my_function</span>();
+
+<span class="comment">// Create our visitor.</span>
+<span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">visitor</span> <span class="op">=</span> <span class="ident">AddOneToI32Consts</span>::<span class="ident">default</span>();
+
+<span class="comment">// Traverse and mutate everything in the function with our visitor.</span>
+<span class="ident">dfs_pre_order_mut</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">visitor</span>, <span class="ident">my_func</span>, <span class="ident">my_func</span>.<span class="ident">entry_block</span>());</pre></div>
+</div></section><section id="search" class="content hidden"></section><section class="footer"></section><aside id="help" class="hidden"><div><h1 class="hidden">Help</h1><div class="shortcuts"><h2>Keyboard Shortcuts</h2><dl><dt><kbd>?</kbd></dt><dd>Show this help dialog</dd><dt><kbd>S</kbd></dt><dd>Focus the search field</dd><dt><kbd>↑</kbd></dt><dd>Move up in search results</dd><dt><kbd>↓</kbd></dt><dd>Move down in search results</dd><dt><kbd>↹</kbd></dt><dd>Switch tab</dd><dt><kbd>&#9166;</kbd></dt><dd>Go to active search result</dd><dt><kbd>+</kbd></dt><dd>Expand all sections</dd><dt><kbd>-</kbd></dt><dd>Collapse all sections</dd></dl></div><div class="infos"><h2>Search Tricks</h2><p>Prefix searches with a type followed by a colon (e.g., <code>fn:</code>) to restrict the search to a given type.</p><p>Accepted types are: <code>fn</code>, <code>mod</code>, <code>struct</code>, <code>enum</code>, <code>trait</code>, <code>type</code>, <code>macro</code>, and <code>const</code>.</p><p>Search functions by type signature (e.g., <code>vec -> usize</code> or <code>* -> vec</code>)</p><p>Search multiple things at once by splitting your query with comma (e.g., <code>str,u8</code> or <code>String,struct:Vec,test</code>)</p></div></div></aside><script>window.rootPath = "../../";window.currentCrate = "walrus";</script><script src="../../aliases.js"></script><script src="../../main.js"></script><script defer src="../../search-index.js"></script></body></html>

@@ -1,0 +1,3 @@
+var N = null;var sourcesIndex = {};
+sourcesIndex["walrus"] = {"name":"","dirs":[{"name":"ir","files":["mod.rs","traversals.rs"]},{"name":"module","dirs":[{"name":"functions","dirs":[{"name":"local_function","files":["context.rs","emit.rs","mod.rs"]}],"files":["mod.rs"]}],"files":["config.rs","custom.rs","data.rs","elements.rs","exports.rs","globals.rs","imports.rs","locals.rs","memories.rs","mod.rs","producers.rs","tables.rs","types.rs"]},{"name":"passes","files":["gc.rs","mod.rs","used.rs","validate.rs"]}],"files":["arena_set.rs","dot.rs","emit.rs","encode.rs","error.rs","function_builder.rs","init_expr.rs","lib.rs","map.rs","parse.rs","tombstone_arena.rs","ty.rs"]};
+createSourceSidebar();

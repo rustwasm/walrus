@@ -1,0 +1,1 @@
+initSidebarItems({"fn":[["run","Validate a wasm module, returning an error if it fails to validate."]]});

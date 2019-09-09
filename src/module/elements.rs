@@ -76,7 +76,7 @@ impl Module {
             let segment = segment?;
 
             match segment.kind {
-                wasmparser::ElementKind::Passive(ty) => {
+                wasmparser::ElementKind::Passive(_) => {
                     bail!("passive element segments not supported yet");
                 }
                 wasmparser::ElementKind::Active {

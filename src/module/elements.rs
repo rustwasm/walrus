@@ -76,8 +76,7 @@ impl Module {
             let segment = segment?;
 
             match segment.kind {
-                wasmparser::ElementKind::Passive(ty) => {
-                    drop(ty);
+                wasmparser::ElementKind::Passive(_) => {
                     bail!("passive element segments not supported yet");
                 }
                 wasmparser::ElementKind::Active {
@@ -222,9 +221,8 @@ impl Emit for ModuleElements {
         // may want to sort this more intelligently in the future. Otherwise
         // emitting a segment here is in general much simpler than above as we
         // know there are no holes.
-        for (id, segment) in self.arena.iter() {
+        for (id, _) in self.arena.iter() {
             cx.indices.push_element(id);
-            drop((id, segment));
             // TODO: sync this with the upstream spec
             panic!(
                 "encoding a passive element segment requires either \

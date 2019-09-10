@@ -32,6 +32,30 @@ Released YYYY-MM-DD.
 
 --------------------------------------------------------------------------------
 
+## 0.12.0
+
+Released 2019-09-10.
+
+### Added
+
+* Added support for multi-value Wasm!
+
+* Added `ModuleExports::get_exported_{func, table, memory, global}` helper
+  functions to get an export by the id of the thing that it is exporting (if
+  any).
+
+* Added fuzz testing with libFuzzer and `cargo fuzz`.
+
+### Changed
+
+* No longer using the "derive" feature from `failure`, which should result in
+  slimmer dependency graphs and faster builds.
+
+* `Module::emit_wasm` is no longer fallible. It never actually did ever return
+  an `Err` and now the type signature reflects that.
+
+--------------------------------------------------------------------------------
+
 ## 0.11.0
 
 Released 2019-08-13.

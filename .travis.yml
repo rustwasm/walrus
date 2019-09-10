@@ -67,12 +67,6 @@ matrix:
       script:
         |
           which cargo-fuzz || cargo install cargo-fuzz
-
-          (for (( ; ; )); do
-              tail -n 100 fuzz.log || true
-              sleep 10
-          done) &
-
           # When the fuzzing fails, the logs are too big for Travis, so just
           # show the relevant tail portion of the log.
           cargo fuzz run wasm-opt-ttf -- -max_total_time=300 > fuzz.log 2>&1 || {
@@ -85,7 +79,7 @@ matrix:
           which cargo-fuzz || cargo install cargo-fuzz
           # When the fuzzing fails, the logs are too big for Travis, so just
           # show the relevant tail portion of the log.
-          cargo fuzz run raw -- -max_total_time=300 > fuzz.log 2>&1 || {
+          cargo fuzz run raw -- -max_total_time=300 -rss_limit_mb=4096 > fuzz.log 2>&1 || {
               tail -n 1000 fuzz.log && exit 1
           }
 

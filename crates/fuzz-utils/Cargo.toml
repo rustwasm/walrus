@@ -9,7 +9,7 @@ publish = false
 rand = { version = "0.7.0", features = ['small_rng'] }
 tempfile = "3.1.0"
 failure = "0.1.5"
-env_logger = "0.6.2"
+env_logger = "0.7.0"
 
 [dependencies.walrus]
 path = "../.."

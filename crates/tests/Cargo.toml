@@ -15,7 +15,7 @@ walrus-tests-utils = { path = "../tests-utils" }
 tempfile = "3.1.0"
 serde_json = { version = "1.0.40", features = ['preserve_order'] }
 serde = { version = "1.0.99", features = ['derive'] }
-env_logger = "0.6.2"
+env_logger = "0.7.0"
 
 [features]
 parallel = ['walrus/parallel']

@@ -105,8 +105,9 @@ where
     }
 
     fn round_trip_through_walrus(&self, wasm: &[u8]) -> Result<Vec<u8>> {
-        let module =
+        let mut module =
             walrus::Module::from_buffer(&wasm).context("walrus failed to parse the wasm buffer")?;
+        walrus::passes::gc::run(&mut module);
         let buf = module.emit_wasm();
         Ok(buf)
     }

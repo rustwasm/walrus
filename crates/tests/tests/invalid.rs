@@ -10,8 +10,14 @@ fn run(wat: &Path) -> Result<(), failure::Error> {
     let wasm = walrus_tests_utils::wat2wasm(wat, &["--no-check"])?;
 
     // NB: reading the module will do the validation.
-    if let Ok(_) = walrus::Module::from_buffer(&wasm) {
-        failure::bail!("expected {} to be invalid, but it was valid", wat.display());
+    match walrus::Module::from_buffer(&wasm) {
+        Err(e) => {
+            eprintln!("Got error, as expected:");
+            for c in e.iter_chain() {
+                eprintln!("  - {}", c);
+            }
+        }
+        Ok(_) => failure::bail!("expected {} to be invalid, but it was valid", wat.display()),
     }
 
     Ok(())

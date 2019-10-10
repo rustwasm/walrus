@@ -35,7 +35,7 @@ pub use crate::module::tables::FunctionTable;
 pub use crate::module::tables::{ModuleTables, Table, TableId, TableKind};
 pub use crate::module::types::ModuleTypes;
 use crate::parse::IndicesToIds;
-use failure::{bail, ResultExt};
+use anyhow::{bail, Context};
 use std::fs;
 use std::mem;
 use std::path::Path;
@@ -189,7 +189,7 @@ impl Module {
                         }
                         "name" => section
                             .get_name_section_reader()
-                            .map_err(failure::Error::from)
+                            .map_err(anyhow::Error::from)
                             .and_then(|r| ret.parse_name_section(r, &indices)),
                         _ => {
                             log::debug!("parsing custom section `{}`", name);

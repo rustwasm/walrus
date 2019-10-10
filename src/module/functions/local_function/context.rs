@@ -7,7 +7,7 @@ use crate::module::Module;
 use crate::parse::IndicesToIds;
 use crate::ty::ValType;
 use crate::{ModuleTypes, TypeId};
-use failure::Fail;
+use anyhow::Context;
 
 #[derive(Debug)]
 pub(crate) struct ControlFrame {
@@ -173,7 +173,7 @@ impl<'a> ValidationContext<'a> {
 
     pub fn control(&self, n: usize) -> Result<&ControlFrame> {
         if n >= self.controls.len() {
-            failure::bail!("jump to nonexistent control block");
+            anyhow::bail!("jump to nonexistent control block");
         }
         let idx = self.controls.len() - n - 1;
         Ok(&self.controls[idx])
@@ -217,9 +217,8 @@ fn impl_pop_operand(
                 log::trace!("pop operand: None");
                 return Ok(None);
             }
-            return Err(ErrorKind::InvalidWasm
-                .context("popped operand past control frame height in non-unreachable code")
-                .into());
+            return Err(ErrorKind::InvalidWasm)
+                .context("popped operand past control frame height in non-unreachable code");
         }
     }
     let op = operands.pop().unwrap();
@@ -237,10 +236,9 @@ fn impl_pop_operand_expected(
         (actual, None) => Ok(actual),
         (Some(actual), Some(expected)) => {
             if actual != expected {
-                Err(ErrorKind::InvalidWasm
+                Err(ErrorKind::InvalidWasm)
                     .context(format!("expected type {}", expected))
                     .context(format!("found type {}", actual))
-                    .into())
             } else {
                 Ok(Some(actual))
             }
@@ -275,7 +273,7 @@ fn impl_push_control(
     end_types: Box<[ValType]>,
 ) -> Result<InstrSeqId> {
     let ty = InstrSeqType::existing(types, &start_types, &end_types).ok_or_else(|| {
-        failure::format_err!(
+        anyhow::anyhow!(
             "attempted to push a control frame for an instruction \
              sequence with a type that does not exist"
         )
@@ -330,19 +328,18 @@ fn impl_pop_control(
     controls: &mut ControlStack,
     operands: &mut OperandStack,
 ) -> Result<ControlFrame> {
-    let frame = controls.last().ok_or_else(|| {
-        ErrorKind::InvalidWasm.context("attempted to pop a frame from an empty control stack")
-    })?;
+    let frame = controls
+        .last()
+        .ok_or_else(|| ErrorKind::InvalidWasm)
+        .context("attempted to pop a frame from an empty control stack")?;
     impl_pop_operands(operands, controls, &frame.end_types)?;
     if operands.len() != frame.height {
-        return Err(ErrorKind::InvalidWasm
-            .context(format!(
-                "incorrect number of operands on the stack at the end of a control frame; \
-                 found {}, expected {}",
-                operands.len(),
-                frame.height
-            ))
-            .into());
+        return Err(ErrorKind::InvalidWasm).context(format!(
+            "incorrect number of operands on the stack at the end of a control frame; \
+             found {}, expected {}",
+            operands.len(),
+            frame.height
+        ));
     }
     let frame = controls.pop().unwrap();
     Ok(frame)

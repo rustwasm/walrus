@@ -1,7 +1,7 @@
 use crate::map::IdHashMap;
 use crate::{DataId, ElementId, Function, FunctionId, GlobalId, Result};
 use crate::{LocalId, MemoryId, TableId, TypeId};
-use failure::bail;
+use anyhow::bail;
 
 /// Maps from old indices in the original Wasm binary to `walrus` IDs.
 ///

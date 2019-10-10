@@ -9,7 +9,7 @@ publish = false
 walkdir = "2.2.9"
 
 [dev-dependencies]
-failure = "0.1.5"
+anyhow = "1.0"
 walrus = { path = "../.." }
 walrus-tests-utils = { path = "../tests-utils" }
 tempfile = "3.1.0"

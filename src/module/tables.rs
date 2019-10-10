@@ -4,6 +4,7 @@ use crate::emit::{Emit, EmitContext, Section};
 use crate::parse::IndicesToIds;
 use crate::tombstone_arena::{Id, Tombstone, TombstoneArena};
 use crate::{FunctionId, GlobalId, ImportId, Module, Result, ValType};
+use anyhow::bail;
 
 /// The id of a table.
 pub type TableId = Id<Table>;
@@ -179,7 +180,7 @@ impl ModuleTables {
             None => return Ok(None),
         };
         if tables.next().is_some() {
-            failure::bail!("module contains more than one function table");
+            bail!("module contains more than one function table");
         }
         Ok(Some(id))
     }
@@ -206,7 +207,7 @@ impl Module {
                 match t.element_type {
                     wasmparser::Type::AnyFunc => TableKind::Function(FunctionTable::default()),
                     wasmparser::Type::AnyRef => TableKind::Anyref(AnyrefTable::default()),
-                    _ => failure::bail!("invalid table type"),
+                    _ => bail!("invalid table type"),
                 },
             );
             ids.push_table(id);

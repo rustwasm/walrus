@@ -11,7 +11,7 @@ use crate::parse::IndicesToIds;
 use crate::tombstone_arena::{Id, Tombstone, TombstoneArena};
 use crate::ty::TypeId;
 use crate::ty::ValType;
-use failure::bail;
+use anyhow::bail;
 use std::cmp;
 
 #[cfg(feature = "parallel")]

@@ -1,4 +1,4 @@
-use failure::ResultExt;
+use anyhow::Context;
 use std::fs;
 use std::path::Path;
 use std::process::Command;
@@ -10,7 +10,7 @@ struct Test {
     commands: Vec<serde_json::Value>,
 }
 
-fn run(wast: &Path) -> Result<(), failure::Error> {
+fn run(wast: &Path) -> Result<(), anyhow::Error> {
     static INIT_LOGS: std::sync::Once = std::sync::Once::new();
     INIT_LOGS.call_once(|| {
         env_logger::init();
@@ -145,7 +145,7 @@ fn run(wast: &Path) -> Result<(), failure::Error> {
     Ok(())
 }
 
-fn run_spectest_interp(cwd: &Path, extra_args: &[&str]) -> Result<(), failure::Error> {
+fn run_spectest_interp(cwd: &Path, extra_args: &[&str]) -> Result<(), anyhow::Error> {
     let output = Command::new("spectest-interp")
         .current_dir(cwd)
         .arg("foo.json")

@@ -2,7 +2,7 @@
 
 #![deny(missing_docs)]
 
-use failure::ResultExt;
+use anyhow::Context;
 use rand::{rngs::SmallRng, Rng, SeedableRng};
 use std::cmp;
 use std::fmt;
@@ -12,8 +12,8 @@ use std::path::Path;
 use std::time;
 use walrus_tests_utils::{wasm_interp, wat2wasm};
 
-/// `Ok(T)` or a `Err(failure::Error)`
-pub type Result<T> = std::result::Result<T, failure::Error>;
+/// `Ok(T)` or a `Err(anyhow::Error)`
+pub type Result<T> = std::result::Result<T, anyhow::Error>;
 
 #[derive(Copy, Clone, Debug)]
 enum ValType {
@@ -139,7 +139,7 @@ where
     pub fn run_one(&mut self) -> Result<()> {
         let wat = self.gen_wat();
         self.test_wat(&wat)
-            .with_context(|_| format!("wat = {}", wat))?;
+            .with_context(|| format!("wat = {}", wat))?;
         Ok(())
     }
 
@@ -436,12 +436,9 @@ impl TestCaseGenerator for WasmOptTtf {
     }
 }
 
-/// Print a `failure::Error` with its chain.
-pub fn print_err(e: &failure::Error) {
-    eprintln!("Error:");
-    for c in e.iter_chain() {
-        eprintln!("  - {}", c);
-    }
+/// Print a `anyhow::Error` with its chain.
+pub fn print_err(e: &anyhow::Error) {
+    eprintln!("Error: {:?}", e);
 }
 
 #[cfg(test)]

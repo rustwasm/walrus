@@ -5,7 +5,7 @@ use crate::ir::Value;
 use crate::parse::IndicesToIds;
 use crate::tombstone_arena::{Id, Tombstone, TombstoneArena};
 use crate::{GlobalId, InitExpr, MemoryId, Module, Result, ValType};
-use failure::{bail, ResultExt};
+use anyhow::{bail, Context};
 
 /// A passive element segment identifier
 pub type DataId = Id<Data>;
@@ -217,7 +217,7 @@ impl Module {
                     memory.data_segments.insert(data.id);
 
                     let offset = InitExpr::eval(&init_expr, ids)
-                        .with_context(|_e| format!("in segment {}", i))?;
+                        .with_context(|| format!("in segment {}", i))?;
                     data.kind = DataKind::Active(ActiveData {
                         memory: memory_id,
                         location: match offset {

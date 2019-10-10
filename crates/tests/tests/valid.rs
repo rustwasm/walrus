@@ -2,7 +2,7 @@ use std::env;
 use std::path::Path;
 use std::sync::Once;
 
-fn run(wat: &Path) -> Result<(), failure::Error> {
+fn run(wat: &Path) -> Result<(), anyhow::Error> {
     static INIT_LOGS: Once = Once::new();
     INIT_LOGS.call_once(|| {
         env_logger::init();

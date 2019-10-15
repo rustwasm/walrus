@@ -5,6 +5,7 @@ use crate::parse::IndicesToIds;
 use crate::tombstone_arena::{Id, Tombstone, TombstoneArena};
 use crate::{FunctionId, FunctionTable, GlobalId, MemoryId, Result, TableId};
 use crate::{Module, TableKind, TypeId, ValType};
+use anyhow::bail;
 
 /// The id of an import.
 pub type ImportId = Id<Import>;
@@ -123,7 +124,7 @@ impl Module {
                 wasmparser::ImportSectionEntryType::Table(t) => {
                     let kind = match t.element_type {
                         wasmparser::Type::AnyFunc => TableKind::Function(FunctionTable::default()),
-                        _ => failure::bail!("invalid table type"),
+                        _ => bail!("invalid table type"),
                     };
                     let id = self.add_import_table(
                         entry.module,

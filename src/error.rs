@@ -1,10 +1,10 @@
 //! Error types and utilities.
 
-pub use failure::Error;
+pub use anyhow::Error;
 use std::fmt;
 
 /// Either `Ok(T)` or `Err(failure::Error)`.
-pub type Result<T> = ::std::result::Result<T, failure::Error>;
+pub type Result<T> = ::std::result::Result<T, anyhow::Error>;
 
 /// A leaf wasm error type.
 ///

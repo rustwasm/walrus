@@ -5,7 +5,7 @@ use crate::ir::Value;
 use crate::parse::IndicesToIds;
 use crate::tombstone_arena::{Id, Tombstone, TombstoneArena};
 use crate::{FunctionId, InitExpr, Module, Result, TableKind, ValType};
-use failure::{bail, ResultExt};
+use anyhow::{bail, Context};
 
 /// A passive element segment identifier
 pub type ElementId = Id<Element>;
@@ -92,7 +92,7 @@ impl Module {
                     };
 
                     let offset = InitExpr::eval(&init_expr, ids)
-                        .with_context(|_e| format!("in segment {}", i))?;
+                        .with_context(|| format!("in segment {}", i))?;
                     let functions = segment.items.get_items_reader()?.into_iter().map(|func| {
                         let func = func?;
                         ids.get_func(func)

@@ -12,7 +12,7 @@ use crate::parse::IndicesToIds;
 use crate::{
     Data, DataId, FunctionBuilder, FunctionId, Module, Result, TableKind, TypeId, ValType,
 };
-use failure::{bail, ResultExt};
+use anyhow::{bail, Context};
 use std::collections::BTreeMap;
 use wasmparser::Operator;
 
@@ -308,7 +308,7 @@ fn validate_instruction(ctx: &mut ValidationContext, inst: Operator) -> Result<(
 
     let mem_arg = |arg: &wasmparser::MemoryImmediate| -> Result<MemArg> {
         if arg.flags >= 32 {
-            failure::bail!("invalid alignment");
+            bail!("invalid alignment");
         }
         Ok(MemArg {
             align: 1 << (arg.flags as i32),

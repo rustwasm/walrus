@@ -1,7 +1,7 @@
 use std::path::Path;
 use walrus_tests_utils::wat2wasm;
 
-fn run(wat_path: &Path) -> Result<(), failure::Error> {
+fn run(wat_path: &Path) -> Result<(), anyhow::Error> {
     static INIT_LOGS: std::sync::Once = std::sync::Once::new();
     INIT_LOGS.call_once(|| {
         env_logger::init();

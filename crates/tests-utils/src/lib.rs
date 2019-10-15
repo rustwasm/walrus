@@ -1,11 +1,11 @@
-use failure::ResultExt;
+use anyhow::{bail, Context};
 use std::ffi::OsStr;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::Once;
 
-pub type Result<T> = std::result::Result<T, failure::Error>;
+pub type Result<T> = std::result::Result<T, anyhow::Error>;
 
 pub const FEATURES: &[&str] = &[
     "--enable-threads",
@@ -56,7 +56,7 @@ pub fn wat2wasm(path: &Path, extra_args: &[&str]) -> Result<Vec<u8>> {
     let output = cmd.output().context("could not spawn wat2wasm")?;
 
     if !output.status.success() {
-        failure::bail!(
+        bail!(
             "wat2wasm exited with status {:?}\n\nstderr = '''\n{}\n'''",
             output.status,
             String::from_utf8_lossy(&output.stderr)
@@ -82,7 +82,7 @@ pub fn wasm2wat(path: &Path) -> Result<String> {
     println!("running: {:?}", cmd);
     let output = cmd.output().context("could not run wasm2wat")?;
     if !output.status.success() {
-        failure::bail!(
+        bail!(
             "wasm2wat exited with status {:?}\n\nstderr = '''\n{}\n'''",
             output.status,
             String::from_utf8_lossy(&output.stderr)
@@ -111,7 +111,7 @@ pub fn wasm_interp(path: &Path) -> Result<String> {
     println!("running: {:?}", cmd);
     let output = cmd.output().context("could notrun wasm-interp")?;
     if !output.status.success() {
-        failure::bail!(
+        bail!(
             "wasm-interp exited with status {:?}\n\nstderr = '''\n{}\n'''",
             output.status,
             String::from_utf8_lossy(&output.stderr)
@@ -151,7 +151,7 @@ where
     println!("running: {:?}", cmd);
     let output = cmd.output().context("could not run wasm-opt")?;
     if !output.status.success() {
-        failure::bail!(
+        bail!(
             "wasm-opt exited with status {:?}\n\nstderr = '''\n{}\n'''",
             output.status,
             String::from_utf8_lossy(&output.stderr)
@@ -174,17 +174,11 @@ impl TestResult for () {
     fn handle(self) {}
 }
 
-impl TestResult for std::result::Result<(), failure::Error> {
+impl TestResult for Result<()> {
     fn handle(self) {
-        let err = match self {
-            Ok(()) => return,
-            Err(e) => e,
-        };
-        eprintln!("got an error:");
-        for c in err.iter_chain() {
-            eprintln!("  {}", c);
+        match self {
+            Ok(()) => {}
+            Err(e) => panic!("got an error: {:?}", e),
         }
-        eprintln!("{}", err.backtrace());
-        panic!("test failed");
     }
 }

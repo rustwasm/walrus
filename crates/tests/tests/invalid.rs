@@ -1,7 +1,7 @@
 use std::path::Path;
 use std::sync::Once;
 
-fn run(wat: &Path) -> Result<(), failure::Error> {
+fn run(wat: &Path) -> Result<(), anyhow::Error> {
     static INIT_LOGS: Once = Once::new();
     INIT_LOGS.call_once(|| {
         env_logger::init();
@@ -12,12 +12,9 @@ fn run(wat: &Path) -> Result<(), failure::Error> {
     // NB: reading the module will do the validation.
     match walrus::Module::from_buffer(&wasm) {
         Err(e) => {
-            eprintln!("Got error, as expected:");
-            for c in e.iter_chain() {
-                eprintln!("  - {}", c);
-            }
+            eprintln!("Got error, as expected: {:?}", e);
         }
-        Ok(_) => failure::bail!("expected {} to be invalid, but it was valid", wat.display()),
+        Ok(_) => anyhow::bail!("expected {} to be invalid, but it was valid", wat.display()),
     }
 
     Ok(())

@@ -4,6 +4,7 @@ use crate::emit::{Emit, EmitContext};
 use crate::encode::Encoder;
 use crate::error::Result;
 use crate::tombstone_arena::Tombstone;
+use anyhow::bail;
 use id_arena::Id;
 use std::cmp::Ordering;
 use std::fmt;
@@ -166,7 +167,7 @@ impl ValType {
             wasmparser::Type::F64 => Ok(ValType::F64),
             wasmparser::Type::V128 => Ok(ValType::V128),
             wasmparser::Type::AnyRef => Ok(ValType::Anyref),
-            _ => failure::bail!("not a value type"),
+            _ => bail!("not a value type"),
         }
     }
 

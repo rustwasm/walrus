@@ -7,7 +7,7 @@ use crate::ir::*;
 use crate::ValType;
 use crate::{Function, FunctionKind, InitExpr, Result};
 use crate::{Global, GlobalKind, Memory, MemoryId, Module, Table, TableKind};
-use failure::{bail, ResultExt};
+use anyhow::{anyhow, bail, Context};
 use std::collections::HashSet;
 
 #[cfg(feature = "parallel")]
@@ -72,7 +72,7 @@ pub fn run(module: &Module) -> Result<()> {
     let mut msg = format!("errors validating module:\n");
     for error in errs.into_iter().flat_map(|v| v) {
         msg.push_str(&format!("  * {}\n", error));
-        for cause in error.iter_causes() {
+        for cause in error.chain() {
             msg.push_str(&format!("    * {}\n", cause));
         }
     }
@@ -164,7 +164,7 @@ fn validate_value(value: Value, ty: ValType) -> Result<()> {
 }
 
 struct Validate<'a> {
-    errs: &'a mut Vec<failure::Error>,
+    errs: &'a mut Vec<anyhow::Error>,
     function: &'a Function,
     module: &'a Module,
 }
@@ -194,7 +194,7 @@ impl Validate<'_> {
     }
 
     fn err(&mut self, msg: &str) {
-        let mut err = failure::format_err!("{}", msg);
+        let mut err = anyhow!("{}", msg);
         if let Some(name) = &self.function.name {
             err = err.context(format!("in function {}", name)).into();
         }

@@ -17,6 +17,7 @@ pub struct FunctionBuilder {
     pub(crate) arena: TombstoneArena<InstrSeq>,
     pub(crate) ty: TypeId,
     pub(crate) entry: Option<InstrSeqId>,
+    pub(crate) name: Option<String>,
 }
 
 impl FunctionBuilder {
@@ -42,7 +43,14 @@ impl FunctionBuilder {
             arena,
             ty,
             entry: None,
+            name: None,
         }
+    }
+
+    /// Set function name.
+    pub fn name(&mut self, function_name: String) -> &mut FunctionBuilder {
+        self.name = Some(function_name);
+        self
     }
 
     /// Get the id of this function's body's instruction sequence.

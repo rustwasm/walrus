@@ -157,10 +157,11 @@ impl ModuleFunctions {
 
     /// Create a new internally defined function
     pub fn add_local(&mut self, func: LocalFunction) -> FunctionId {
+        let func_name = func.builder().name.clone();
         self.arena.alloc_with_id(|id| Function {
             id,
             kind: FunctionKind::Local(func),
-            name: None,
+            name: func_name,
         })
     }
 

@@ -4,12 +4,12 @@
 extern crate libfuzzer_sys;
 
 fuzz_target!(|data: &[u8]| {
-    let module = match walrus::Module::from_buffer(data) {
+    let mut module = match walrus::Module::from_buffer(data) {
         Ok(m) => m,
         Err(_) => return,
     };
     let serialized = module.emit_wasm();
-    let module =
+    let mut module =
         walrus::Module::from_buffer(&serialized).expect("we should only emit valid Wasm data");
     let reserialized = module.emit_wasm();
     assert_eq!(

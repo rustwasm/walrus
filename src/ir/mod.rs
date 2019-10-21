@@ -119,6 +119,38 @@ impl From<TypeId> for InstrSeqType {
     }
 }
 
+/// A symbolic original wasm operator source location.
+#[derive(Debug, Copy, Clone)]
+pub struct InstrLocId(u32);
+
+const DEFAULT_INSTR_LOC_ID: u32 = 0xffff_ffff;
+
+impl InstrLocId {
+    /// Create `InstrLocId` from provided data. Normaly the data is
+    /// wasm bytecode offset. (0xffff_ffff is reserved for default value).
+    pub fn new(data: u32) -> Self {
+        assert!(data != DEFAULT_INSTR_LOC_ID);
+        InstrLocId(data)
+    }
+
+    /// Check if default value.
+    pub fn is_default(&self) -> bool {
+        self.0 == DEFAULT_INSTR_LOC_ID
+    }
+
+    /// The data
+    pub fn data(&self) -> u32 {
+        assert!(self.0 != DEFAULT_INSTR_LOC_ID);
+        self.0
+    }
+}
+
+impl Default for InstrLocId {
+    fn default() -> Self {
+        InstrLocId(DEFAULT_INSTR_LOC_ID)
+    }
+}
+
 /// A sequence of instructions.
 #[derive(Debug)]
 pub struct InstrSeq {
@@ -130,21 +162,21 @@ pub struct InstrSeq {
     pub ty: InstrSeqType,
 
     /// The instructions that make up the body of this block.
-    pub instrs: Vec<Instr>,
+    pub instrs: Vec<(Instr, InstrLocId)>,
 }
 
 impl Deref for InstrSeq {
-    type Target = Vec<Instr>;
+    type Target = Vec<(Instr, InstrLocId)>;
 
     #[inline]
-    fn deref(&self) -> &Vec<Instr> {
+    fn deref(&self) -> &Vec<(Instr, InstrLocId)> {
         &self.instrs
     }
 }
 
 impl DerefMut for InstrSeq {
     #[inline]
-    fn deref_mut(&mut self) -> &mut Vec<Instr> {
+    fn deref_mut(&mut self) -> &mut Vec<(Instr, InstrLocId)> {
         &mut self.instrs
     }
 }

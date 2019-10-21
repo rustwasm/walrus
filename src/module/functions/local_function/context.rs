@@ -1,7 +1,7 @@
 //! Context needed when validating instructions and constructing our `Instr` IR.
 
 use crate::error::{ErrorKind, Result};
-use crate::ir::{BlockKind, Instr, InstrSeq, InstrSeqId, InstrSeqType};
+use crate::ir::{BlockKind, Instr, InstrLocId, InstrSeq, InstrSeqId, InstrSeqType};
 use crate::module::functions::{FunctionId, LocalFunction};
 use crate::module::Module;
 use crate::parse::IndicesToIds;
@@ -179,26 +179,32 @@ impl<'a> ValidationContext<'a> {
         Ok(&self.controls[idx])
     }
 
-    pub fn alloc_instr_in_block(&mut self, block: InstrSeqId, instr: impl Into<Instr>) {
-        self.func.block_mut(block).instrs.push(instr.into());
+    pub fn alloc_instr_in_block(
+        &mut self,
+        block: InstrSeqId,
+        instr: impl Into<Instr>,
+        loc: InstrLocId,
+    ) {
+        self.func.block_mut(block).instrs.push((instr.into(), loc));
     }
 
     pub fn alloc_instr_in_control(
         &mut self,
         control: usize,
         instr: impl Into<Instr>,
+        loc: InstrLocId,
     ) -> Result<()> {
         let frame = self.control(control)?;
         if frame.unreachable {
             return Ok(());
         }
         let block = frame.block;
-        self.alloc_instr_in_block(block, instr);
+        self.alloc_instr_in_block(block, instr, loc);
         Ok(())
     }
 
-    pub fn alloc_instr(&mut self, instr: impl Into<Instr>) {
-        self.alloc_instr_in_control(0, instr).unwrap();
+    pub fn alloc_instr(&mut self, instr: impl Into<Instr>, loc: InstrLocId) {
+        self.alloc_instr_in_control(0, instr, loc).unwrap();
     }
 }
 

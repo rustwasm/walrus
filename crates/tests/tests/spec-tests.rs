@@ -100,14 +100,14 @@ fn run(wast: &Path) -> Result<(), anyhow::Error> {
             }
             cmd => {
                 let wasm = fs::read(&path)?;
-                let wasm = config
+                let mut wasm = config
                     .parse(&wasm)
                     .context(format!("error parsing wasm (line {})", line))?;
                 let wasm1 = wasm.emit_wasm();
                 fs::write(&path, &wasm1)?;
                 let wasm2 = config
                     .parse(&wasm1)
-                    .map(|m| m.emit_wasm())
+                    .map(|mut m| m.emit_wasm())
                     .context(format!("error re-parsing wasm (line {})", line))?;
                 if wasm1 != wasm2 {
                     panic!("wasm module at line {} isn't deterministic", line);

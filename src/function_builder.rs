@@ -164,19 +164,21 @@ impl InstrSeqBuilder<'_> {
     }
 
     /// Get this instruction sequence's instructions.
-    pub fn instrs(&self) -> &[Instr] {
+    pub fn instrs(&self) -> &[(Instr, InstrLocId)] {
         &self.builder.arena[self.id]
     }
 
     /// Get this instruction sequence's instructions mutably.
-    pub fn instrs_mut(&mut self) -> &mut Vec<Instr> {
+    pub fn instrs_mut(&mut self) -> &mut Vec<(Instr, InstrLocId)> {
         &mut self.builder.arena[self.id].instrs
     }
 
     /// Pushes a new instruction onto this builder's sequence.
     #[inline]
     pub fn instr(&mut self, instr: impl Into<Instr>) -> &mut Self {
-        self.builder.arena[self.id].instrs.push(instr.into());
+        self.builder.arena[self.id]
+            .instrs
+            .push((instr.into(), Default::default()));
         self
     }
 
@@ -189,7 +191,7 @@ impl InstrSeqBuilder<'_> {
     pub fn instr_at(&mut self, position: usize, instr: impl Into<Instr>) -> &mut Self {
         self.builder.arena[self.id]
             .instrs
-            .insert(position, instr.into());
+            .insert(position, (instr.into(), Default::default()));
         self
     }
 

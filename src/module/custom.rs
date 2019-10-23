@@ -1,6 +1,7 @@
 //! Working with custom sections.
 
 use crate::tombstone_arena::{Id, Tombstone, TombstoneArena};
+use crate::CodeTransform;
 use crate::IdsToIndices;
 use std::any::Any;
 use std::borrow::Cow;
@@ -27,6 +28,26 @@ pub trait CustomSection: WalrusAny + Debug + Send + Sync {
     /// section's name, or the count of how many bytes are in the
     /// payload. `walrus` will handle these for you.
     fn data(&self, ids_to_indices: &IdsToIndices) -> Cow<[u8]>;
+
+    /// Apply the given code transformations to this custom section.
+    ///
+    /// If the module was not configured with `preserve_code_transform = true`,
+    /// then this method is never called.
+    ///
+    /// This method is called after we have emitted the non-custom Wasm
+    /// sections, just before a custom section's data is emitted into the Wasm
+    /// binary. If this custom section references offsets in the Wasm code, this
+    /// is a chance to update them so they are valid for the new, transformed
+    /// Wasm code that is being emitted.
+    ///
+    /// For example, DWARF debug info references Wasm instructions via offsets
+    /// into the code section, and we can use these transforms to fix those
+    /// offsets after having transformed various functions and instructions.
+    ///
+    /// The default provided method does nothing.
+    fn apply_code_transform(&mut self, transform: &CodeTransform) {
+        let _ = transform;
+    }
 }
 
 /// A wrapper trait around `any` but implemented for all types that already

@@ -509,7 +509,7 @@ fn create_visit(variants: &[WalrusVariant]) -> impl quote::ToTokens {
 
             /// Visit `Instr`.
             #[inline]
-            fn visit_instr(&mut self, instr: &'instr Instr) {
+            fn visit_instr(&mut self, instr: &'instr Instr, instr_loc: &'instr InstrLocId) {
                 // ...
             }
 
@@ -593,7 +593,7 @@ fn create_visit(variants: &[WalrusVariant]) -> impl quote::ToTokens {
 
             /// Visit `Instr`.
             #[inline]
-            fn visit_instr_mut(&mut self, instr: &mut Instr) {
+            fn visit_instr_mut(&mut self, instr: &mut Instr, instr_loc: &mut InstrLocId) {
                 // ...
             }
 

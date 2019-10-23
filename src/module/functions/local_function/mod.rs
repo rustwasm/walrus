@@ -45,7 +45,8 @@ impl LocalFunction {
         id: FunctionId,
         ty: TypeId,
         args: Vec<LocalId>,
-        body: wasmparser::OperatorsReader,
+        mut body: wasmparser::OperatorsReader,
+        on_instr_pos: Option<&(dyn Fn(&usize) -> InstrLocId + Sync + Send + 'static)>,
     ) -> Result<LocalFunction> {
         let mut func = LocalFunction {
             builder: FunctionBuilder::without_entry(ty),
@@ -66,9 +67,14 @@ impl LocalFunction {
         );
         let entry = ctx.push_control_with_ty(BlockKind::FunctionEntry, ty);
         ctx.func.builder.entry = Some(entry);
-        for inst in body {
-            let inst = inst?;
-            validate_instruction(&mut ctx, inst)?;
+        while !body.eof() {
+            let (inst, pos) = body.read_with_offset()?;
+            let loc = if let Some(ref on_instr_pos) = on_instr_pos {
+                on_instr_pos(&pos)
+            } else {
+                InstrLocId::new(pos as u32)
+            };
+            validate_instruction(&mut ctx, inst, loc)?;
         }
         if !ctx.controls.is_empty() {
             bail!("function failed to end with `end`");
@@ -144,7 +150,7 @@ impl LocalFunction {
         self.block(self.entry_block())
             .instrs
             .iter()
-            .all(|e| e.is_const())
+            .all(|(e, _)| e.is_const())
     }
 
     /// Collect the set of data segments that are used in this function via
@@ -245,8 +251,9 @@ impl LocalFunction {
         indices: &IdsToIndices,
         local_indices: &IdHashMap<Local, u32>,
         dst: &mut Encoder,
+        map: Option<&mut Vec<(InstrLocId, usize)>>,
     ) {
-        emit::run(self, indices, local_indices, dst)
+        emit::run(self, indices, local_indices, dst, map)
     }
 }
 
@@ -276,27 +283,31 @@ fn block_param_tys(
     }
 }
 
-fn validate_instruction(ctx: &mut ValidationContext, inst: Operator) -> Result<()> {
+fn validate_instruction<'context>(
+    ctx: &'context mut ValidationContext,
+    inst: Operator,
+    loc: InstrLocId,
+) -> Result<()> {
     use crate::ir::ExtendedLoad::*;
     use crate::ValType::*;
 
     log::trace!("validate instruction: {:?}", inst);
 
     let const_ = |ctx: &mut ValidationContext, ty, value| {
-        ctx.alloc_instr(Const { value });
+        ctx.alloc_instr(Const { value }, loc);
         ctx.push_operand(Some(ty));
     };
 
     let one_op = |ctx: &mut ValidationContext, input, output, op| -> Result<()> {
         ctx.pop_operand_expected(Some(input))?;
-        ctx.alloc_instr(Unop { op });
+        ctx.alloc_instr(Unop { op }, loc);
         ctx.push_operand(Some(output));
         Ok(())
     };
     let two_ops = |ctx: &mut ValidationContext, lhs, rhs, output, op| -> Result<()> {
         ctx.pop_operand_expected(Some(rhs))?;
         ctx.pop_operand_expected(Some(lhs))?;
-        ctx.alloc_instr(Binop { op });
+        ctx.alloc_instr(Binop { op }, loc);
         ctx.push_operand(Some(output));
         Ok(())
     };
@@ -320,7 +331,7 @@ fn validate_instruction(ctx: &mut ValidationContext, inst: Operator) -> Result<(
         ctx.pop_operand_expected(Some(I32))?;
         let memory = ctx.indices.get_memory(0)?;
         let arg = mem_arg(&arg)?;
-        ctx.alloc_instr(Load { arg, kind, memory });
+        ctx.alloc_instr(Load { arg, kind, memory }, loc);
         ctx.push_operand(Some(ty));
         Ok(())
     };
@@ -330,7 +341,7 @@ fn validate_instruction(ctx: &mut ValidationContext, inst: Operator) -> Result<(
         ctx.pop_operand_expected(Some(I32))?;
         let memory = ctx.indices.get_memory(0)?;
         let arg = mem_arg(&arg)?;
-        ctx.alloc_instr(Store { arg, kind, memory });
+        ctx.alloc_instr(Store { arg, kind, memory }, loc);
         Ok(())
     };
 
@@ -339,12 +350,15 @@ fn validate_instruction(ctx: &mut ValidationContext, inst: Operator) -> Result<(
         ctx.pop_operand_expected(Some(I32))?;
         let memory = ctx.indices.get_memory(0)?;
         let arg = mem_arg(&arg)?;
-        ctx.alloc_instr(AtomicRmw {
-            arg,
-            memory,
-            op,
-            width,
-        });
+        ctx.alloc_instr(
+            AtomicRmw {
+                arg,
+                memory,
+                op,
+                width,
+            },
+            loc,
+        );
         ctx.push_operand(Some(ty));
         Ok(())
     };
@@ -355,7 +369,7 @@ fn validate_instruction(ctx: &mut ValidationContext, inst: Operator) -> Result<(
         ctx.pop_operand_expected(Some(I32))?;
         let memory = ctx.indices.get_memory(0)?;
         let arg = mem_arg(&arg)?;
-        ctx.alloc_instr(Cmpxchg { arg, memory, width });
+        ctx.alloc_instr(Cmpxchg { arg, memory, width }, loc);
         ctx.push_operand(Some(ty));
         Ok(())
     };
@@ -364,11 +378,10 @@ fn validate_instruction(ctx: &mut ValidationContext, inst: Operator) -> Result<(
         ctx.pop_operand_expected(Some(I32))?;
         let memory = ctx.indices.get_memory(0)?;
         let arg = mem_arg(&arg)?;
-        ctx.alloc_instr(LoadSplat { memory, arg, kind });
+        ctx.alloc_instr(LoadSplat { memory, arg, kind }, loc);
         ctx.push_operand(Some(V128));
         Ok(())
     };
-
     match inst {
         Operator::Call { function_index } => {
             let func = ctx
@@ -378,7 +391,7 @@ fn validate_instruction(ctx: &mut ValidationContext, inst: Operator) -> Result<(
             let ty_id = ctx.module.funcs.get(func).ty();
             let fun_ty = ctx.module.types.get(ty_id);
             ctx.pop_operands(fun_ty.params())?;
-            ctx.alloc_instr(Call { func });
+            ctx.alloc_instr(Call { func }, loc);
             ctx.push_operands(fun_ty.results());
         }
         Operator::CallIndirect { index, table_index } => {
@@ -393,26 +406,26 @@ fn validate_instruction(ctx: &mut ValidationContext, inst: Operator) -> Result<(
                 .context("invalid call_indirect")?;
             ctx.pop_operand_expected(Some(I32))?;
             ctx.pop_operands(ty.params())?;
-            ctx.alloc_instr(CallIndirect { table, ty: type_id });
+            ctx.alloc_instr(CallIndirect { table, ty: type_id }, loc);
             ctx.push_operands(ty.results());
         }
         Operator::GetLocal { local_index } => {
             let local = ctx.indices.get_local(ctx.func_id, local_index)?;
             let ty = ctx.module.locals.get(local).ty();
-            ctx.alloc_instr(LocalGet { local });
+            ctx.alloc_instr(LocalGet { local }, loc);
             ctx.push_operand(Some(ty));
         }
         Operator::SetLocal { local_index } => {
             let local = ctx.indices.get_local(ctx.func_id, local_index)?;
             let ty = ctx.module.locals.get(local).ty();
             ctx.pop_operand_expected(Some(ty))?;
-            ctx.alloc_instr(LocalSet { local });
+            ctx.alloc_instr(LocalSet { local }, loc);
         }
         Operator::TeeLocal { local_index } => {
             let local = ctx.indices.get_local(ctx.func_id, local_index)?;
             let ty = ctx.module.locals.get(local).ty();
             ctx.pop_operand_expected(Some(ty))?;
-            ctx.alloc_instr(LocalTee { local });
+            ctx.alloc_instr(LocalTee { local }, loc);
             ctx.push_operand(Some(ty));
         }
         Operator::GetGlobal { global_index } => {
@@ -421,7 +434,7 @@ fn validate_instruction(ctx: &mut ValidationContext, inst: Operator) -> Result<(
                 .get_global(global_index)
                 .context("invalid global.get")?;
             let ty = ctx.module.globals.get(global).ty;
-            ctx.alloc_instr(GlobalGet { global });
+            ctx.alloc_instr(GlobalGet { global }, loc);
             ctx.push_operand(Some(ty));
         }
         Operator::SetGlobal { global_index } => {
@@ -431,7 +444,7 @@ fn validate_instruction(ctx: &mut ValidationContext, inst: Operator) -> Result<(
                 .context("invalid global.set")?;
             let ty = ctx.module.globals.get(global).ty;
             ctx.pop_operand_expected(Some(ty))?;
-            ctx.alloc_instr(GlobalSet { global });
+            ctx.alloc_instr(GlobalSet { global }, loc);
         }
         Operator::I32Const { value } => const_(ctx, I32, Value::I32(value)),
         Operator::I64Const { value } => const_(ctx, I64, Value::I64(value)),
@@ -605,24 +618,24 @@ fn validate_instruction(ctx: &mut ValidationContext, inst: Operator) -> Result<(
 
         Operator::Drop => {
             ctx.pop_operand()?;
-            ctx.alloc_instr(Drop {});
+            ctx.alloc_instr(Drop {}, loc);
         }
         Operator::Select => {
             ctx.pop_operand_expected(Some(I32))?;
             let t1 = ctx.pop_operand()?;
             let t2 = ctx.pop_operand_expected(t1)?;
-            ctx.alloc_instr(Select {});
+            ctx.alloc_instr(Select {}, loc);
             ctx.push_operand(t2);
         }
         Operator::Return => {
             let fn_ty = ctx.module.funcs.get(ctx.func_id).ty();
             let expected = ctx.module.types.get(fn_ty).results();
             ctx.pop_operands(expected)?;
-            ctx.alloc_instr(Return {});
+            ctx.alloc_instr(Return {}, loc);
             ctx.unreachable();
         }
         Operator::Unreachable => {
-            ctx.alloc_instr(Unreachable {});
+            ctx.alloc_instr(Unreachable {}, loc);
             ctx.unreachable();
         }
         Operator::Block { ty } => {
@@ -630,14 +643,14 @@ fn validate_instruction(ctx: &mut ValidationContext, inst: Operator) -> Result<(
             let result_tys = block_result_tys(ctx, ty)?;
             ctx.pop_operands(&param_tys)?;
             let seq = ctx.push_control(BlockKind::Block, param_tys, result_tys)?;
-            ctx.alloc_instr_in_control(1, Block { seq })?;
+            ctx.alloc_instr_in_control(1, Block { seq }, loc)?;
         }
         Operator::Loop { ty } => {
             let result_tys = block_result_tys(ctx, ty)?;
             let param_tys = block_param_tys(ctx, ty)?;
             ctx.pop_operands(&param_tys)?;
             let seq = ctx.push_control(BlockKind::Loop, param_tys, result_tys)?;
-            ctx.alloc_instr_in_control(1, Loop { seq })?;
+            ctx.alloc_instr_in_control(1, Loop { seq }, loc)?;
         }
         Operator::If { ty } => {
             let result_tys = block_result_tys(ctx, ty)?;
@@ -683,10 +696,13 @@ fn validate_instruction(ctx: &mut ValidationContext, inst: Operator) -> Result<(
                         }
                     };
 
-                    ctx.alloc_instr(IfElse {
-                        consequent,
-                        alternative,
-                    });
+                    ctx.alloc_instr(
+                        IfElse {
+                            consequent,
+                            alternative,
+                        },
+                        loc,
+                    );
                 }
                 _ => {}
             }
@@ -718,7 +734,7 @@ fn validate_instruction(ctx: &mut ValidationContext, inst: Operator) -> Result<(
             ctx.pop_operands(&expected)?;
 
             let block = ctx.control(n)?.block;
-            ctx.alloc_instr(Br { block });
+            ctx.alloc_instr(Br { block }, loc);
             ctx.unreachable();
         }
         Operator::BrIf { relative_depth } => {
@@ -729,7 +745,7 @@ fn validate_instruction(ctx: &mut ValidationContext, inst: Operator) -> Result<(
             ctx.pop_operands(&expected)?;
 
             let block = ctx.control(n)?.block;
-            ctx.alloc_instr(BrIf { block });
+            ctx.alloc_instr(BrIf { block }, loc);
             ctx.push_operands(&expected);
         }
         Operator::BrTable { table } => {
@@ -767,7 +783,7 @@ fn validate_instruction(ctx: &mut ValidationContext, inst: Operator) -> Result<(
             ctx.pop_operand_expected(Some(I32))?;
 
             ctx.pop_operands(&expected)?;
-            ctx.alloc_instr(BrTable { blocks, default });
+            ctx.alloc_instr(BrTable { blocks, default }, loc);
 
             ctx.unreachable();
         }
@@ -777,7 +793,7 @@ fn validate_instruction(ctx: &mut ValidationContext, inst: Operator) -> Result<(
                 bail!("reserved byte isn't zero");
             }
             let memory = ctx.indices.get_memory(0)?;
-            ctx.alloc_instr(MemorySize { memory });
+            ctx.alloc_instr(MemorySize { memory }, loc);
             ctx.push_operand(Some(I32));
         }
         Operator::MemoryGrow { reserved } => {
@@ -786,7 +802,7 @@ fn validate_instruction(ctx: &mut ValidationContext, inst: Operator) -> Result<(
             }
             ctx.pop_operand_expected(Some(I32))?;
             let memory = ctx.indices.get_memory(0)?;
-            ctx.alloc_instr(MemoryGrow { memory });
+            ctx.alloc_instr(MemoryGrow { memory }, loc);
             ctx.push_operand(Some(I32));
         }
         Operator::MemoryInit { segment } => {
@@ -795,28 +811,31 @@ fn validate_instruction(ctx: &mut ValidationContext, inst: Operator) -> Result<(
             ctx.pop_operand_expected(Some(I32))?;
             let memory = ctx.indices.get_memory(0)?;
             let data = ctx.indices.get_data(segment)?;
-            ctx.alloc_instr(MemoryInit { memory, data });
+            ctx.alloc_instr(MemoryInit { memory, data }, loc);
         }
         Operator::DataDrop { segment } => {
             let data = ctx.indices.get_data(segment)?;
-            ctx.alloc_instr(DataDrop { data });
+            ctx.alloc_instr(DataDrop { data }, loc);
         }
         Operator::MemoryCopy => {
             ctx.pop_operand_expected(Some(I32))?;
             ctx.pop_operand_expected(Some(I32))?;
             ctx.pop_operand_expected(Some(I32))?;
             let memory = ctx.indices.get_memory(0)?;
-            ctx.alloc_instr(MemoryCopy {
-                src: memory,
-                dst: memory,
-            });
+            ctx.alloc_instr(
+                MemoryCopy {
+                    src: memory,
+                    dst: memory,
+                },
+                loc,
+            );
         }
         Operator::MemoryFill => {
             ctx.pop_operand_expected(Some(I32))?;
             ctx.pop_operand_expected(Some(I32))?;
             ctx.pop_operand_expected(Some(I32))?;
             let memory = ctx.indices.get_memory(0)?;
-            ctx.alloc_instr(MemoryFill { memory });
+            ctx.alloc_instr(MemoryFill { memory }, loc);
         }
 
         Operator::Nop => {}
@@ -882,7 +901,7 @@ fn validate_instruction(ctx: &mut ValidationContext, inst: Operator) -> Result<(
             if flags != 0 {
                 bail!("fence with nonzero flags not supported yet");
             }
-            ctx.alloc_instr(AtomicFence {});
+            ctx.alloc_instr(AtomicFence {}, loc);
         }
 
         Operator::I32AtomicLoad { memarg } => {
@@ -1111,10 +1130,13 @@ fn validate_instruction(ctx: &mut ValidationContext, inst: Operator) -> Result<(
             ctx.pop_operand_expected(Some(I32))?;
             ctx.pop_operand_expected(Some(I32))?;
             let memory = ctx.indices.get_memory(0)?;
-            ctx.alloc_instr(AtomicNotify {
-                memory,
-                arg: mem_arg(memarg)?,
-            });
+            ctx.alloc_instr(
+                AtomicNotify {
+                    memory,
+                    arg: mem_arg(memarg)?,
+                },
+                loc,
+            );
             ctx.push_operand(Some(I32));
         }
         Operator::I32Wait { ref memarg } | Operator::I64Wait { ref memarg } => {
@@ -1126,18 +1148,21 @@ fn validate_instruction(ctx: &mut ValidationContext, inst: Operator) -> Result<(
             ctx.pop_operand_expected(Some(ty))?;
             ctx.pop_operand_expected(Some(I32))?;
             let memory = ctx.indices.get_memory(0)?;
-            ctx.alloc_instr(AtomicWait {
-                sixty_four,
-                memory,
-                arg: mem_arg(memarg)?,
-            });
+            ctx.alloc_instr(
+                AtomicWait {
+                    sixty_four,
+                    memory,
+                    arg: mem_arg(memarg)?,
+                },
+                loc,
+            );
             ctx.push_operand(Some(I32));
         }
 
         Operator::TableGet { table } => {
             let table = ctx.indices.get_table(table)?;
             ctx.pop_operand_expected(Some(I32))?;
-            ctx.alloc_instr(TableGet { table });
+            ctx.alloc_instr(TableGet { table }, loc);
             ctx.push_operand(Some(Anyref));
         }
         Operator::TableSet { table } => {
@@ -1148,7 +1173,7 @@ fn validate_instruction(ctx: &mut ValidationContext, inst: Operator) -> Result<(
             };
             ctx.pop_operand_expected(Some(expected_ty))?;
             ctx.pop_operand_expected(Some(I32))?;
-            ctx.alloc_instr(TableSet { table });
+            ctx.alloc_instr(TableSet { table }, loc);
         }
         Operator::TableGrow { table } => {
             let table = ctx.indices.get_table(table)?;
@@ -1158,35 +1183,35 @@ fn validate_instruction(ctx: &mut ValidationContext, inst: Operator) -> Result<(
             };
             ctx.pop_operand_expected(Some(I32))?;
             ctx.pop_operand_expected(Some(expected_ty))?;
-            ctx.alloc_instr(TableGrow { table });
+            ctx.alloc_instr(TableGrow { table }, loc);
             ctx.push_operand(Some(I32));
         }
         Operator::TableSize { table } => {
             let table = ctx.indices.get_table(table)?;
-            ctx.alloc_instr(TableSize { table });
+            ctx.alloc_instr(TableSize { table }, loc);
             ctx.push_operand(Some(I32));
         }
         Operator::RefNull => {
-            ctx.alloc_instr(RefNull {});
+            ctx.alloc_instr(RefNull {}, loc);
             ctx.push_operand(Some(Anyref));
         }
         Operator::RefIsNull => {
             ctx.pop_operand_expected(Some(Anyref))?;
-            ctx.alloc_instr(RefIsNull {});
+            ctx.alloc_instr(RefIsNull {}, loc);
             ctx.push_operand(Some(I32));
         }
 
         Operator::V8x16Swizzle => {
             ctx.pop_operand_expected(Some(V128))?;
             ctx.pop_operand_expected(Some(V128))?;
-            ctx.alloc_instr(V128Swizzle {});
+            ctx.alloc_instr(V128Swizzle {}, loc);
             ctx.push_operand(Some(V128));
         }
 
         Operator::V8x16Shuffle { lanes } => {
             ctx.pop_operand_expected(Some(V128))?;
             ctx.pop_operand_expected(Some(V128))?;
-            ctx.alloc_instr(V128Shuffle { indices: lanes });
+            ctx.alloc_instr(V128Shuffle { indices: lanes }, loc);
             ctx.push_operand(Some(V128));
         }
 
@@ -1291,7 +1316,7 @@ fn validate_instruction(ctx: &mut ValidationContext, inst: Operator) -> Result<(
             ctx.pop_operand_expected(Some(V128))?;
             ctx.pop_operand_expected(Some(V128))?;
             ctx.pop_operand_expected(Some(V128))?;
-            ctx.alloc_instr(V128Bitselect {});
+            ctx.alloc_instr(V128Bitselect {}, loc);
             ctx.push_operand(Some(V128));
         }
 

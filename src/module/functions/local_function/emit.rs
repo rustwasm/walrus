@@ -10,6 +10,7 @@ pub(crate) fn run(
     indices: &IdsToIndices,
     local_indices: &IdHashMap<Local, u32>,
     encoder: &mut Encoder,
+    map: Option<&mut Vec<(InstrLocId, usize)>>,
 ) {
     let v = &mut Emit {
         indices,
@@ -17,6 +18,7 @@ pub(crate) fn run(
         block_kinds: vec![BlockKind::FunctionEntry],
         encoder,
         local_indices,
+        map,
     };
     dfs_in_order(v, func, func.entry_block());
 
@@ -42,6 +44,9 @@ struct Emit<'a, 'b> {
 
     // The instruction sequence we are building up to emit.
     encoder: &'a mut Encoder<'b>,
+
+    // Encoded ExprId -> offset map.
+    map: Option<&'a mut Vec<(InstrLocId, usize)>>,
 }
 
 impl<'instr> Visitor<'instr> for Emit<'_, '_> {
@@ -90,8 +95,14 @@ impl<'instr> Visitor<'instr> for Emit<'_, '_> {
         }
     }
 
-    fn visit_instr(&mut self, instr: &'instr Instr) {
+    fn visit_instr(&mut self, instr: &'instr Instr, instr_loc: &'instr InstrLocId) {
         use self::Instr::*;
+
+        if let Some(map) = self.map.as_mut() {
+            let pos = self.encoder.pos();
+            // Save the encoded_at position for the specified ExprId.
+            map.push((instr_loc.clone(), pos));
+        }
 
         match instr {
             Block(_) => self.block_kinds.push(BlockKind::Block),

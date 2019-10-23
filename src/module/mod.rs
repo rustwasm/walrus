@@ -17,6 +17,7 @@ mod types;
 use crate::emit::{Emit, EmitContext, IdsToIndices, Section};
 use crate::encode::Encoder;
 use crate::error::Result;
+pub use crate::ir::InstrLocId;
 pub use crate::module::custom::{
     CustomSection, CustomSectionId, ModuleCustomSections, RawCustomSection, TypedCustomSectionId,
     UntypedCustomSectionId,
@@ -69,6 +70,14 @@ pub struct Module {
     pub name: Option<String>,
     pub(crate) config: ModuleConfig,
 }
+
+/// Maps from an offset of an instruction in the input Wasm to its offset in the
+/// output Wasm.
+///
+/// Note that an input offset may be mapped to multiple output offsets, and vice
+/// versa, due to transformations like function inlinining or constant
+/// propagation.
+pub type CodeTransform = Vec<(InstrLocId, usize)>;
 
 impl Module {
     /// Create a default, empty module that uses the given configuration.
@@ -173,8 +182,14 @@ impl Module {
                         None => bail!("cannot have a code section without function section"),
                     };
                     let reader = section.get_code_section_reader()?;
-                    ret.parse_local_functions(reader, function_section_size, &mut indices)
-                        .context("failed to parse code section")?;
+                    let on_instr_loc = config.on_instr_loc.as_ref().map(|f| f.as_ref());
+                    ret.parse_local_functions(
+                        reader,
+                        function_section_size,
+                        &mut indices,
+                        on_instr_loc,
+                    )
+                    .context("failed to parse code section")?;
                 }
                 wasmparser::SectionCode::DataCount => {
                     let count = section.get_data_count_section_content()?;
@@ -231,7 +246,7 @@ impl Module {
     }
 
     /// Emit this module into a `.wasm` file at the given path.
-    pub fn emit_wasm_file<P>(&self, path: P) -> Result<()>
+    pub fn emit_wasm_file<P>(&mut self, path: P) -> Result<()>
     where
         P: AsRef<Path>,
     {
@@ -241,7 +256,7 @@ impl Module {
     }
 
     /// Emit this module into an in-memory wasm buffer.
-    pub fn emit_wasm(&self) -> Vec<u8> {
+    pub fn emit_wasm(&mut self) -> Vec<u8> {
         log::debug!("start emit");
 
         let indices = &mut IdsToIndices::default();
@@ -249,11 +264,14 @@ impl Module {
         wasm.extend(&[0x00, 0x61, 0x73, 0x6d]); // magic
         wasm.extend(&[0x01, 0x00, 0x00, 0x00]); // version
 
+        let mut customs = mem::replace(&mut self.customs, ModuleCustomSections::default());
+
         let mut cx = EmitContext {
             module: self,
             indices,
             encoder: Encoder::new(&mut wasm),
             locals: Default::default(),
+            code_transform: Vec::new(),
         };
         self.types.emit(&mut cx);
         self.imports.emit(&mut cx);
@@ -280,13 +298,18 @@ impl Module {
 
         let indices = mem::replace(cx.indices, Default::default());
 
-        for (_id, section) in self.customs.iter() {
+        for (_id, section) in customs.iter_mut() {
             if !self.config.generate_dwarf && section.name().starts_with(".debug") {
                 log::debug!("skipping DWARF custom section {}", section.name());
                 continue;
             }
 
             log::debug!("emitting custom section {}", section.name());
+
+            if self.config.preserve_code_transform {
+                section.apply_code_transform(&cx.code_transform);
+            }
+
             cx.custom_section(&section.name())
                 .encoder
                 .raw(&section.data(&indices));

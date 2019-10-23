@@ -385,13 +385,13 @@ impl Dot for LocalFunction {
 
 impl DotNode for InstrSeq {
     fn fields(&self, fields: &mut impl FieldAggregator) {
-        for (i, instr) in self.instrs.iter().enumerate() {
+        for (i, (instr, _)) in self.instrs.iter().enumerate() {
             fields.add_field_with_port(&i.to_string(), &format!("{:?}", instr));
         }
     }
 
     fn edges(&self, edges: &mut impl EdgeAggregator) {
-        for (i, instr) in self.instrs.iter().enumerate() {
+        for (i, (instr, _)) in self.instrs.iter().enumerate() {
             let port = i.to_string();
             instr.visit(&mut DotVisitor { port, edges });
         }

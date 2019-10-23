@@ -1,4 +1,5 @@
 use crate::error::Result;
+use crate::ir::InstrLocId;
 use crate::module::Module;
 use crate::parse::IndicesToIds;
 use std::fmt;
@@ -13,8 +14,10 @@ pub struct ModuleConfig {
     pub(crate) skip_strict_validate: bool,
     pub(crate) skip_producers_section: bool,
     pub(crate) skip_name_section: bool,
+    pub(crate) preserve_code_transform: bool,
     pub(crate) on_parse:
         Option<Box<dyn Fn(&mut Module, &IndicesToIds) -> Result<()> + Sync + Send + 'static>>,
+    pub(crate) on_instr_loc: Option<Box<dyn Fn(&usize) -> InstrLocId + Sync + Send + 'static>>,
 }
 
 impl Clone for ModuleConfig {
@@ -28,9 +31,11 @@ impl Clone for ModuleConfig {
             skip_strict_validate: self.skip_strict_validate,
             skip_producers_section: self.skip_producers_section,
             skip_name_section: self.skip_name_section,
+            preserve_code_transform: self.preserve_code_transform,
 
             // ... and this is left empty.
             on_parse: None,
+            on_instr_loc: None,
         }
     }
 }
@@ -46,7 +51,9 @@ impl fmt::Debug for ModuleConfig {
             ref skip_strict_validate,
             ref skip_producers_section,
             ref skip_name_section,
+            ref preserve_code_transform,
             ref on_parse,
+            ref on_instr_loc,
         } = self;
 
         f.debug_struct("ModuleConfig")
@@ -59,7 +66,9 @@ impl fmt::Debug for ModuleConfig {
             .field("skip_strict_validate", skip_strict_validate)
             .field("skip_producers_section", skip_producers_section)
             .field("skip_name_section", skip_name_section)
+            .field("preserve_code_transform", preserve_code_transform)
             .field("on_parse", &on_parse.as_ref().map(|_| ".."))
+            .field("on_instr_loc", &on_instr_loc.as_ref().map(|_| ".."))
             .finish()
     }
 }
@@ -168,6 +177,26 @@ impl ModuleConfig {
         F: Fn(&mut Module, &IndicesToIds) -> Result<()> + Send + Sync + 'static,
     {
         self.on_parse = Some(Box::new(f) as _);
+        self
+    }
+
+    /// Provide a function that is invoked on source location ID step.
+    ///
+    /// Note that cloning a `ModuleConfig` will result in a config that does not
+    /// have an `on_instr_loc` function, even if the original did.
+    pub fn on_instr_loc<F>(&mut self, f: F) -> &mut ModuleConfig
+    where
+        F: Fn(&usize) -> InstrLocId + Send + Sync + 'static,
+    {
+        self.on_instr_loc = Some(Box::new(f) as _);
+        self
+    }
+
+    /// Sets a flag to whether code transform is preverved during parsing.
+    ///
+    /// By default this flag is `false`.
+    pub fn preserve_code_transform(&mut self, preserve: bool) -> &mut ModuleConfig {
+        self.preserve_code_transform = preserve;
         self
     }
 

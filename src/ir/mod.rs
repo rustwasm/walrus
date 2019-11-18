@@ -508,11 +508,23 @@ pub enum Instr {
         table: TableId,
     },
 
+    /// `table.fill`
+    TableFill {
+        /// The table we're filling
+        table: TableId,
+    },
+
     /// `ref.null`
     RefNull {},
 
     /// `ref.is_null`
     RefIsNull {},
+
+    /// `ref.func`
+    RefFunc {
+        /// The function that this instruction is referencing
+        func: FunctionId,
+    },
 
     /// `v128.bitselect`
     V128Bitselect {},
@@ -1127,8 +1139,10 @@ impl Instr {
             | Instr::TableSet(..)
             | Instr::TableGrow(..)
             | Instr::TableSize(..)
+            | Instr::TableFill(..)
             | Instr::RefNull(..)
             | Instr::RefIsNull(..)
+            | Instr::RefFunc(..)
             | Instr::V128Bitselect(..)
             | Instr::V128Swizzle(..)
             | Instr::V128Shuffle(..)

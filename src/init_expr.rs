@@ -25,7 +25,7 @@ impl InitExpr {
             I64Const { value } => InitExpr::Value(Value::I64(value)),
             F32Const { value } => InitExpr::Value(Value::F32(f32::from_bits(value.bits()))),
             F64Const { value } => InitExpr::Value(Value::F64(f64::from_bits(value.bits()))),
-            GetGlobal { global_index } => InitExpr::Global(ids.get_global(global_index)?),
+            GlobalGet { global_index } => InitExpr::Global(ids.get_global(global_index)?),
             _ => bail!("invalid constant expression"),
         };
         match reader.read()? {

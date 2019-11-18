@@ -409,26 +409,26 @@ fn validate_instruction<'context>(
             ctx.alloc_instr(CallIndirect { table, ty: type_id }, loc);
             ctx.push_operands(ty.results());
         }
-        Operator::GetLocal { local_index } => {
+        Operator::LocalGet { local_index } => {
             let local = ctx.indices.get_local(ctx.func_id, local_index)?;
             let ty = ctx.module.locals.get(local).ty();
             ctx.alloc_instr(LocalGet { local }, loc);
             ctx.push_operand(Some(ty));
         }
-        Operator::SetLocal { local_index } => {
+        Operator::LocalSet { local_index } => {
             let local = ctx.indices.get_local(ctx.func_id, local_index)?;
             let ty = ctx.module.locals.get(local).ty();
             ctx.pop_operand_expected(Some(ty))?;
             ctx.alloc_instr(LocalSet { local }, loc);
         }
-        Operator::TeeLocal { local_index } => {
+        Operator::LocalTee { local_index } => {
             let local = ctx.indices.get_local(ctx.func_id, local_index)?;
             let ty = ctx.module.locals.get(local).ty();
             ctx.pop_operand_expected(Some(ty))?;
             ctx.alloc_instr(LocalTee { local }, loc);
             ctx.push_operand(Some(ty));
         }
-        Operator::GetGlobal { global_index } => {
+        Operator::GlobalGet { global_index } => {
             let global = ctx
                 .indices
                 .get_global(global_index)
@@ -437,7 +437,7 @@ fn validate_instruction<'context>(
             ctx.alloc_instr(GlobalGet { global }, loc);
             ctx.push_operand(Some(ty));
         }
-        Operator::SetGlobal { global_index } => {
+        Operator::GlobalSet { global_index } => {
             let global = ctx
                 .indices
                 .get_global(global_index)
@@ -581,28 +581,28 @@ fn validate_instruction<'context>(
         Operator::F64Copysign => binop(ctx, F64, BinaryOp::F64Copysign)?,
 
         Operator::I32WrapI64 => one_op(ctx, I64, I32, UnaryOp::I32WrapI64)?,
-        Operator::I32TruncSF32 => one_op(ctx, F32, I32, UnaryOp::I32TruncSF32)?,
-        Operator::I32TruncUF32 => one_op(ctx, F32, I32, UnaryOp::I32TruncUF32)?,
-        Operator::I32TruncSF64 => one_op(ctx, F64, I32, UnaryOp::I32TruncSF64)?,
-        Operator::I32TruncUF64 => one_op(ctx, F64, I32, UnaryOp::I32TruncUF64)?,
+        Operator::I32TruncF32S => one_op(ctx, F32, I32, UnaryOp::I32TruncSF32)?,
+        Operator::I32TruncF32U => one_op(ctx, F32, I32, UnaryOp::I32TruncUF32)?,
+        Operator::I32TruncF64S => one_op(ctx, F64, I32, UnaryOp::I32TruncSF64)?,
+        Operator::I32TruncF64U => one_op(ctx, F64, I32, UnaryOp::I32TruncUF64)?,
 
-        Operator::I64ExtendSI32 => one_op(ctx, I32, I64, UnaryOp::I64ExtendSI32)?,
-        Operator::I64ExtendUI32 => one_op(ctx, I32, I64, UnaryOp::I64ExtendUI32)?,
-        Operator::I64TruncSF32 => one_op(ctx, F32, I64, UnaryOp::I64TruncSF32)?,
-        Operator::I64TruncUF32 => one_op(ctx, F32, I64, UnaryOp::I64TruncUF32)?,
-        Operator::I64TruncSF64 => one_op(ctx, F64, I64, UnaryOp::I64TruncSF64)?,
-        Operator::I64TruncUF64 => one_op(ctx, F64, I64, UnaryOp::I64TruncUF64)?,
+        Operator::I64ExtendI32S => one_op(ctx, I32, I64, UnaryOp::I64ExtendSI32)?,
+        Operator::I64ExtendI32U => one_op(ctx, I32, I64, UnaryOp::I64ExtendUI32)?,
+        Operator::I64TruncF32S => one_op(ctx, F32, I64, UnaryOp::I64TruncSF32)?,
+        Operator::I64TruncF32U => one_op(ctx, F32, I64, UnaryOp::I64TruncUF32)?,
+        Operator::I64TruncF64S => one_op(ctx, F64, I64, UnaryOp::I64TruncSF64)?,
+        Operator::I64TruncF64U => one_op(ctx, F64, I64, UnaryOp::I64TruncUF64)?,
 
-        Operator::F32ConvertSI32 => one_op(ctx, I32, F32, UnaryOp::F32ConvertSI32)?,
-        Operator::F32ConvertUI32 => one_op(ctx, I32, F32, UnaryOp::F32ConvertUI32)?,
-        Operator::F32ConvertSI64 => one_op(ctx, I64, F32, UnaryOp::F32ConvertSI64)?,
-        Operator::F32ConvertUI64 => one_op(ctx, I64, F32, UnaryOp::F32ConvertUI64)?,
+        Operator::F32ConvertI32S => one_op(ctx, I32, F32, UnaryOp::F32ConvertSI32)?,
+        Operator::F32ConvertI32U => one_op(ctx, I32, F32, UnaryOp::F32ConvertUI32)?,
+        Operator::F32ConvertI64S => one_op(ctx, I64, F32, UnaryOp::F32ConvertSI64)?,
+        Operator::F32ConvertI64U => one_op(ctx, I64, F32, UnaryOp::F32ConvertUI64)?,
         Operator::F32DemoteF64 => one_op(ctx, F64, F32, UnaryOp::F32DemoteF64)?,
 
-        Operator::F64ConvertSI32 => one_op(ctx, I32, F64, UnaryOp::F64ConvertSI32)?,
-        Operator::F64ConvertUI32 => one_op(ctx, I32, F64, UnaryOp::F64ConvertUI32)?,
-        Operator::F64ConvertSI64 => one_op(ctx, I64, F64, UnaryOp::F64ConvertSI64)?,
-        Operator::F64ConvertUI64 => one_op(ctx, I64, F64, UnaryOp::F64ConvertUI64)?,
+        Operator::F64ConvertI32S => one_op(ctx, I32, F64, UnaryOp::F64ConvertSI32)?,
+        Operator::F64ConvertI32U => one_op(ctx, I32, F64, UnaryOp::F64ConvertUI32)?,
+        Operator::F64ConvertI64S => one_op(ctx, I64, F64, UnaryOp::F64ConvertSI64)?,
+        Operator::F64ConvertI64U => one_op(ctx, I64, F64, UnaryOp::F64ConvertUI64)?,
         Operator::F64PromoteF32 => one_op(ctx, F32, F64, UnaryOp::F64PromoteF32)?,
 
         Operator::I32ReinterpretF32 => one_op(ctx, F32, I32, UnaryOp::I32ReinterpretF32)?,
@@ -897,7 +897,7 @@ fn validate_instruction<'context>(
             store(ctx, memarg, I64, StoreKind::I64_32 { atomic: false })?
         }
 
-        Operator::Fence { flags } => {
+        Operator::AtomicFence { flags } => {
             if flags != 0 {
                 bail!("fence with nonzero flags not supported yet");
             }
@@ -979,19 +979,19 @@ fn validate_instruction<'context>(
         Operator::I64AtomicRmwAdd { memarg } => {
             atomicrmw(ctx, memarg, I64, AtomicOp::Add, AtomicWidth::I64)?;
         }
-        Operator::I32AtomicRmw8UAdd { memarg } => {
+        Operator::I32AtomicRmw8AddU { memarg } => {
             atomicrmw(ctx, memarg, I32, AtomicOp::Add, AtomicWidth::I32_8)?;
         }
-        Operator::I32AtomicRmw16UAdd { memarg } => {
+        Operator::I32AtomicRmw16AddU { memarg } => {
             atomicrmw(ctx, memarg, I32, AtomicOp::Add, AtomicWidth::I32_16)?;
         }
-        Operator::I64AtomicRmw8UAdd { memarg } => {
+        Operator::I64AtomicRmw8AddU { memarg } => {
             atomicrmw(ctx, memarg, I64, AtomicOp::Add, AtomicWidth::I64_8)?;
         }
-        Operator::I64AtomicRmw16UAdd { memarg } => {
+        Operator::I64AtomicRmw16AddU { memarg } => {
             atomicrmw(ctx, memarg, I64, AtomicOp::Add, AtomicWidth::I64_16)?;
         }
-        Operator::I64AtomicRmw32UAdd { memarg } => {
+        Operator::I64AtomicRmw32AddU { memarg } => {
             atomicrmw(ctx, memarg, I64, AtomicOp::Add, AtomicWidth::I64_32)?;
         }
 
@@ -1001,19 +1001,19 @@ fn validate_instruction<'context>(
         Operator::I64AtomicRmwSub { memarg } => {
             atomicrmw(ctx, memarg, I64, AtomicOp::Sub, AtomicWidth::I64)?;
         }
-        Operator::I32AtomicRmw8USub { memarg } => {
+        Operator::I32AtomicRmw8SubU { memarg } => {
             atomicrmw(ctx, memarg, I32, AtomicOp::Sub, AtomicWidth::I32_8)?;
         }
-        Operator::I32AtomicRmw16USub { memarg } => {
+        Operator::I32AtomicRmw16SubU { memarg } => {
             atomicrmw(ctx, memarg, I32, AtomicOp::Sub, AtomicWidth::I32_16)?;
         }
-        Operator::I64AtomicRmw8USub { memarg } => {
+        Operator::I64AtomicRmw8SubU { memarg } => {
             atomicrmw(ctx, memarg, I64, AtomicOp::Sub, AtomicWidth::I64_8)?;
         }
-        Operator::I64AtomicRmw16USub { memarg } => {
+        Operator::I64AtomicRmw16SubU { memarg } => {
             atomicrmw(ctx, memarg, I64, AtomicOp::Sub, AtomicWidth::I64_16)?;
         }
-        Operator::I64AtomicRmw32USub { memarg } => {
+        Operator::I64AtomicRmw32SubU { memarg } => {
             atomicrmw(ctx, memarg, I64, AtomicOp::Sub, AtomicWidth::I64_32)?;
         }
 
@@ -1023,19 +1023,19 @@ fn validate_instruction<'context>(
         Operator::I64AtomicRmwAnd { memarg } => {
             atomicrmw(ctx, memarg, I64, AtomicOp::And, AtomicWidth::I64)?;
         }
-        Operator::I32AtomicRmw8UAnd { memarg } => {
+        Operator::I32AtomicRmw8AndU { memarg } => {
             atomicrmw(ctx, memarg, I32, AtomicOp::And, AtomicWidth::I32_8)?;
         }
-        Operator::I32AtomicRmw16UAnd { memarg } => {
+        Operator::I32AtomicRmw16AndU { memarg } => {
             atomicrmw(ctx, memarg, I32, AtomicOp::And, AtomicWidth::I32_16)?;
         }
-        Operator::I64AtomicRmw8UAnd { memarg } => {
+        Operator::I64AtomicRmw8AndU { memarg } => {
             atomicrmw(ctx, memarg, I64, AtomicOp::And, AtomicWidth::I64_8)?;
         }
-        Operator::I64AtomicRmw16UAnd { memarg } => {
+        Operator::I64AtomicRmw16AndU { memarg } => {
             atomicrmw(ctx, memarg, I64, AtomicOp::And, AtomicWidth::I64_16)?;
         }
-        Operator::I64AtomicRmw32UAnd { memarg } => {
+        Operator::I64AtomicRmw32AndU { memarg } => {
             atomicrmw(ctx, memarg, I64, AtomicOp::And, AtomicWidth::I64_32)?;
         }
 
@@ -1045,19 +1045,19 @@ fn validate_instruction<'context>(
         Operator::I64AtomicRmwOr { memarg } => {
             atomicrmw(ctx, memarg, I64, AtomicOp::Or, AtomicWidth::I64)?;
         }
-        Operator::I32AtomicRmw8UOr { memarg } => {
+        Operator::I32AtomicRmw8OrU { memarg } => {
             atomicrmw(ctx, memarg, I32, AtomicOp::Or, AtomicWidth::I32_8)?;
         }
-        Operator::I32AtomicRmw16UOr { memarg } => {
+        Operator::I32AtomicRmw16OrU { memarg } => {
             atomicrmw(ctx, memarg, I32, AtomicOp::Or, AtomicWidth::I32_16)?;
         }
-        Operator::I64AtomicRmw8UOr { memarg } => {
+        Operator::I64AtomicRmw8OrU { memarg } => {
             atomicrmw(ctx, memarg, I64, AtomicOp::Or, AtomicWidth::I64_8)?;
         }
-        Operator::I64AtomicRmw16UOr { memarg } => {
+        Operator::I64AtomicRmw16OrU { memarg } => {
             atomicrmw(ctx, memarg, I64, AtomicOp::Or, AtomicWidth::I64_16)?;
         }
-        Operator::I64AtomicRmw32UOr { memarg } => {
+        Operator::I64AtomicRmw32OrU { memarg } => {
             atomicrmw(ctx, memarg, I64, AtomicOp::Or, AtomicWidth::I64_32)?;
         }
 
@@ -1067,19 +1067,19 @@ fn validate_instruction<'context>(
         Operator::I64AtomicRmwXor { memarg } => {
             atomicrmw(ctx, memarg, I64, AtomicOp::Xor, AtomicWidth::I64)?;
         }
-        Operator::I32AtomicRmw8UXor { memarg } => {
+        Operator::I32AtomicRmw8XorU { memarg } => {
             atomicrmw(ctx, memarg, I32, AtomicOp::Xor, AtomicWidth::I32_8)?;
         }
-        Operator::I32AtomicRmw16UXor { memarg } => {
+        Operator::I32AtomicRmw16XorU { memarg } => {
             atomicrmw(ctx, memarg, I32, AtomicOp::Xor, AtomicWidth::I32_16)?;
         }
-        Operator::I64AtomicRmw8UXor { memarg } => {
+        Operator::I64AtomicRmw8XorU { memarg } => {
             atomicrmw(ctx, memarg, I64, AtomicOp::Xor, AtomicWidth::I64_8)?;
         }
-        Operator::I64AtomicRmw16UXor { memarg } => {
+        Operator::I64AtomicRmw16XorU { memarg } => {
             atomicrmw(ctx, memarg, I64, AtomicOp::Xor, AtomicWidth::I64_16)?;
         }
-        Operator::I64AtomicRmw32UXor { memarg } => {
+        Operator::I64AtomicRmw32XorU { memarg } => {
             atomicrmw(ctx, memarg, I64, AtomicOp::Xor, AtomicWidth::I64_32)?;
         }
 
@@ -1089,19 +1089,19 @@ fn validate_instruction<'context>(
         Operator::I64AtomicRmwXchg { memarg } => {
             atomicrmw(ctx, memarg, I64, AtomicOp::Xchg, AtomicWidth::I64)?;
         }
-        Operator::I32AtomicRmw8UXchg { memarg } => {
+        Operator::I32AtomicRmw8XchgU { memarg } => {
             atomicrmw(ctx, memarg, I32, AtomicOp::Xchg, AtomicWidth::I32_8)?;
         }
-        Operator::I32AtomicRmw16UXchg { memarg } => {
+        Operator::I32AtomicRmw16XchgU { memarg } => {
             atomicrmw(ctx, memarg, I32, AtomicOp::Xchg, AtomicWidth::I32_16)?;
         }
-        Operator::I64AtomicRmw8UXchg { memarg } => {
+        Operator::I64AtomicRmw8XchgU { memarg } => {
             atomicrmw(ctx, memarg, I64, AtomicOp::Xchg, AtomicWidth::I64_8)?;
         }
-        Operator::I64AtomicRmw16UXchg { memarg } => {
+        Operator::I64AtomicRmw16XchgU { memarg } => {
             atomicrmw(ctx, memarg, I64, AtomicOp::Xchg, AtomicWidth::I64_16)?;
         }
-        Operator::I64AtomicRmw32UXchg { memarg } => {
+        Operator::I64AtomicRmw32XchgU { memarg } => {
             atomicrmw(ctx, memarg, I64, AtomicOp::Xchg, AtomicWidth::I64_32)?;
         }
 
@@ -1111,22 +1111,22 @@ fn validate_instruction<'context>(
         Operator::I64AtomicRmwCmpxchg { memarg } => {
             cmpxchg(ctx, memarg, I64, AtomicWidth::I64)?;
         }
-        Operator::I32AtomicRmw8UCmpxchg { memarg } => {
+        Operator::I32AtomicRmw8CmpxchgU { memarg } => {
             cmpxchg(ctx, memarg, I32, AtomicWidth::I32_8)?;
         }
-        Operator::I32AtomicRmw16UCmpxchg { memarg } => {
+        Operator::I32AtomicRmw16CmpxchgU { memarg } => {
             cmpxchg(ctx, memarg, I32, AtomicWidth::I32_16)?;
         }
-        Operator::I64AtomicRmw8UCmpxchg { memarg } => {
+        Operator::I64AtomicRmw8CmpxchgU { memarg } => {
             cmpxchg(ctx, memarg, I64, AtomicWidth::I64_8)?;
         }
-        Operator::I64AtomicRmw16UCmpxchg { memarg } => {
+        Operator::I64AtomicRmw16CmpxchgU { memarg } => {
             cmpxchg(ctx, memarg, I64, AtomicWidth::I64_16)?;
         }
-        Operator::I64AtomicRmw32UCmpxchg { memarg } => {
+        Operator::I64AtomicRmw32CmpxchgU { memarg } => {
             cmpxchg(ctx, memarg, I64, AtomicWidth::I64_32)?;
         }
-        Operator::Wake { ref memarg } => {
+        Operator::AtomicNotify { ref memarg } => {
             ctx.pop_operand_expected(Some(I32))?;
             ctx.pop_operand_expected(Some(I32))?;
             let memory = ctx.indices.get_memory(0)?;
@@ -1139,9 +1139,9 @@ fn validate_instruction<'context>(
             );
             ctx.push_operand(Some(I32));
         }
-        Operator::I32Wait { ref memarg } | Operator::I64Wait { ref memarg } => {
+        Operator::I32AtomicWait { ref memarg } | Operator::I64AtomicWait { ref memarg } => {
             let (ty, sixty_four) = match inst {
-                Operator::I32Wait { .. } => (I32, false),
+                Operator::I32AtomicWait { .. } => (I32, false),
                 _ => (I64, true),
             };
             ctx.pop_operand_expected(Some(I64))?;
@@ -1191,6 +1191,17 @@ fn validate_instruction<'context>(
             ctx.alloc_instr(TableSize { table }, loc);
             ctx.push_operand(Some(I32));
         }
+        Operator::TableFill { table } => {
+            let table = ctx.indices.get_table(table)?;
+            let expected_ty = match ctx.module.tables.get(table).kind {
+                TableKind::Anyref(_) => Anyref,
+                TableKind::Function(_) => bail!("cannot set function table yet"),
+            };
+            ctx.pop_operand_expected(Some(I32))?;
+            ctx.pop_operand_expected(Some(expected_ty))?;
+            ctx.pop_operand_expected(Some(I32))?;
+            ctx.alloc_instr(TableFill { table }, loc);
+        }
         Operator::RefNull => {
             ctx.alloc_instr(RefNull {}, loc);
             ctx.push_operand(Some(Anyref));
@@ -1199,6 +1210,14 @@ fn validate_instruction<'context>(
             ctx.pop_operand_expected(Some(Anyref))?;
             ctx.alloc_instr(RefIsNull {}, loc);
             ctx.push_operand(Some(I32));
+        }
+        Operator::RefFunc { function_index }=> {
+            let func = ctx
+                .indices
+                .get_func(function_index)
+                .context("invalid call")?;
+            ctx.alloc_instr(RefFunc { func }, loc);
+            ctx.push_operand(Some(Anyref));
         }
 
         Operator::V8x16Swizzle => {
@@ -1387,28 +1406,28 @@ fn validate_instruction<'context>(
         Operator::F64x2Min => binop(ctx, V128, BinaryOp::F64x2Min)?,
         Operator::F64x2Max => binop(ctx, V128, BinaryOp::F64x2Max)?,
 
-        Operator::I32x4TruncSF32x4Sat => unop(ctx, V128, UnaryOp::I32x4TruncSF32x4Sat)?,
-        Operator::I32x4TruncUF32x4Sat => unop(ctx, V128, UnaryOp::I32x4TruncUF32x4Sat)?,
-        Operator::I64x2TruncSF64x2Sat => unop(ctx, V128, UnaryOp::I64x2TruncSF64x2Sat)?,
-        Operator::I64x2TruncUF64x2Sat => unop(ctx, V128, UnaryOp::I64x2TruncUF64x2Sat)?,
-        Operator::F32x4ConvertSI32x4 => unop(ctx, V128, UnaryOp::F32x4ConvertSI32x4)?,
-        Operator::F32x4ConvertUI32x4 => unop(ctx, V128, UnaryOp::F32x4ConvertUI32x4)?,
-        Operator::F64x2ConvertSI64x2 => unop(ctx, V128, UnaryOp::F64x2ConvertSI64x2)?,
-        Operator::F64x2ConvertUI64x2 => unop(ctx, V128, UnaryOp::F64x2ConvertUI64x2)?,
+        Operator::I32x4TruncSatF32x4S => unop(ctx, V128, UnaryOp::I32x4TruncSF32x4Sat)?,
+        Operator::I32x4TruncSatF32x4U => unop(ctx, V128, UnaryOp::I32x4TruncUF32x4Sat)?,
+        Operator::I64x2TruncSatF64x2S => unop(ctx, V128, UnaryOp::I64x2TruncSF64x2Sat)?,
+        Operator::I64x2TruncSatF64x2U => unop(ctx, V128, UnaryOp::I64x2TruncUF64x2Sat)?,
+        Operator::F32x4ConvertI32x4S => unop(ctx, V128, UnaryOp::F32x4ConvertSI32x4)?,
+        Operator::F32x4ConvertI32x4U => unop(ctx, V128, UnaryOp::F32x4ConvertUI32x4)?,
+        Operator::F64x2ConvertI64x2S => unop(ctx, V128, UnaryOp::F64x2ConvertSI64x2)?,
+        Operator::F64x2ConvertI64x2U => unop(ctx, V128, UnaryOp::F64x2ConvertUI64x2)?,
 
-        Operator::I32TruncSSatF32 => one_op(ctx, F32, I32, UnaryOp::I32TruncSSatF32)?,
-        Operator::I32TruncUSatF32 => one_op(ctx, F32, I32, UnaryOp::I32TruncUSatF32)?,
-        Operator::I32TruncSSatF64 => one_op(ctx, F64, I32, UnaryOp::I32TruncSSatF64)?,
-        Operator::I32TruncUSatF64 => one_op(ctx, F64, I32, UnaryOp::I32TruncUSatF64)?,
-        Operator::I64TruncSSatF32 => one_op(ctx, F32, I64, UnaryOp::I64TruncSSatF32)?,
-        Operator::I64TruncUSatF32 => one_op(ctx, F32, I64, UnaryOp::I64TruncUSatF32)?,
-        Operator::I64TruncSSatF64 => one_op(ctx, F64, I64, UnaryOp::I64TruncSSatF64)?,
-        Operator::I64TruncUSatF64 => one_op(ctx, F64, I64, UnaryOp::I64TruncUSatF64)?,
+        Operator::I32TruncSatF32S => one_op(ctx, F32, I32, UnaryOp::I32TruncSSatF32)?,
+        Operator::I32TruncSatF32U => one_op(ctx, F32, I32, UnaryOp::I32TruncUSatF32)?,
+        Operator::I32TruncSatF64S => one_op(ctx, F64, I32, UnaryOp::I32TruncSSatF64)?,
+        Operator::I32TruncSatF64U => one_op(ctx, F64, I32, UnaryOp::I32TruncUSatF64)?,
+        Operator::I64TruncSatF32S => one_op(ctx, F32, I64, UnaryOp::I64TruncSSatF32)?,
+        Operator::I64TruncSatF32U => one_op(ctx, F32, I64, UnaryOp::I64TruncUSatF32)?,
+        Operator::I64TruncSatF64S => one_op(ctx, F64, I64, UnaryOp::I64TruncSSatF64)?,
+        Operator::I64TruncSatF64U => one_op(ctx, F64, I64, UnaryOp::I64TruncUSatF64)?,
 
-        Operator::I8x16LoadSplat { memarg } => load_splat(ctx, memarg, LoadSplatKind::I8)?,
-        Operator::I16x8LoadSplat { memarg } => load_splat(ctx, memarg, LoadSplatKind::I16)?,
-        Operator::I32x4LoadSplat { memarg } => load_splat(ctx, memarg, LoadSplatKind::I32)?,
-        Operator::I64x2LoadSplat { memarg } => load_splat(ctx, memarg, LoadSplatKind::I64)?,
+        Operator::V8x16LoadSplat { memarg } => load_splat(ctx, memarg, LoadSplatKind::I8)?,
+        Operator::V16x8LoadSplat { memarg } => load_splat(ctx, memarg, LoadSplatKind::I16)?,
+        Operator::V32x4LoadSplat { memarg } => load_splat(ctx, memarg, LoadSplatKind::I32)?,
+        Operator::V64x2LoadSplat { memarg } => load_splat(ctx, memarg, LoadSplatKind::I64)?,
 
         op @ Operator::TableInit { .. }
         | op @ Operator::ElemDrop { .. }

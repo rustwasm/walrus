@@ -76,12 +76,13 @@ impl Module {
             let segment = segment?;
 
             match segment.kind {
-                wasmparser::ElementKind::Passive(_) => {
+                wasmparser::ElementKind::Passive { .. } => {
                     bail!("passive element segments not supported yet");
                 }
                 wasmparser::ElementKind::Active {
                     table_index,
                     init_expr,
+                    items,
                 } => {
                     let table = ids.get_table(table_index)?;
                     let table = match &mut self.tables.get_mut(table).kind {
@@ -93,7 +94,7 @@ impl Module {
 
                     let offset = InitExpr::eval(&init_expr, ids)
                         .with_context(|| format!("in segment {}", i))?;
-                    let functions = segment.items.get_items_reader()?.into_iter().map(|func| {
+                    let functions = items.get_items_reader()?.into_iter().map(|func| {
                         let func = func?;
                         ids.get_func(func)
                     });

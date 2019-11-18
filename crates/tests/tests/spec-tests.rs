@@ -26,6 +26,7 @@ fn run(wast: &Path) -> Result<(), anyhow::Error> {
         None => &[],
         Some("mutable-global") => &[],
         Some("sign-extension-ops") => &["--enable-sign-extension"],
+        Some("multi-value") => &["--enable-multi-value"],
         Some("nontrapping-float-to-int-conversions") => &["--enable-saturating-float-to-int"],
 
         // Currently wabt doesn't have support for `ref.host` which is used in
@@ -34,9 +35,6 @@ fn run(wast: &Path) -> Result<(), anyhow::Error> {
 
         // Currently wabt has broken support for `ref.func` initializers
         Some("bulk-memory-operations") => return Ok(()),
-
-        // TODO: we should actually implement this proposal!
-        Some("multi-value") => return Ok(()),
 
         // TODO: should get threads working
         Some("threads") => return Ok(()),

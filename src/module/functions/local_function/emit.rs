@@ -752,11 +752,21 @@ impl<'instr> Visitor<'instr> for Emit<'_, '_> {
                 let idx = self.indices.get_table_index(e.table);
                 self.encoder.u32(idx);
             }
+            TableFill(e) => {
+                self.encoder.raw(&[0xfc, 0x11]);
+                let idx = self.indices.get_table_index(e.table);
+                self.encoder.u32(idx);
+            }
             RefNull(_e) => {
                 self.encoder.byte(0xd0);
             }
             RefIsNull(_e) => {
                 self.encoder.byte(0xd1);
+            }
+            RefFunc(e) => {
+                self.encoder.byte(0xd2);
+                let idx = self.indices.get_func_index(e.func);
+                self.encoder.u32(idx);
             }
 
             V128Bitselect(_) => {

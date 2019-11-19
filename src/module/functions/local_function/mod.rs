@@ -455,23 +455,7 @@ fn validate_instruction<'context>(
             const_(ctx, F64, Value::F64(f64::from_bits(value.bits())));
         }
         Operator::V128Const { value } => {
-            let n = value.bytes();
-            let val = ((n[0] as u128) << 0)
-                | ((n[1] as u128) << 8)
-                | ((n[2] as u128) << 16)
-                | ((n[3] as u128) << 24)
-                | ((n[4] as u128) << 32)
-                | ((n[5] as u128) << 40)
-                | ((n[6] as u128) << 48)
-                | ((n[7] as u128) << 56)
-                | ((n[8] as u128) << 64)
-                | ((n[9] as u128) << 72)
-                | ((n[10] as u128) << 80)
-                | ((n[11] as u128) << 88)
-                | ((n[12] as u128) << 96)
-                | ((n[13] as u128) << 104)
-                | ((n[14] as u128) << 112)
-                | ((n[15] as u128) << 120);
+            let val = crate::init_expr::v128_to_u128(&value);
             const_(ctx, V128, Value::V128(val));
         }
         Operator::I32Eqz => testop(ctx, I32, UnaryOp::I32Eqz)?,

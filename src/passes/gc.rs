@@ -4,13 +4,13 @@
 //! internally and can be safely removed.
 
 use crate::map::IdHashSet;
-use crate::passes::Used;
+use crate::passes::used::Used;
 use crate::{ImportKind, Module};
 use id_arena::Id;
 
 /// Run GC passes over the module specified.
 pub fn run(m: &mut Module) {
-    let used = Used::new(m, m.exports.iter().map(|e| e.id()));
+    let used = Used::new(m);
 
     let mut unused_imports = Vec::new();
     for import in m.imports.iter() {

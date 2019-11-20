@@ -1,5 +1,6 @@
 //! Working with custom sections.
 
+use crate::passes::Roots;
 use crate::tombstone_arena::{Id, Tombstone, TombstoneArena};
 use crate::CodeTransform;
 use crate::IdsToIndices;
@@ -28,6 +29,16 @@ pub trait CustomSection: WalrusAny + Debug + Send + Sync {
     /// section's name, or the count of how many bytes are in the
     /// payload. `walrus` will handle these for you.
     fn data(&self, ids_to_indices: &IdsToIndices) -> Cow<[u8]>;
+
+    /// Add any core wasm roots to the provided `roots` argument.
+    ///
+    /// This function will add any referenced core wasm items into the `Roots`
+    /// array provided.
+    ///
+    /// The default provided method does nothing.
+    fn add_gc_roots(&self, roots: &mut Roots) {
+        drop(roots);
+    }
 
     /// Apply the given code transformations to this custom section.
     ///

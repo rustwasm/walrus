@@ -1,11 +1,71 @@
 use crate::ir::*;
 use crate::map::IdHashSet;
-use crate::{
-    ActiveDataLocation, Data, DataId, DataKind, Element, ExportId, ExportItem, Function, InitExpr,
-};
+use crate::{ActiveDataLocation, Data, DataId, DataKind, Element, ExportItem, Function, InitExpr};
 use crate::{FunctionId, FunctionKind, Global, GlobalId};
 use crate::{GlobalKind, ImportKind, Memory, MemoryId, Table, TableId};
 use crate::{Module, TableKind, Type, TypeId};
+
+/// Set of all root used items in a wasm module.
+#[derive(Debug, Default)]
+pub struct Roots {
+    tables: Vec<TableId>,
+    funcs: Vec<FunctionId>,
+    globals: Vec<GlobalId>,
+    memories: Vec<MemoryId>,
+    datas: Vec<DataId>,
+    used: Used,
+}
+
+impl Roots {
+    /// Creates a new set of empty roots.
+    pub fn new() -> Roots {
+        Roots::default()
+    }
+
+    /// Adds a new function to the set of roots
+    pub fn push_func(&mut self, func: FunctionId) -> &mut Roots {
+        if self.used.funcs.insert(func) {
+            log::trace!("function is used: {:?}", func);
+            self.funcs.push(func);
+        }
+        self
+    }
+
+    /// Adds a new table to the set of roots
+    pub fn push_table(&mut self, table: TableId) -> &mut Roots {
+        if self.used.tables.insert(table) {
+            log::trace!("table is used: {:?}", table);
+            self.tables.push(table);
+        }
+        self
+    }
+
+    /// Adds a new memory to the set of roots
+    pub fn push_memory(&mut self, memory: MemoryId) -> &mut Roots {
+        if self.used.memories.insert(memory) {
+            log::trace!("memory is used: {:?}", memory);
+            self.memories.push(memory);
+        }
+        self
+    }
+
+    /// Adds a new global to the set of roots
+    pub fn push_global(&mut self, global: GlobalId) -> &mut Roots {
+        if self.used.globals.insert(global) {
+            log::trace!("global is used: {:?}", global);
+            self.globals.push(global);
+        }
+        self
+    }
+
+    fn push_data(&mut self, data: DataId) -> &mut Roots {
+        if self.used.data.insert(data) {
+            log::trace!("data is used: {:?}", data);
+            self.datas.push(data);
+        }
+        self
+    }
+}
 
 /// Finds the things within a module that are used.
 ///
@@ -32,29 +92,21 @@ pub struct Used {
 
 impl Used {
     /// Construct a new `Used` set for the given module.
-    pub fn new<R>(module: &Module, roots: R) -> Used
-    where
-        R: IntoIterator<Item = ExportId>,
-    {
+    pub fn new(module: &Module) -> Used {
         log::debug!("starting to calculate used set");
-        let mut used = Used::default();
-        let mut stack = UsedStack {
-            used: &mut used,
-            functions: Vec::new(),
-            tables: Vec::new(),
-            globals: Vec::new(),
-            memories: Vec::new(),
-            datas: Vec::new(),
-        };
+        let mut stack = Roots::default();
 
-        for r in roots {
-            match module.exports.get(r).item {
+        // All exports are roots
+        for export in module.exports.iter() {
+            match export.item {
                 ExportItem::Function(f) => stack.push_func(f),
                 ExportItem::Table(t) => stack.push_table(t),
                 ExportItem::Memory(m) => stack.push_memory(m),
                 ExportItem::Global(g) => stack.push_global(g),
-            }
+            };
         }
+
+        // The start function is an implicit root as well
         if let Some(f) = module.start {
             stack.push_func(f);
         }
@@ -85,13 +137,19 @@ impl Used {
             }
         }
 
+        // And finally ask custom sections for their roots
+        for (_id, section) in module.customs.iter() {
+            section.add_gc_roots(&mut stack);
+        }
+
         // Iteratively visit all items until our stack is empty
-        while stack.functions.len() > 0
+        while stack.funcs.len() > 0
             || stack.tables.len() > 0
             || stack.memories.len() > 0
             || stack.globals.len() > 0
+            || stack.datas.len() > 0
         {
-            while let Some(f) = stack.functions.pop() {
+            while let Some(f) = stack.funcs.pop() {
                 let func = module.funcs.get(f);
                 stack.used.types.insert(func.ty());
 
@@ -151,61 +209,15 @@ impl Used {
             }
         }
 
-        used
+        stack.used
     }
 }
 
-struct UsedStack<'a> {
-    used: &'a mut Used,
-    functions: Vec<FunctionId>,
-    tables: Vec<TableId>,
-    memories: Vec<MemoryId>,
-    globals: Vec<GlobalId>,
-    datas: Vec<DataId>,
+struct UsedVisitor<'a> {
+    stack: &'a mut Roots,
 }
 
-impl UsedStack<'_> {
-    fn push_func(&mut self, f: FunctionId) {
-        log::trace!("function is used: {:?}", f);
-        if self.used.funcs.insert(f) {
-            self.functions.push(f);
-        }
-    }
-
-    fn push_table(&mut self, f: TableId) {
-        log::trace!("table is used: {:?}", f);
-        if self.used.tables.insert(f) {
-            self.tables.push(f);
-        }
-    }
-
-    fn push_global(&mut self, f: GlobalId) {
-        log::trace!("global is used: {:?}", f);
-        if self.used.globals.insert(f) {
-            self.globals.push(f);
-        }
-    }
-
-    fn push_memory(&mut self, f: MemoryId) {
-        log::trace!("memory is used: {:?}", f);
-        if self.used.memories.insert(f) {
-            self.memories.push(f);
-        }
-    }
-
-    fn push_data(&mut self, d: DataId) {
-        log::trace!("data is used: {:?}", d);
-        if self.used.data.insert(d) {
-            self.datas.push(d);
-        }
-    }
-}
-
-struct UsedVisitor<'a, 'b> {
-    stack: &'a mut UsedStack<'b>,
-}
-
-impl<'expr> Visitor<'expr> for UsedVisitor<'_, '_> {
+impl<'expr> Visitor<'expr> for UsedVisitor<'_> {
     fn visit_function_id(&mut self, &func: &FunctionId) {
         self.stack.push_func(func);
     }

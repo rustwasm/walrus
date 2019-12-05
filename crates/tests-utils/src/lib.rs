@@ -1,7 +1,7 @@
 use anyhow::{bail, Context};
 use std::ffi::OsStr;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::{Command, Stdio};
 use std::sync::Once;
 
@@ -22,7 +22,7 @@ pub const FEATURES: &[&str] = &[
 
 fn require_tool(tool: &str, repo: &str) {
     let diagnostic = format!("Could not spawn {}; do you have {} installed?", tool, repo);
-    let status = Command::new("wat2wasm")
+    let status = Command::new(tool)
         .arg("--help")
         .stdout(Stdio::null())
         .stderr(Stdio::null())
@@ -31,69 +31,8 @@ fn require_tool(tool: &str, repo: &str) {
     assert!(status.success(), "{}", diagnostic)
 }
 
-fn require_wat2wasm() {
-    require_tool("wat2wasm", "https://github.com/WebAssembly/wabt");
-}
-
-/// Compile the `.wat` file at the given path into a `.wasm`.
-pub fn wat2wasm(path: &Path, extra_args: &[&str]) -> Result<Vec<u8>> {
-    static CHECK: Once = Once::new();
-    CHECK.call_once(require_wat2wasm);
-
-    let file = tempfile::NamedTempFile::new().context("could not create named temp file")?;
-
-    let mut wasm = PathBuf::from(path);
-    wasm.set_extension("wasm");
-
-    let mut cmd = Command::new("wat2wasm");
-    cmd.arg(path)
-        .args(FEATURES)
-        .arg("--debug-names")
-        .arg("-o")
-        .arg(file.path())
-        .args(extra_args);
-    println!("running: {:?}", cmd);
-    let output = cmd.output().context("could not spawn wat2wasm")?;
-
-    if !output.status.success() {
-        bail!(
-            "wat2wasm exited with status {:?}\n\nstderr = '''\n{}\n'''",
-            output.status,
-            String::from_utf8_lossy(&output.stderr)
-        );
-    }
-
-    let buf = fs::read(file.path())?;
-    Ok(buf)
-}
-
-fn require_wasm2wat() {
-    require_tool("wasm2wat", "https://github.com/WebAssembly/wabt");
-}
-
-/// Disassemble the `.wasm` file at the given path into a `.wat`.
-pub fn wasm2wat(path: &Path) -> Result<String> {
-    static CHECK: Once = Once::new();
-    CHECK.call_once(require_wasm2wat);
-
-    let mut cmd = Command::new("wasm2wat");
-    cmd.arg(path);
-    cmd.args(FEATURES);
-    println!("running: {:?}", cmd);
-    let output = cmd.output().context("could not run wasm2wat")?;
-    if !output.status.success() {
-        bail!(
-            "wasm2wat exited with status {:?}\n\nstderr = '''\n{}\n'''",
-            output.status,
-            String::from_utf8_lossy(&output.stderr)
-        );
-    }
-
-    Ok(String::from_utf8_lossy(&output.stdout).into_owned())
-}
-
 fn require_wasm_interp() {
-    require_tool("wasm-insterp", "https://github.com/WebAssembly/wabt");
+    require_tool("wasm-interp", "https://github.com/WebAssembly/wabt");
 }
 
 /// Run `wasm-interp` on the given wat file.

@@ -1195,7 +1195,7 @@ fn validate_instruction<'context>(
             ctx.alloc_instr(RefIsNull {}, loc);
             ctx.push_operand(Some(I32));
         }
-        Operator::RefFunc { function_index }=> {
+        Operator::RefFunc { function_index } => {
             let func = ctx
                 .indices
                 .get_func(function_index)

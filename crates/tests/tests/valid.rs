@@ -8,7 +8,7 @@ fn run(wat: &Path) -> Result<(), anyhow::Error> {
         env_logger::init();
     });
 
-    let wasm = walrus_tests_utils::wat2wasm(wat, &[])?;
+    let wasm = wat::parse_file(wat)?;
 
     // NB: reading the module will do the validation.
     let module = walrus::Module::from_buffer(&wasm)?;

@@ -10,12 +10,14 @@ walkdir = "2.2.9"
 
 [dev-dependencies]
 anyhow = "1.0"
+env_logger = "0.7.0"
+serde = { version = "1.0.99", features = ['derive'] }
+serde_json = { version = "1.0.40", features = ['preserve_order'] }
+tempfile = "3.1.0"
 walrus = { path = "../.." }
 walrus-tests-utils = { path = "../tests-utils" }
-tempfile = "3.1.0"
-serde_json = { version = "1.0.40", features = ['preserve_order'] }
-serde = { version = "1.0.99", features = ['derive'] }
-env_logger = "0.7.0"
+wasmprinter = "0.2"
+wat = "1.0"
 
 [features]
 parallel = ['walrus/parallel']

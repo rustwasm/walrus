@@ -554,27 +554,27 @@
     (func $i8x16.replace_lane (type 11) (param v128 i32) (result v128)
       local.get 0
       local.get 1
-      i8x16.replace_lane 2 )
+      i8x16.replace_lane 2)
     (func $i16x8.replace_lane (type 11) (param v128 i32) (result v128)
       local.get 0
       local.get 1
-      i16x8.replace_lane 2 )
+      i16x8.replace_lane 2)
     (func $i32x4.replace_lane (type 11) (param v128 i32) (result v128)
       local.get 0
       local.get 1
-      i32x4.replace_lane 2 )
+      i32x4.replace_lane 2)
     (func $i64x2.replace_lane (type 12) (param v128 i64) (result v128)
       local.get 0
       local.get 1
-      i64x2.replace_lane 0 )
+      i64x2.replace_lane 0)
     (func $f32x4.replace_lane (type 13) (param v128 f32) (result v128)
       local.get 0
       local.get 1
-      f32x4.replace_lane 2 )
+      f32x4.replace_lane 2)
     (func $f64x2.replace_lane (type 14) (param v128 f64) (result v128)
       local.get 0
       local.get 1
-      f64x2.replace_lane 0 )
+      f64x2.replace_lane 0)
     (func $i8x16.eq (type 15) (param v128 v128) (result v128)
       local.get 0
       local.get 1
@@ -915,43 +915,43 @@
       i8x16.splat)
     (func $i8x16.extract_lane_s (type 6) (param v128) (result i32)
       local.get 0
-      i8x16.extract_lane_s 1 )
+      i8x16.extract_lane_s 1)
     (func $i8x16.extract_lane_u (type 6) (param v128) (result i32)
       local.get 0
-      i8x16.extract_lane_u 2 )
+      i8x16.extract_lane_u 2)
     (func $i16x8.splat (type 1) (param i32) (result v128)
       local.get 0
       i16x8.splat)
     (func $i16x8.extract_lane_s (type 6) (param v128) (result i32)
       local.get 0
-      i16x8.extract_lane_s 1 )
+      i16x8.extract_lane_s 1)
     (func $i16x8.extract_lane_u (type 6) (param v128) (result i32)
       local.get 0
-      i16x8.extract_lane_u 2 )
+      i16x8.extract_lane_u 2)
     (func $i32x4.splat (type 1) (param i32) (result v128)
       local.get 0
       i32x4.splat)
     (func $i32x4.extract_lane (type 6) (param v128) (result i32)
       local.get 0
-      i32x4.extract_lane 1 )
+      i32x4.extract_lane 1)
     (func $i64x2.splat (type 3) (param i64) (result v128)
       local.get 0
       i64x2.splat)
     (func $i64x2.extract_lane (type 7) (param v128) (result i64)
       local.get 0
-      i64x2.extract_lane 1 )
+      i64x2.extract_lane 1)
     (func $f32x4.splat (type 4) (param f32) (result v128)
       local.get 0
       f32x4.splat)
     (func $f32x4.extract_lane (type 8) (param v128) (result f32)
       local.get 0
-      f32x4.extract_lane 1 )
+      f32x4.extract_lane 1)
     (func $f64x2.splat (type 5) (param f64) (result v128)
       local.get 0
       f64x2.splat)
     (func $f64x2.extract_lane (type 9) (param v128) (result f64)
       local.get 0
-      f64x2.extract_lane 1 )
+      f64x2.extract_lane 1)
     (func $v128.not (type 10) (param v128) (result v128)
       local.get 0
       v128.not)

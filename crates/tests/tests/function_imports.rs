@@ -1,5 +1,4 @@
 use std::path::Path;
-use walrus_tests_utils::wat2wasm;
 
 fn run(wat_path: &Path) -> Result<(), anyhow::Error> {
     static INIT_LOGS: std::sync::Once = std::sync::Once::new();
@@ -7,7 +6,7 @@ fn run(wat_path: &Path) -> Result<(), anyhow::Error> {
         env_logger::init();
     });
 
-    let wasm = wat2wasm(wat_path, &[])?;
+    let wasm = wat::parse_file(wat_path)?;
     let module = walrus::Module::from_buffer(&wasm)?;
 
     assert!(module.imports.find("doggo", "husky").is_some());

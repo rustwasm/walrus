@@ -5,7 +5,6 @@
   <strong>Walrus is a WebAssembly transformation library</strong>
 
   <p>
-    <a href="https://travis-ci.org/rustwasm/walrus"><img src="https://img.shields.io/travis/rustwasm/walrus.svg?style=flat-square" alt="Build Status" /></a>
     <a href="https://crates.io/crates/walrus"><img src="https://img.shields.io/crates/v/walrus.svg?style=flat-square" alt="Crates.io version" /></a>
     <a href="https://crates.io/crates/walrus"><img src="https://img.shields.io/crates/d/walrus.svg?style=flat-square" alt="Download" /></a>
     <a href="https://docs.rs/walrus"><img src="https://img.shields.io/badge/docs-latest-blue.svg?style=flat-square" alt="docs.rs docs" /></a>

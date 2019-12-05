@@ -1,6 +1,5 @@
 use std::env;
 use std::path::Path;
-use walrus_tests_utils::{wasm2wat, wat2wasm};
 
 fn run(wat_path: &Path) -> Result<(), anyhow::Error> {
     static INIT_LOGS: std::sync::Once = std::sync::Once::new();
@@ -8,7 +7,7 @@ fn run(wat_path: &Path) -> Result<(), anyhow::Error> {
         env_logger::init();
     });
 
-    let wasm = wat2wasm(wat_path, &[])?;
+    let wasm = wat::parse_file(wat_path)?;
     let mut module = walrus::Module::from_buffer(&wasm)?;
 
     if env::var("WALRUS_TESTS_DOT").is_ok() {
@@ -19,7 +18,7 @@ fn run(wat_path: &Path) -> Result<(), anyhow::Error> {
     walrus::passes::gc::run(&mut module);
     module.emit_wasm_file(&out_wasm_file)?;
 
-    let out_wat = wasm2wat(&out_wasm_file)?;
+    let out_wat = wasmprinter::print_file(&out_wasm_file)?;
     let checker = walrus_tests::FileCheck::from_file(wat_path);
     checker.check(&out_wat);
     Ok(())

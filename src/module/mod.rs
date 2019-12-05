@@ -26,7 +26,7 @@ pub use crate::module::data::{ActiveData, ActiveDataLocation, Data, DataId, Data
 pub use crate::module::elements::{Element, ElementId, ModuleElements};
 pub use crate::module::exports::{Export, ExportId, ExportItem, ModuleExports};
 pub use crate::module::functions::{Function, FunctionId, ModuleFunctions};
-pub use crate::module::functions::{FunctionKind, LocalFunction, ImportedFunction};
+pub use crate::module::functions::{FunctionKind, ImportedFunction, LocalFunction};
 pub use crate::module::globals::{Global, GlobalId, GlobalKind, ModuleGlobals};
 pub use crate::module::imports::{Import, ImportId, ImportKind, ModuleImports};
 pub use crate::module::locals::ModuleLocals;

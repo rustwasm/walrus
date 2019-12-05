@@ -10,7 +10,7 @@ use std::fs;
 use std::marker::PhantomData;
 use std::path::Path;
 use std::time;
-use walrus_tests_utils::{wasm_interp, wat2wasm};
+use walrus_tests_utils::wasm_interp;
 
 /// `Ok(T)` or a `Err(anyhow::Error)`
 pub type Result<T> = std::result::Result<T, anyhow::Error>;
@@ -95,8 +95,7 @@ where
     }
 
     fn wat2wasm(&self, wat: &str) -> Result<Vec<u8>> {
-        fs::write(self.scratch.path(), wat).context("failed to write to scratch file")?;
-        wat2wasm(self.scratch.path(), &[])
+        Ok(wat::parse_str(wat)?)
     }
 
     fn interp(&self, wasm: &[u8]) -> Result<String> {
@@ -416,22 +415,18 @@ impl TestCaseGenerator for WasmOptTtf {
                     }
                 };
 
-            if {
-                // Only generate programs that wat2wasm can handle.
-                let tmp = tempfile::NamedTempFile::new().unwrap();
-                fs::write(tmp.path(), &wat).unwrap();
-                wat2wasm(tmp.path(), &[]).is_err()
-            } {
-                eprintln!(
-                    "Warning: `wasm-opt -fff` generated wat that wat2wasm cannot handle; \
-                     skipping. wat =\n{}",
-                    String::from_utf8_lossy(&wat)
-                );
-                last_wat = Some(wat);
-                continue;
+            // Only generate programs that wat2wasm can handle.
+            if let Ok(bytes) = wat::parse_bytes(&wat) {
+                if wasmparser::validate(&bytes, None).is_ok() {
+                    return String::from_utf8(wat).unwrap();
+                }
             }
-
-            return String::from_utf8(wat).unwrap();
+            eprintln!(
+                "Warning: `wasm-opt -fff` generated wat that wat2wasm cannot handle; \
+                 skipping. wat =\n{}",
+                String::from_utf8_lossy(&wat)
+            );
+            last_wat = Some(wat);
         }
     }
 }

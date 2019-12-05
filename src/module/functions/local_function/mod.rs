@@ -1415,7 +1415,7 @@ fn validate_instruction<'context>(
 
         op @ Operator::TableInit { .. }
         | op @ Operator::ElemDrop { .. }
-        | op @ Operator::TableCopy {.. } => {
+        | op @ Operator::TableCopy { .. } => {
             bail!("Have not implemented support for opcode yet: {:?}", op)
         }
     }

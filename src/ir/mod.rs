@@ -540,13 +540,13 @@ pub enum Instr {
         indices: ShuffleIndices,
     },
 
-    /// `iaaxbb.load_splat`
-    LoadSplat {
+    /// Various instructions to load a simd vector from memory
+    LoadSimd {
         /// The memory we're loading from.
         memory: MemoryId,
         /// The size of load this is performing
         #[walrus(skip_visit)]
-        kind: LoadSplatKind,
+        kind: LoadSimdKind,
         /// The alignment and offset of this memory load
         #[walrus(skip_visit)]
         arg: MemArg,
@@ -757,6 +757,7 @@ pub enum BinaryOp {
     V128And,
     V128Or,
     V128Xor,
+    V128AndNot,
 
     I8x16Shl,
     I8x16ShrS,
@@ -789,6 +790,7 @@ pub enum BinaryOp {
     I64x2ShrU,
     I64x2Add,
     I64x2Sub,
+    I64x2Mul,
 
     F32x4Add,
     F32x4Sub,
@@ -802,6 +804,13 @@ pub enum BinaryOp {
     F64x2Div,
     F64x2Min,
     F64x2Max,
+
+    I8x16NarrowI16x8S,
+    I8x16NarrowI16x8U,
+    I16x8NarrowI32x4S,
+    I16x8NarrowI32x4U,
+    I8x16RoundingAverageU,
+    I16x8RoundingAverageU,
 }
 
 /// Possible unary operations in wasm
@@ -922,6 +931,15 @@ pub enum UnaryOp {
     I64TruncUSatF32,
     I64TruncSSatF64,
     I64TruncUSatF64,
+
+    I16x8WidenLowI8x16S,
+    I16x8WidenLowI8x16U,
+    I16x8WidenHighI8x16S,
+    I16x8WidenHighI8x16U,
+    I32x4WidenLowI16x8S,
+    I32x4WidenLowI16x8U,
+    I32x4WidenHighI16x8S,
+    I32x4WidenHighI16x8U,
 }
 
 /// The different kinds of load instructions that are part of a `Load` IR node
@@ -944,14 +962,20 @@ pub enum LoadKind {
     I64_32 { kind: ExtendedLoad },
 }
 
-/// The different kinds of load instructions that are part of a `LoadSplat` IR node
+/// The different kinds of load instructions that are part of a `LoadSimd` IR node
 #[derive(Debug, Copy, Clone)]
 #[allow(missing_docs)]
-pub enum LoadSplatKind {
-    I8,
-    I16,
-    I32,
-    I64,
+pub enum LoadSimdKind {
+    Splat8,
+    Splat16,
+    Splat32,
+    Splat64,
+    I16x8Load8x8S,
+    I16x8Load8x8U,
+    I32x4Load16x4S,
+    I32x4Load16x4U,
+    I64x2Load32x2S,
+    I64x2Load32x2U,
 }
 
 /// The kinds of extended loads which can happen
@@ -1146,7 +1170,7 @@ impl Instr {
             | Instr::V128Bitselect(..)
             | Instr::V128Swizzle(..)
             | Instr::V128Shuffle(..)
-            | Instr::LoadSplat(..)
+            | Instr::LoadSimd(..)
             | Instr::AtomicFence(..)
             | Instr::Drop(..) => false,
         }

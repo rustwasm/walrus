@@ -374,11 +374,11 @@ fn validate_instruction<'context>(
         Ok(())
     };
 
-    let load_splat = |ctx: &mut ValidationContext, arg, kind| -> Result<()> {
+    let load_simd = |ctx: &mut ValidationContext, arg, kind| -> Result<()> {
         ctx.pop_operand_expected(Some(I32))?;
         let memory = ctx.indices.get_memory(0)?;
         let arg = mem_arg(&arg)?;
-        ctx.alloc_instr(LoadSplat { memory, arg, kind }, loc);
+        ctx.alloc_instr(LoadSimd { memory, arg, kind }, loc);
         ctx.push_operand(Some(V128));
         Ok(())
     };
@@ -1312,6 +1312,7 @@ fn validate_instruction<'context>(
 
         Operator::V128Not => unop(ctx, V128, UnaryOp::V128Not)?,
         Operator::V128And => binop(ctx, V128, BinaryOp::V128And)?,
+        Operator::V128AndNot => binop(ctx, V128, BinaryOp::V128AndNot)?,
         Operator::V128Or => binop(ctx, V128, BinaryOp::V128Or)?,
         Operator::V128Xor => binop(ctx, V128, BinaryOp::V128Xor)?,
 
@@ -1369,6 +1370,7 @@ fn validate_instruction<'context>(
         Operator::I64x2ShrU => two_ops(ctx, V128, I32, V128, BinaryOp::I64x2ShrU)?,
         Operator::I64x2Add => binop(ctx, V128, BinaryOp::I64x2Add)?,
         Operator::I64x2Sub => binop(ctx, V128, BinaryOp::I64x2Sub)?,
+        Operator::I64x2Mul => binop(ctx, V128, BinaryOp::I64x2Mul)?,
 
         Operator::F32x4Abs => unop(ctx, V128, UnaryOp::F32x4Abs)?,
         Operator::F32x4Neg => unop(ctx, V128, UnaryOp::F32x4Neg)?,
@@ -1408,10 +1410,39 @@ fn validate_instruction<'context>(
         Operator::I64TruncSatF64S => one_op(ctx, F64, I64, UnaryOp::I64TruncSSatF64)?,
         Operator::I64TruncSatF64U => one_op(ctx, F64, I64, UnaryOp::I64TruncUSatF64)?,
 
-        Operator::V8x16LoadSplat { memarg } => load_splat(ctx, memarg, LoadSplatKind::I8)?,
-        Operator::V16x8LoadSplat { memarg } => load_splat(ctx, memarg, LoadSplatKind::I16)?,
-        Operator::V32x4LoadSplat { memarg } => load_splat(ctx, memarg, LoadSplatKind::I32)?,
-        Operator::V64x2LoadSplat { memarg } => load_splat(ctx, memarg, LoadSplatKind::I64)?,
+        Operator::V8x16LoadSplat { memarg } => load_simd(ctx, memarg, LoadSimdKind::Splat8)?,
+        Operator::V16x8LoadSplat { memarg } => load_simd(ctx, memarg, LoadSimdKind::Splat16)?,
+        Operator::V32x4LoadSplat { memarg } => load_simd(ctx, memarg, LoadSimdKind::Splat32)?,
+        Operator::V64x2LoadSplat { memarg } => load_simd(ctx, memarg, LoadSimdKind::Splat64)?,
+
+        Operator::I8x16NarrowI16x8S => binop(ctx, V128, BinaryOp::I8x16NarrowI16x8S)?,
+        Operator::I8x16NarrowI16x8U => binop(ctx, V128, BinaryOp::I8x16NarrowI16x8U)?,
+        Operator::I16x8NarrowI32x4S => binop(ctx, V128, BinaryOp::I16x8NarrowI32x4S)?,
+        Operator::I16x8NarrowI32x4U => binop(ctx, V128, BinaryOp::I16x8NarrowI32x4U)?,
+        Operator::I16x8WidenLowI8x16S => unop(ctx, V128, UnaryOp::I16x8WidenLowI8x16S)?,
+        Operator::I16x8WidenLowI8x16U => unop(ctx, V128, UnaryOp::I16x8WidenLowI8x16U)?,
+        Operator::I16x8WidenHighI8x16S => unop(ctx, V128, UnaryOp::I16x8WidenHighI8x16S)?,
+        Operator::I16x8WidenHighI8x16U => unop(ctx, V128, UnaryOp::I16x8WidenHighI8x16U)?,
+        Operator::I32x4WidenLowI16x8S => unop(ctx, V128, UnaryOp::I32x4WidenLowI16x8S)?,
+        Operator::I32x4WidenLowI16x8U => unop(ctx, V128, UnaryOp::I32x4WidenLowI16x8U)?,
+        Operator::I32x4WidenHighI16x8S => unop(ctx, V128, UnaryOp::I32x4WidenHighI16x8S)?,
+        Operator::I32x4WidenHighI16x8U => unop(ctx, V128, UnaryOp::I32x4WidenHighI16x8U)?,
+        Operator::I16x8Load8x8S { memarg } => load_simd(ctx, memarg, LoadSimdKind::I16x8Load8x8S)?,
+        Operator::I16x8Load8x8U { memarg } => load_simd(ctx, memarg, LoadSimdKind::I16x8Load8x8U)?,
+        Operator::I32x4Load16x4S { memarg } => {
+            load_simd(ctx, memarg, LoadSimdKind::I32x4Load16x4S)?
+        }
+        Operator::I32x4Load16x4U { memarg } => {
+            load_simd(ctx, memarg, LoadSimdKind::I32x4Load16x4U)?
+        }
+        Operator::I64x2Load32x2S { memarg } => {
+            load_simd(ctx, memarg, LoadSimdKind::I64x2Load32x2S)?
+        }
+        Operator::I64x2Load32x2U { memarg } => {
+            load_simd(ctx, memarg, LoadSimdKind::I64x2Load32x2U)?
+        }
+        Operator::I8x16RoundingAverageU => binop(ctx, V128, BinaryOp::I8x16RoundingAverageU)?,
+        Operator::I16x8RoundingAverageU => binop(ctx, V128, BinaryOp::I16x8RoundingAverageU)?,
 
         op @ Operator::TableInit { .. }
         | op @ Operator::ElemDrop { .. }

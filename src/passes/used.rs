@@ -174,7 +174,9 @@ impl Used {
                         for (global, list) in list.relative_elements.iter() {
                             stack.push_global(*global);
                             for id in list {
-                                stack.push_func(*id);
+                                if let Some(id) = *id {
+                                    stack.push_func(id);
+                                }
                             }
                         }
                     }

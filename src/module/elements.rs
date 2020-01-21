@@ -76,13 +76,12 @@ impl Module {
             let segment = segment?;
 
             match segment.kind {
-                wasmparser::ElementKind::Passive { .. } => {
+                wasmparser::ElementKind::Passive { .. } | wasmparser::ElementKind::Declared => {
                     bail!("passive element segments not supported yet");
                 }
                 wasmparser::ElementKind::Active {
                     table_index,
                     init_expr,
-                    items,
                 } => {
                     let table = ids.get_table(table_index)?;
                     let table = match &mut self.tables.get_mut(table).kind {
@@ -94,10 +93,17 @@ impl Module {
 
                     let offset = InitExpr::eval(&init_expr, ids)
                         .with_context(|| format!("in segment {}", i))?;
-                    let functions = items.get_items_reader()?.into_iter().map(|func| {
-                        let func = func?;
-                        ids.get_func(func)
-                    });
+                    let functions =
+                        segment
+                            .items
+                            .get_items_reader()?
+                            .into_iter()
+                            .map(|e| -> Result<_> {
+                                Ok(match e? {
+                                    wasmparser::ElementItem::Func(f) => Some(ids.get_func(f)?),
+                                    wasmparser::ElementItem::Null => None,
+                                })
+                            });
 
                     match offset {
                         InitExpr::Value(Value::I32(n)) => {
@@ -106,7 +112,7 @@ impl Module {
                                 while i + offset + 1 > table.elements.len() {
                                     table.elements.push(None);
                                 }
-                                table.elements[i + offset] = Some(id?);
+                                table.elements[i + offset] = id?;
                             }
                         }
                         InitExpr::Global(global) if self.globals.get(global).ty == ValType::I32 => {
@@ -181,11 +187,12 @@ impl Emit for ModuleElements {
         //
         // Note that much of this is in accordance with the
         // currently-in-progress bulk-memory proposal for WebAssembly.
-        let active_table_header = |cx: &mut EmitContext, index: u32| {
+        let active_table_header = |cx: &mut EmitContext, index: u32, exprs: bool| {
+            let exprs_bit = if exprs { 0x4 } else { 0x0 };
             if index == 0 {
-                cx.encoder.byte(0x00);
+                cx.encoder.byte(0x00 | exprs_bit);
             } else {
-                cx.encoder.byte(0x02);
+                cx.encoder.byte(0x02 | exprs_bit);
                 cx.encoder.u32(index);
             }
         };
@@ -194,7 +201,7 @@ impl Emit for ModuleElements {
         // constant offsets
         for (&id, table, offset, len) in chunks {
             let table_index = cx.indices.get_table_index(id);
-            active_table_header(&mut cx, table_index);
+            active_table_header(&mut cx, table_index, false);
             InitExpr::Value(Value::I32(offset as i32)).emit(&mut cx);
             cx.encoder.usize(len);
             for item in table.elements[offset..][..len].iter() {
@@ -208,12 +215,27 @@ impl Emit for ModuleElements {
         for (id, table) in active.iter() {
             let table_index = cx.indices.get_table_index(*id);
             for (global, list) in table.relative_elements.iter() {
-                active_table_header(&mut cx, table_index);
+                let exprs = list.iter().any(|i| i.is_none());
+                active_table_header(&mut cx, table_index, exprs);
                 InitExpr::Global(*global).emit(&mut cx);
                 cx.encoder.usize(list.len());
                 for func in list {
-                    let index = cx.indices.get_func_index(*func);
-                    cx.encoder.u32(index);
+                    match func {
+                        Some(id) => {
+                            let index = cx.indices.get_func_index(*id);
+                            if exprs {
+                                cx.encoder.byte(0xd2);
+                                cx.encoder.u32(index);
+                                cx.encoder.byte(0x0b);
+                            } else {
+                                cx.encoder.u32(index);
+                            }
+                        }
+                        None => {
+                            cx.encoder.byte(0xd1);
+                            cx.encoder.byte(0x0b);
+                        }
+                    }
                 }
             }
         }

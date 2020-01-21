@@ -530,8 +530,17 @@ impl<'instr> Visitor<'instr> for Emit<'_, '_> {
                 }
             }
 
-            Select(_) => {
-                self.encoder.byte(0x1b); // select
+            Select(e) => {
+                match e.ty {
+                    Some(ty) => {
+                        self.encoder.byte(0x1c);
+                        self.encoder.byte(0x01);
+                        ty.emit(self.encoder);
+                    }
+                    None => {
+                        self.encoder.byte(0x1b); // select
+                    }
+                }
             }
 
             Unreachable(_) => {

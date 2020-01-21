@@ -4,7 +4,7 @@ pub use anyhow::Error;
 use std::fmt;
 
 /// Either `Ok(T)` or `Err(failure::Error)`.
-pub type Result<T> = ::std::result::Result<T, anyhow::Error>;
+pub use anyhow::Result;
 
 /// A leaf wasm error type.
 ///

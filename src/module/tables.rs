@@ -64,7 +64,7 @@ pub struct FunctionTable {
 
     /// Elements of this table which are relative to a global, typically
     /// imported.
-    pub relative_elements: Vec<(GlobalId, Vec<FunctionId>)>,
+    pub relative_elements: Vec<(GlobalId, Vec<Option<FunctionId>>)>,
 }
 
 /// Components of a table of `anyref`

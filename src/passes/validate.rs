@@ -236,4 +236,10 @@ impl<'a> Visitor<'a> for Validate<'a> {
         let width = if e.sixty_four { 8 } else { 4 };
         self.require_atomic(e.memory, &e.arg, width);
     }
+
+    fn visit_global_set(&mut self, e: &GlobalSet) {
+        if !self.module.globals.get(e.global).mutable {
+            self.err("cannot mutate immutable global");
+        }
+    }
 }

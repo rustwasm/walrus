@@ -320,7 +320,12 @@ pub enum Instr {
     },
 
     /// `select`
-    Select {},
+    Select {
+        /// Optionally listed type that the `select` instruction is expected to
+        /// produce, used in subtyping relations with the gc proposal.
+        #[walrus(skip_visit)]
+        ty: Option<ValType>,
+    },
 
     /// `unreachable`
     Unreachable {},

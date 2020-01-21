@@ -168,6 +168,9 @@ impl Module {
                 }
                 wasmparser::SectionCode::Start => {
                     let idx = section.get_start_section_content()?;
+                    if ret.start.is_some() {
+                        bail!("multiple start sections found");
+                    }
                     ret.start = Some(indices.get_func(idx)?);
                 }
                 wasmparser::SectionCode::Function => {

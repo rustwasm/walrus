@@ -38,6 +38,11 @@ fn run(wast: &Path) -> Result<(), anyhow::Error> {
 
         // TODO: should get threads working
         Some("threads") => return Ok(()),
+        // TODO: should get simd working
+        Some("simd") => return Ok(()),
+        // TODO: should get tail-call working
+        Some("tail-call") => return Ok(()),
+
         // Some("threads") => &["--enable-threads"],
         Some(other) => panic!("unknown wasm proposal: {}", other),
     };

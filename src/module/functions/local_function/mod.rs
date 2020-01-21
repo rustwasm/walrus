@@ -608,7 +608,15 @@ fn validate_instruction<'context>(
             ctx.pop_operand_expected(Some(I32))?;
             let t1 = ctx.pop_operand()?;
             let t2 = ctx.pop_operand_expected(t1)?;
-            ctx.alloc_instr(Select {}, loc);
+            ctx.alloc_instr(Select { ty: None }, loc);
+            ctx.push_operand(t2);
+        }
+        Operator::TypedSelect { ty } => {
+            let ty = ValType::parse(&ty)?;
+            ctx.pop_operand_expected(Some(ty))?;
+            let t1 = ctx.pop_operand()?;
+            let t2 = ctx.pop_operand_expected(t1)?;
+            ctx.alloc_instr(Select { ty: Some(ty) }, loc);
             ctx.push_operand(t2);
         }
         Operator::Return => {

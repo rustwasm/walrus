@@ -839,6 +839,19 @@ pub enum BinaryOp {
     I16x8NarrowI32x4U,
     I8x16RoundingAverageU,
     I16x8RoundingAverageU,
+
+    I8x16MinS,
+    I8x16MinU,
+    I8x16MaxS,
+    I8x16MaxU,
+    I16x8MinS,
+    I16x8MinU,
+    I16x8MaxS,
+    I16x8MaxU,
+    I32x4MinS,
+    I32x4MinU,
+    I32x4MaxS,
+    I32x4MaxU,
 }
 
 /// Possible unary operations in wasm

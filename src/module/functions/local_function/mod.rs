@@ -1460,6 +1460,19 @@ fn validate_instruction<'context>(
         Operator::I8x16RoundingAverageU => binop(ctx, V128, BinaryOp::I8x16RoundingAverageU)?,
         Operator::I16x8RoundingAverageU => binop(ctx, V128, BinaryOp::I16x8RoundingAverageU)?,
 
+        Operator::I8x16MinS => binop(ctx, V128, BinaryOp::I8x16MinS)?,
+        Operator::I8x16MinU => binop(ctx, V128, BinaryOp::I8x16MinU)?,
+        Operator::I8x16MaxS => binop(ctx, V128, BinaryOp::I8x16MaxS)?,
+        Operator::I8x16MaxU => binop(ctx, V128, BinaryOp::I8x16MaxU)?,
+        Operator::I16x8MinS => binop(ctx, V128, BinaryOp::I16x8MinS)?,
+        Operator::I16x8MinU => binop(ctx, V128, BinaryOp::I16x8MinU)?,
+        Operator::I16x8MaxS => binop(ctx, V128, BinaryOp::I16x8MaxS)?,
+        Operator::I16x8MaxU => binop(ctx, V128, BinaryOp::I16x8MaxU)?,
+        Operator::I32x4MinS => binop(ctx, V128, BinaryOp::I32x4MinS)?,
+        Operator::I32x4MinU => binop(ctx, V128, BinaryOp::I32x4MinU)?,
+        Operator::I32x4MaxS => binop(ctx, V128, BinaryOp::I32x4MaxS)?,
+        Operator::I32x4MaxU => binop(ctx, V128, BinaryOp::I32x4MaxU)?,
+
         Operator::TableCopy {
             src_table,
             dst_table,

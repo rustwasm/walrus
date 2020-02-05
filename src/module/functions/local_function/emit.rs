@@ -373,6 +373,19 @@ impl<'instr> Visitor<'instr> for Emit<'_, '_> {
 
                     I8x16RoundingAverageU => self.simd(0xd9),
                     I16x8RoundingAverageU => self.simd(0xda),
+
+                    I8x16MinS => self.simd(0x5e),
+                    I8x16MinU => self.simd(0x5f),
+                    I8x16MaxS => self.simd(0x60),
+                    I8x16MaxU => self.simd(0x61),
+                    I16x8MinS => self.simd(0x6f),
+                    I16x8MinU => self.simd(0x70),
+                    I16x8MaxS => self.simd(0x71),
+                    I16x8MaxU => self.simd(0x72),
+                    I32x4MinS => self.simd(0x80),
+                    I32x4MinU => self.simd(0x81),
+                    I32x4MaxS => self.simd(0x82),
+                    I32x4MaxU => self.simd(0x83),
                 }
             }
 

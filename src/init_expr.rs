@@ -3,7 +3,7 @@
 use crate::emit::{Emit, EmitContext};
 use crate::ir::Value;
 use crate::parse::IndicesToIds;
-use crate::{GlobalId, Result};
+use crate::{FunctionId, GlobalId, Result};
 use anyhow::bail;
 
 /// A constant which is produced in WebAssembly, typically used in global
@@ -14,6 +14,10 @@ pub enum InitExpr {
     Value(Value),
     /// A constant value referenced by the global specified
     Global(GlobalId),
+    /// A null reference
+    RefNull,
+    /// A function initializer
+    RefFunc(FunctionId),
 }
 
 impl InitExpr {
@@ -27,6 +31,8 @@ impl InitExpr {
             F64Const { value } => InitExpr::Value(Value::F64(f64::from_bits(value.bits()))),
             V128Const { value } => InitExpr::Value(Value::V128(v128_to_u128(&value))),
             GlobalGet { global_index } => InitExpr::Global(ids.get_global(global_index)?),
+            RefNull => InitExpr::RefNull,
+            RefFunc { function_index } => InitExpr::RefFunc(ids.get_func(function_index)?),
             _ => bail!("invalid constant expression"),
         };
         match reader.read()? {
@@ -46,6 +52,11 @@ impl Emit for InitExpr {
                 let idx = cx.indices.get_global_index(id);
                 cx.encoder.byte(0x23); // global.get
                 cx.encoder.u32(idx);
+            }
+            InitExpr::RefNull => cx.encoder.byte(0xd0), // ref.null
+            InitExpr::RefFunc(id) => {
+                cx.encoder.byte(0xd2); // ref.func
+                cx.encoder.u32(cx.indices.get_func_index(id));
             }
         }
         cx.encoder.byte(0x0b); // end

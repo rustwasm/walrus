@@ -822,6 +822,20 @@ impl<'instr> Visitor<'instr> for Emit<'_, '_> {
                 }
                 self.memarg(e.memory, &e.arg);
             }
+            TableInit(e) => {
+                self.encoder.raw(&[0xfc, 0x0c]);
+                self.encoder.u32(self.indices.get_element_index(e.elem));
+                self.encoder.u32(self.indices.get_table_index(e.table));
+            }
+            TableCopy(e) => {
+                self.encoder.raw(&[0xfc, 0x0e]);
+                self.encoder.u32(self.indices.get_table_index(e.src));
+                self.encoder.u32(self.indices.get_table_index(e.dst));
+            }
+            ElemDrop(e) => {
+                self.encoder.raw(&[0xfc, 0x0d]);
+                self.encoder.u32(self.indices.get_element_index(e.elem));
+            }
         }
     }
 }

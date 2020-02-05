@@ -23,6 +23,7 @@ pub use crate::module::custom::{
     UntypedCustomSectionId,
 };
 pub use crate::module::data::{ActiveData, ActiveDataLocation, Data, DataId, DataKind, ModuleData};
+pub use crate::module::elements::ElementKind;
 pub use crate::module::elements::{Element, ElementId, ModuleElements};
 pub use crate::module::exports::{Export, ExportId, ExportItem, ModuleExports};
 pub use crate::module::functions::{Function, FunctionId, ModuleFunctions};
@@ -32,8 +33,7 @@ pub use crate::module::imports::{Import, ImportId, ImportKind, ModuleImports};
 pub use crate::module::locals::ModuleLocals;
 pub use crate::module::memories::{Memory, MemoryId, ModuleMemories};
 pub use crate::module::producers::ModuleProducers;
-pub use crate::module::tables::FunctionTable;
-pub use crate::module::tables::{ModuleTables, Table, TableId, TableKind};
+pub use crate::module::tables::{ModuleTables, Table, TableId};
 pub use crate::module::types::ModuleTypes;
 use crate::parse::IndicesToIds;
 use anyhow::{bail, Context};

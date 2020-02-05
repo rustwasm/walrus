@@ -6,7 +6,7 @@
 use crate::ir::*;
 use crate::ValType;
 use crate::{Function, FunctionKind, InitExpr, Result};
-use crate::{Global, GlobalKind, Memory, MemoryId, Module, Table, TableKind};
+use crate::{Global, GlobalKind, Memory, MemoryId, Module, Table};
 use anyhow::{anyhow, bail, Context};
 use std::collections::HashSet;
 
@@ -90,15 +90,6 @@ fn validate_memory(m: &Memory) -> Result<()> {
 
 fn validate_table(t: &Table) -> Result<()> {
     validate_limits(t.initial, t.maximum, u32::max_value()).context("when validating a table")?;
-
-    // Ensure that the table element type is `anyfunc`. This does
-    // nothing, but if new wasm versions and future parity-wasm releases
-    // get support for new table types, this may need to actually do
-    // something.
-    match t.kind {
-        TableKind::Function(_) => {}
-        TableKind::Anyref(_) => {}
-    }
     Ok(())
 }
 
@@ -145,6 +136,16 @@ fn validate_global(module: &Module, global: &Global) -> Result<()> {
             }
             if other.ty != global.ty {
                 bail!("locally defined global does not match type of import");
+            }
+        }
+        GlobalKind::Local(InitExpr::RefNull) => {
+            if !ValType::Nullref.is_subtype_of(global.ty) {
+                bail!("invalid type on global");
+            }
+        }
+        GlobalKind::Local(InitExpr::RefFunc(_)) => {
+            if !ValType::Funcref.is_subtype_of(global.ty) {
+                bail!("invalid type on global");
             }
         }
     }

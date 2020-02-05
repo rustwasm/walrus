@@ -28,13 +28,8 @@ fn run(wast: &Path) -> Result<(), anyhow::Error> {
         Some("sign-extension-ops") => &["--enable-sign-extension"],
         Some("multi-value") => &["--enable-multi-value"],
         Some("nontrapping-float-to-int-conversions") => &["--enable-saturating-float-to-int"],
-
-        // Currently wabt doesn't have support for `ref.host` which is used in
-        // these tests.
-        Some("reference-types") => return Ok(()),
-
-        // Currently wabt has broken support for `ref.func` initializers
-        Some("bulk-memory-operations") => return Ok(()),
+        Some("reference-types") => &["--enable-reference-types", "--enable-bulk-memory"],
+        Some("bulk-memory-operations") => &["--enable-bulk-memory"],
 
         // TODO: should get threads working
         Some("threads") => return Ok(()),
@@ -76,8 +71,12 @@ fn run(wast: &Path) -> Result<(), anyhow::Error> {
         let path = tempdir.path().join(filename);
         match command["type"].as_str().unwrap() {
             "assert_invalid" | "assert_malformed" => {
-                if command["text"].as_str().unwrap() == "invalid result arity" {
-                    // These tests are valid with multi-value!
+                // Skip tests that are actually valid with various in-flight proposals
+                let text = command["text"].as_str().unwrap();
+                if text == "invalid result arity"
+                    || text == "multiple memories"
+                    || text == "multiple tables"
+                {
                     continue;
                 }
                 let wasm = fs::read(&path)?;
@@ -87,6 +86,14 @@ fn run(wast: &Path) -> Result<(), anyhow::Error> {
                     // but we implement it, so basically just skip those tests.
                     let message = command["text"].as_str().unwrap();
                     if message.contains("invalid result arity") {
+                        continue;
+                    }
+
+                    // MVP wasm considers this tests to fail, but
+                    // reference-types-enhanced wasm considers this test to
+                    // pass. We implement the reference-types semantics, so
+                    // let's go forward with that.
+                    if wast.ends_with("unreached-invalid.wast") && line == 539 {
                         continue;
                     }
                     panic!("wasm parsed when it shouldn't (line {})", line);

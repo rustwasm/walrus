@@ -9,7 +9,8 @@ pub use self::traversals::*;
 
 use crate::encode::Encoder;
 use crate::{
-    DataId, FunctionId, GlobalId, LocalFunction, MemoryId, ModuleTypes, TableId, TypeId, ValType,
+    DataId, ElementId, FunctionId, GlobalId, LocalFunction, MemoryId, ModuleTypes, TableId, TypeId,
+    ValType,
 };
 use id_arena::Id;
 use std::fmt;
@@ -555,6 +556,28 @@ pub enum Instr {
         /// The alignment and offset of this memory load
         #[walrus(skip_visit)]
         arg: MemArg,
+    },
+
+    /// `table.init`
+    TableInit {
+        /// The table we're copying into.
+        table: TableId,
+        /// The element we're getting items from.
+        elem: ElementId,
+    },
+
+    /// `elem.drop`
+    ElemDrop {
+        /// The elem segment to drop
+        elem: ElementId,
+    },
+
+    /// `table.copy`
+    TableCopy {
+        /// The source table
+        src: TableId,
+        /// The destination table
+        dst: TableId,
     },
 }
 
@@ -1177,6 +1200,9 @@ impl Instr {
             | Instr::V128Shuffle(..)
             | Instr::LoadSimd(..)
             | Instr::AtomicFence(..)
+            | Instr::TableInit(..)
+            | Instr::TableCopy(..)
+            | Instr::ElemDrop(..)
             | Instr::Drop(..) => false,
         }
     }

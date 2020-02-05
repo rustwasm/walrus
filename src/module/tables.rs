@@ -1,9 +1,10 @@
 //! Tables within a wasm module.
 
 use crate::emit::{Emit, EmitContext, Section};
+use crate::map::IdHashSet;
 use crate::parse::IndicesToIds;
 use crate::tombstone_arena::{Id, Tombstone, TombstoneArena};
-use crate::{FunctionId, GlobalId, ImportId, Module, Result, ValType};
+use crate::{Element, ImportId, Module, Result, ValType};
 use anyhow::bail;
 
 /// The id of a table.
@@ -17,61 +18,15 @@ pub struct Table {
     pub initial: u32,
     /// The maximum size of this table
     pub maximum: Option<u32>,
-    /// Which kind of table this is
-    pub kind: TableKind,
+    /// The type of the elements in this table
+    pub element_ty: ValType,
     /// Whether or not this table is imported, and if so what imports it.
     pub import: Option<ImportId>,
+    /// Active data segments that will be used to initialize this memory.
+    pub elem_segments: IdHashSet<Element>,
 }
 
 impl Tombstone for Table {}
-
-/// The kinds of tables that can exist
-#[derive(Debug)]
-pub enum TableKind {
-    /// A table of `anyfunc` functions.
-    ///
-    /// Contains the initialization list for this table, if any.
-    Function(FunctionTable),
-
-    /// A table of type `anyref` values
-    Anyref(AnyrefTable),
-}
-
-impl TableKind {
-    /// Unwrap `TableKind` to get inner `FunctionTable`. Panics if `TableKind` is anything other than `Function`
-    pub fn unwrap_function(&self) -> &FunctionTable {
-        match *self {
-            TableKind::Function(ref table) => table,
-            _ => panic!("not a Function"),
-        }
-    }
-
-    /// Unwrap `TableKind` to get inner `Anyref`. Panics if `TableKind` is anything other than `Anyref`
-    pub fn unwrap_anyref(&self) -> &AnyrefTable {
-        match *self {
-            TableKind::Anyref(ref anyref) => anyref,
-            _ => panic!("not an Anyref"),
-        }
-    }
-}
-
-/// Components of a table of functions (`anyfunc` table)
-#[derive(Debug, Default)]
-pub struct FunctionTable {
-    /// Layout of this function table that we know of, or those elements which
-    /// have constant initializers.
-    pub elements: Vec<Option<FunctionId>>,
-
-    /// Elements of this table which are relative to a global, typically
-    /// imported.
-    pub relative_elements: Vec<(GlobalId, Vec<Option<FunctionId>>)>,
-}
-
-/// Components of a table of `anyref`
-#[derive(Debug, Default)]
-pub struct AnyrefTable {
-    // currently intentionally empty
-}
 
 impl Table {
     /// Get this table's id.
@@ -82,12 +37,7 @@ impl Table {
 
 impl Emit for Table {
     fn emit(&self, cx: &mut EmitContext) {
-        match self.kind {
-            TableKind::Function(_) => {
-                cx.encoder.byte(0x70); // the `anyfunc` type
-            }
-            TableKind::Anyref(_) => ValType::Anyref.emit(&mut cx.encoder),
-        }
+        self.element_ty.emit(&mut cx.encoder);
         cx.encoder.byte(self.maximum.is_some() as u8);
         cx.encoder.u32(self.initial);
         if let Some(m) = self.maximum {
@@ -109,7 +59,7 @@ impl ModuleTables {
         &mut self,
         initial: u32,
         max: Option<u32>,
-        kind: TableKind,
+        element_ty: ValType,
         import: ImportId,
     ) -> TableId {
         let id = self.arena.next_id();
@@ -117,21 +67,23 @@ impl ModuleTables {
             id,
             initial,
             maximum: max,
-            kind,
+            element_ty,
             import: Some(import),
+            elem_segments: Default::default(),
         })
     }
 
     /// Construct a new table, that does not originate from any of the input
     /// wasm tables.
-    pub fn add_local(&mut self, initial: u32, max: Option<u32>, kind: TableKind) -> TableId {
+    pub fn add_local(&mut self, initial: u32, max: Option<u32>, element_ty: ValType) -> TableId {
         let id = self.arena.next_id();
         let id2 = self.arena.alloc(Table {
             id,
             initial,
             maximum: max,
-            kind,
+            element_ty,
             import: None,
+            elem_segments: Default::default(),
         });
         debug_assert_eq!(id, id2);
         id
@@ -171,12 +123,9 @@ impl ModuleTables {
     ///
     /// Returns an error if there are two function tables in this module
     pub fn main_function_table(&self) -> Result<Option<TableId>> {
-        let mut tables = self.iter().filter_map(|t| match t.kind {
-            TableKind::Function(_) => Some(t.id()),
-            _ => None,
-        });
+        let mut tables = self.iter().filter(|t| t.element_ty == ValType::Funcref);
         let id = match tables.next() {
-            Some(id) => id,
+            Some(t) => t.id(),
             None => return Ok(None),
         };
         if tables.next().is_some() {
@@ -204,11 +153,7 @@ impl Module {
             let id = self.tables.add_local(
                 t.limits.initial,
                 t.limits.maximum,
-                match t.element_type {
-                    wasmparser::Type::AnyFunc => TableKind::Function(FunctionTable::default()),
-                    wasmparser::Type::AnyRef => TableKind::Anyref(AnyrefTable::default()),
-                    _ => bail!("invalid table type"),
-                },
+                ValType::parse(&t.element_type)?,
             );
             ids.push_table(id);
         }

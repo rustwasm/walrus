@@ -9,9 +9,7 @@ use crate::encode::Encoder;
 use crate::ir::*;
 use crate::map::{IdHashMap, IdHashSet};
 use crate::parse::IndicesToIds;
-use crate::{
-    Data, DataId, FunctionBuilder, FunctionId, Module, Result, TableKind, TypeId, ValType,
-};
+use crate::{Data, DataId, FunctionBuilder, FunctionId, Module, Result, TypeId, ValType};
 use anyhow::{bail, Context};
 use std::collections::BTreeMap;
 use wasmparser::Operator;
@@ -607,17 +605,23 @@ fn validate_instruction<'context>(
         Operator::Select => {
             ctx.pop_operand_expected(Some(I32))?;
             let t1 = ctx.pop_operand()?;
+            match t1 {
+                Some(ValType::I32) | Some(ValType::I64) | Some(ValType::F32)
+                | Some(ValType::F64) => {}
+                Some(_) => bail!("select without types must use a number-type"),
+                None => {}
+            }
             let t2 = ctx.pop_operand_expected(t1)?;
             ctx.alloc_instr(Select { ty: None }, loc);
             ctx.push_operand(t2);
         }
         Operator::TypedSelect { ty } => {
             let ty = ValType::parse(&ty)?;
+            ctx.pop_operand_expected(Some(I32))?;
             ctx.pop_operand_expected(Some(ty))?;
-            let t1 = ctx.pop_operand()?;
-            let t2 = ctx.pop_operand_expected(t1)?;
+            ctx.pop_operand_expected(Some(ty))?;
             ctx.alloc_instr(Select { ty: Some(ty) }, loc);
-            ctx.push_operand(t2);
+            ctx.push_operand(Some(ty));
         }
         Operator::Return => {
             let fn_ty = ctx.module.funcs.get(ctx.func_id).ty();
@@ -740,43 +744,55 @@ fn validate_instruction<'context>(
             ctx.alloc_instr(BrIf { block }, loc);
             ctx.push_operands(&expected);
         }
+
         Operator::BrTable { table } => {
-            let len = table.len();
-            let mut blocks = Vec::with_capacity(len);
-            let mut label_types = None;
-            let label_types_ref = &mut label_types;
-            let mut iter = table.into_iter();
-            let mut next = || {
-                let n = match iter.next() {
-                    Some(n) => n,
-                    None => bail!("malformed `br_table"),
-                };
-                let control = ctx.control(n as usize)?;
-                match label_types_ref {
-                    None => *label_types_ref = Some(control.label_types().to_vec()),
-                    Some(n) => {
-                        if &n[..] != control.label_types() {
-                            bail!("br_table jump with non-uniform label types")
-                        }
-                    }
+            let mut blocks = Vec::with_capacity(table.len());
+            let (labels, default) = table.read_table()?;
+            let default = ctx.control(default as usize)?;
+
+            // Note that with the reference types proposal we, as a type
+            // checker, need to figure out the type of the `br_table`
+            // instruction. To do that we start out with the default label's set
+            // of types, but these types may change as we inspect the other
+            // labels. All label arities must match, but we need to find a
+            // "least upper bound" of a type in a sort of unification process to
+            // figure out the types that we're popping.
+            let mut types = default.label_types().to_vec();
+            let default = default.block;
+            for label in labels.iter() {
+                let control = ctx.control(*label as usize)?;
+                blocks.push(control.block);
+                if control.label_types().len() != types.len() {
+                    bail!("br_table jump with non-uniform label types")
                 }
-                Ok(control.block)
-            };
-            for _ in 0..len {
-                blocks.push(next()?);
-            }
-            let default = next()?;
-            if iter.next().is_some() {
-                bail!("malformed `br_table`");
-            }
 
-            let blocks = blocks.into_boxed_slice();
-            let expected = label_types.unwrap().clone();
+                // As part of the reference types proposal as well, we don't
+                // typecheck unreachable control blocks. (I think this is right?
+                // A little uncertain)
+                if control.unreachable {
+                    continue;
+                }
+
+                for (actual, expected) in control.label_types().iter().zip(&mut types) {
+                    // If we're already a subtype, nothing to do...
+                    if actual.is_subtype_of(*expected) {
+                        continue;
+                    }
+                    // ... otherwise attempt to "unify" ourselves with the
+                    // actual type, in which case change future expected
+                    // types...
+                    if expected.is_subtype_of(*actual) {
+                        *expected = *actual;
+                        continue;
+                    }
+                    // ... and otherwise we found an error!
+                    bail!("br_table jump with non-uniform label types")
+                }
+            }
             ctx.pop_operand_expected(Some(I32))?;
-
-            ctx.pop_operands(&expected)?;
+            ctx.pop_operands(&types)?;
+            let blocks = blocks.into_boxed_slice();
             ctx.alloc_instr(BrTable { blocks, default }, loc);
-
             ctx.unreachable();
         }
 
@@ -1155,24 +1171,19 @@ fn validate_instruction<'context>(
             let table = ctx.indices.get_table(table)?;
             ctx.pop_operand_expected(Some(I32))?;
             ctx.alloc_instr(TableGet { table }, loc);
-            ctx.push_operand(Some(Anyref));
+            let result = ctx.module.tables.get(table).element_ty;
+            ctx.push_operand(Some(result));
         }
         Operator::TableSet { table } => {
             let table = ctx.indices.get_table(table)?;
-            let expected_ty = match ctx.module.tables.get(table).kind {
-                TableKind::Anyref(_) => Anyref,
-                TableKind::Function(_) => bail!("cannot set function table yet"),
-            };
+            let expected_ty = ctx.module.tables.get(table).element_ty;
             ctx.pop_operand_expected(Some(expected_ty))?;
             ctx.pop_operand_expected(Some(I32))?;
             ctx.alloc_instr(TableSet { table }, loc);
         }
         Operator::TableGrow { table } => {
             let table = ctx.indices.get_table(table)?;
-            let expected_ty = match ctx.module.tables.get(table).kind {
-                TableKind::Anyref(_) => Anyref,
-                TableKind::Function(_) => bail!("cannot grow function table yet"),
-            };
+            let expected_ty = ctx.module.tables.get(table).element_ty;
             ctx.pop_operand_expected(Some(I32))?;
             ctx.pop_operand_expected(Some(expected_ty))?;
             ctx.alloc_instr(TableGrow { table }, loc);
@@ -1185,10 +1196,7 @@ fn validate_instruction<'context>(
         }
         Operator::TableFill { table } => {
             let table = ctx.indices.get_table(table)?;
-            let expected_ty = match ctx.module.tables.get(table).kind {
-                TableKind::Anyref(_) => Anyref,
-                TableKind::Function(_) => bail!("cannot set function table yet"),
-            };
+            let expected_ty = ctx.module.tables.get(table).element_ty;
             ctx.pop_operand_expected(Some(I32))?;
             ctx.pop_operand_expected(Some(expected_ty))?;
             ctx.pop_operand_expected(Some(I32))?;
@@ -1196,7 +1204,7 @@ fn validate_instruction<'context>(
         }
         Operator::RefNull => {
             ctx.alloc_instr(RefNull {}, loc);
-            ctx.push_operand(Some(Anyref));
+            ctx.push_operand(Some(Nullref));
         }
         Operator::RefIsNull => {
             ctx.pop_operand_expected(Some(Anyref))?;
@@ -1209,7 +1217,7 @@ fn validate_instruction<'context>(
                 .get_func(function_index)
                 .context("invalid call")?;
             ctx.alloc_instr(RefFunc { func }, loc);
-            ctx.push_operand(Some(Anyref));
+            ctx.push_operand(Some(Funcref));
         }
 
         Operator::V8x16Swizzle => {
@@ -1452,10 +1460,30 @@ fn validate_instruction<'context>(
         Operator::I8x16RoundingAverageU => binop(ctx, V128, BinaryOp::I8x16RoundingAverageU)?,
         Operator::I16x8RoundingAverageU => binop(ctx, V128, BinaryOp::I16x8RoundingAverageU)?,
 
-        op @ Operator::TableInit { .. }
-        | op @ Operator::ElemDrop { .. }
-        | op @ Operator::TableCopy { .. } => {
-            bail!("Have not implemented support for opcode yet: {:?}", op)
+        Operator::TableCopy {
+            src_table,
+            dst_table,
+        } => {
+            let src = ctx.indices.get_table(src_table)?;
+            let dst = ctx.indices.get_table(dst_table)?;
+            ctx.pop_operand_expected(Some(I32))?;
+            ctx.pop_operand_expected(Some(I32))?;
+            ctx.pop_operand_expected(Some(I32))?;
+            ctx.alloc_instr(TableCopy { src, dst }, loc);
+        }
+
+        Operator::TableInit { segment, table } => {
+            let elem = ctx.indices.get_element(segment)?;
+            let table = ctx.indices.get_table(table)?;
+            ctx.pop_operand_expected(Some(I32))?;
+            ctx.pop_operand_expected(Some(I32))?;
+            ctx.pop_operand_expected(Some(I32))?;
+            ctx.alloc_instr(TableInit { elem, table }, loc);
+        }
+
+        Operator::ElemDrop { segment } => {
+            let elem = ctx.indices.get_element(segment)?;
+            ctx.alloc_instr(ElemDrop { elem }, loc);
         }
     }
     Ok(())

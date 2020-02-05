@@ -281,7 +281,6 @@ impl DotNode for Table {
         fields.add_field(&[&format!("<b>Table {:?}</b>", self.id())]);
         fields.add_field(&["initial", &self.initial.to_string()]);
         fields.add_field(&["maximum", &format!("{:?}", self.maximum)]);
-        fields.add_field(&["kind", &format!("{:?}", self.kind)]);
         if self.import.is_some() {
             fields.add_field_with_port("import", "import");
         }
@@ -528,7 +527,9 @@ impl DotNode for Element {
 
     fn edges(&self, edges: &mut impl EdgeAggregator) {
         for m in self.members.iter() {
-            edges.add_edge(m);
+            if let Some(m) = m {
+                edges.add_edge(m);
+            }
         }
     }
 }

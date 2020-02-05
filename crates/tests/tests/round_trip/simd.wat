@@ -502,12 +502,6 @@
    (func $i32x4_trunc_u_f32x4_sat (export "i32x4_trunc_u_f32x4_sat") (param v128) (result v128)
     local.get 0
     i32x4.trunc_sat_f32x4_u)
-   (func $i64x2_trunc_s_f64x2_sat (export "i64x2_trunc_s_f64x2_sat") (param v128) (result v128)
-    local.get 0
-    i64x2.trunc_sat_f64x2_s)
-   (func $i64x2_trunc_u_f64x2_sat (export "i64x2_trunc_u_f64x2_sat") (param v128) (result v128)
-    local.get 0
-    i64x2.trunc_sat_f64x2_u)
 
    (func $f32x4.convert_i32x4_s (export "f32x4.convert_i32x4_s") (param v128) (result v128)
     local.get 0
@@ -515,12 +509,6 @@
    (func $f32x4.convert_i32x4_u (export "f32x4.convert_i32x4_u") (param v128) (result v128)
     local.get 0
     f32x4.convert_i32x4_u)
-   (func $f64x2.convert_i64x2_s (export "f64x2.convert_i64x2_s") (param v128) (result v128)
-    local.get 0
-    f64x2.convert_i64x2_s)
-   (func $f64x2.convert_i64x2_u (export "f64x2.convert_i64x2_u") (param v128) (result v128)
-    local.get 0
-    f64x2.convert_i64x2_u)
 )
 
 (; CHECK-ALL:
@@ -1015,24 +1003,12 @@
     (func $i32x4_trunc_u_f32x4_sat (type 10) (param v128) (result v128)
       local.get 0
       i32x4.trunc_sat_f32x4_u)
-    (func $i64x2_trunc_s_f64x2_sat (type 10) (param v128) (result v128)
-      local.get 0
-      i64x2.trunc_sat_f64x2_s)
-    (func $i64x2_trunc_u_f64x2_sat (type 10) (param v128) (result v128)
-      local.get 0
-      i64x2.trunc_sat_f64x2_u)
     (func $f32x4.convert_i32x4_s (type 10) (param v128) (result v128)
       local.get 0
       f32x4.convert_i32x4_s)
     (func $f32x4.convert_i32x4_u (type 10) (param v128) (result v128)
       local.get 0
       f32x4.convert_i32x4_u)
-    (func $f64x2.convert_i64x2_s (type 10) (param v128) (result v128)
-      local.get 0
-      f64x2.convert_i64x2_s)
-    (func $f64x2.convert_i64x2_u (type 10) (param v128) (result v128)
-      local.get 0
-      f64x2.convert_i64x2_u)
     (func $v128.const (type 0) (result v128)
       v128.const i32x4 0x00000001 0x00000002 0x00000003 0x00000004)
     (memory (;0;) 0)
@@ -1164,10 +1140,6 @@
     (export "f64x2.max" (func $f64x2.max))
     (export "i32x4_trunc_s_f32x4_sat" (func $i32x4_trunc_s_f32x4_sat))
     (export "i32x4_trunc_u_f32x4_sat" (func $i32x4_trunc_u_f32x4_sat))
-    (export "i64x2_trunc_s_f64x2_sat" (func $i64x2_trunc_s_f64x2_sat))
-    (export "i64x2_trunc_u_f64x2_sat" (func $i64x2_trunc_u_f64x2_sat))
     (export "f32x4.convert_i32x4_s" (func $f32x4.convert_i32x4_s))
-    (export "f32x4.convert_i32x4_u" (func $f32x4.convert_i32x4_u))
-    (export "f64x2.convert_i64x2_s" (func $f64x2.convert_i64x2_s))
-    (export "f64x2.convert_i64x2_u" (func $f64x2.convert_i64x2_u)))
+    (export "f32x4.convert_i32x4_u" (func $f32x4.convert_i32x4_u)))
 ;)

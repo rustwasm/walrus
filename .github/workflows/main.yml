@@ -9,7 +9,9 @@ jobs:
       matrix:
         rust: [stable, beta, nightly]
     steps:
-    - uses: actions/checkout@master
+    - uses: actions/checkout@v1
+      with:
+        submodules: true
     - name: Install Rust
       run: rustup update ${{ matrix.rust }} && rustup default ${{ matrix.rust }}
     - name: Install wabt

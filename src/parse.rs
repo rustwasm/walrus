@@ -60,7 +60,7 @@ define_push_get!(push_type, get_type, TypeId, types);
 define_push_get!(push_func, get_func, FunctionId, funcs);
 define_push_get!(push_global, get_global, GlobalId, globals);
 define_push_get!(push_memory, get_memory, MemoryId, memories);
-//define_push_get!(push_element, get_element, ElementId, elements);
+define_push_get!(push_element, get_element, ElementId, elements);
 define_push_get!(push_data, get_data, DataId, data);
 
 impl IndicesToIds {

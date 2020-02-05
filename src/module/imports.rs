@@ -3,9 +3,8 @@
 use crate::emit::{Emit, EmitContext, Section};
 use crate::parse::IndicesToIds;
 use crate::tombstone_arena::{Id, Tombstone, TombstoneArena};
-use crate::{FunctionId, FunctionTable, GlobalId, MemoryId, Result, TableId};
-use crate::{Module, TableKind, TypeId, ValType};
-use anyhow::bail;
+use crate::{FunctionId, GlobalId, MemoryId, Result, TableId};
+use crate::{Module, TypeId, ValType};
 
 /// The id of an import.
 pub type ImportId = Id<Import>;
@@ -122,16 +121,13 @@ impl Module {
                     ids.push_func(id.0);
                 }
                 wasmparser::ImportSectionEntryType::Table(t) => {
-                    let kind = match t.element_type {
-                        wasmparser::Type::AnyFunc => TableKind::Function(FunctionTable::default()),
-                        _ => bail!("invalid table type"),
-                    };
+                    let ty = ValType::parse(&t.element_type)?;
                     let id = self.add_import_table(
                         entry.module,
                         entry.field,
                         t.limits.initial,
                         t.limits.maximum,
-                        kind,
+                        ty,
                     );
                     ids.push_table(id.0);
                 }
@@ -195,10 +191,10 @@ impl Module {
         name: &str,
         initial: u32,
         max: Option<u32>,
-        kind: TableKind,
+        ty: ValType,
     ) -> (TableId, ImportId) {
         let import = self.imports.arena.next_id();
-        let table = self.tables.add_import(initial, max, kind, import);
+        let table = self.tables.add_import(initial, max, ty, import);
         self.imports.add(module, name, table);
         (table, import)
     }

@@ -1,9 +1,9 @@
 use crate::ir::*;
 use crate::map::IdHashSet;
 use crate::{ActiveDataLocation, Data, DataId, DataKind, Element, ExportItem, Function, InitExpr};
+use crate::{ElementId, ElementKind, Module, Type, TypeId};
 use crate::{FunctionId, FunctionKind, Global, GlobalId};
-use crate::{GlobalKind, ImportKind, Memory, MemoryId, Table, TableId};
-use crate::{Module, TableKind, Type, TypeId};
+use crate::{GlobalKind, Memory, MemoryId, Table, TableId};
 
 /// Set of all root used items in a wasm module.
 #[derive(Debug, Default)]
@@ -13,6 +13,7 @@ pub struct Roots {
     globals: Vec<GlobalId>,
     memories: Vec<MemoryId>,
     datas: Vec<DataId>,
+    elements: Vec<ElementId>,
     used: Used,
 }
 
@@ -65,6 +66,14 @@ impl Roots {
         }
         self
     }
+
+    fn push_element(&mut self, element: ElementId) -> &mut Roots {
+        if self.used.elements.insert(element) {
+            log::trace!("element is used: {:?}", element);
+            self.elements.push(element);
+        }
+        self
+    }
 }
 
 /// Finds the things within a module that are used.
@@ -111,29 +120,16 @@ impl Used {
             stack.push_func(f);
         }
 
-        // Initialization of imported memories or imported tables is a
-        // side-effectful operation, so be sure to retain any tables/memories
-        // that are imported and initialized, even if they aren't used.
-        for import in module.imports.iter() {
-            match import.kind {
-                ImportKind::Memory(m) => {
-                    let mem = module.memories.get(m);
-                    if !mem.data_segments.is_empty() {
-                        stack.push_memory(m);
-                    }
-                }
-                ImportKind::Table(t) => {
-                    let table = module.tables.get(t);
-                    match &table.kind {
-                        TableKind::Function(init) => {
-                            if !init.elements.is_empty() || !init.relative_elements.is_empty() {
-                                stack.push_table(t);
-                            }
-                        }
-                        TableKind::Anyref(_) => {}
-                    }
-                }
-                _ => {}
+        // Initialization of memories or tables is a side-effectful operation
+        // because they can be out-of-bounds, so keep all active segments.
+        for data in module.data.iter() {
+            if let DataKind::Active { .. } = &data.kind {
+                stack.push_data(data.id());
+            }
+        }
+        for elem in module.elements.iter() {
+            if let ElementKind::Active { .. } = &elem.kind {
+                stack.push_element(elem.id());
             }
         }
 
@@ -148,6 +144,7 @@ impl Used {
             || stack.memories.len() > 0
             || stack.globals.len() > 0
             || stack.datas.len() > 0
+            || stack.elements.len() > 0
         {
             while let Some(f) = stack.funcs.pop() {
                 let func = module.funcs.get(f);
@@ -164,23 +161,8 @@ impl Used {
             }
 
             while let Some(t) = stack.tables.pop() {
-                match &module.tables.get(t).kind {
-                    TableKind::Function(list) => {
-                        for id in list.elements.iter() {
-                            if let Some(id) = id {
-                                stack.push_func(*id);
-                            }
-                        }
-                        for (global, list) in list.relative_elements.iter() {
-                            stack.push_global(*global);
-                            for id in list {
-                                if let Some(id) = *id {
-                                    stack.push_func(id);
-                                }
-                            }
-                        }
-                    }
-                    TableKind::Anyref(_) => {}
+                for elem in module.tables.get(t).elem_segments.iter() {
+                    stack.push_element(*elem);
                 }
             }
 
@@ -190,7 +172,11 @@ impl Used {
                     GlobalKind::Local(InitExpr::Global(global)) => {
                         stack.push_global(*global);
                     }
-                    GlobalKind::Local(InitExpr::Value(_)) => {}
+                    GlobalKind::Local(InitExpr::RefFunc(func)) => {
+                        stack.push_func(*func);
+                    }
+                    GlobalKind::Local(InitExpr::Value(_))
+                    | GlobalKind::Local(InitExpr::RefNull) => {}
                 }
             }
 
@@ -202,12 +188,40 @@ impl Used {
 
             while let Some(d) = stack.datas.pop() {
                 let d = module.data.get(d);
-                if let DataKind::Active(ref a) = d.kind {
+                if let DataKind::Active(a) = &d.kind {
                     stack.push_memory(a.memory);
                     if let ActiveDataLocation::Relative(g) = a.location {
                         stack.push_global(g);
                     }
                 }
+            }
+
+            while let Some(e) = stack.elements.pop() {
+                let e = module.elements.get(e);
+                for func in e.members.iter() {
+                    if let Some(func) = func {
+                        stack.push_func(*func);
+                    }
+                }
+                if let ElementKind::Active { offset, table } = &e.kind {
+                    if let InitExpr::Global(g) = offset {
+                        stack.push_global(*g);
+                    }
+                    stack.push_table(*table);
+                }
+            }
+        }
+
+        // Wabt seems to have weird behavior where a `data` segment, if present
+        // even if passive, requires a `memory` declaration. Our GC pass is
+        // pretty aggressive and if you have a passive data segment and only
+        // `data.drop` instructions you technically don't need the `memory`.
+        // Let's keep `wabt` passing though and just say that if there are data
+        // segments kept, but no memories, then we try to add the first memory,
+        // if any, to the used set.
+        if stack.used.data.len() > 0 && stack.used.memories.len() == 0 {
+            if let Some(mem) = module.memories.iter().next() {
+                stack.used.memories.insert(mem.id());
             }
         }
 
@@ -242,5 +256,9 @@ impl<'expr> Visitor<'expr> for UsedVisitor<'_> {
 
     fn visit_data_id(&mut self, &d: &DataId) {
         self.stack.push_data(d);
+    }
+
+    fn visit_element_id(&mut self, &e: &ElementId) {
+        self.stack.push_element(e);
     }
 }

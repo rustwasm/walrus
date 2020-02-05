@@ -1,10 +1,9 @@
 //! Table elements within a wasm module.
 
 use crate::emit::{Emit, EmitContext, Section};
-use crate::ir::Value;
 use crate::parse::IndicesToIds;
 use crate::tombstone_arena::{Id, Tombstone, TombstoneArena};
-use crate::{FunctionId, InitExpr, Module, Result, TableKind, ValType};
+use crate::{FunctionId, InitExpr, Module, Result, TableId, ValType, ir::Value};
 use anyhow::{bail, Context};
 
 /// A passive element segment identifier
@@ -15,8 +14,22 @@ pub type ElementId = Id<Element>;
 pub struct Element {
     id: Id<Element>,
 
+    /// Whether this segment is passive or active.
+    pub kind: ElementKind,
+
+    /// The type of elements in this segment
+    pub ty: ValType,
+
     /// The function members of this passive elements segment.
-    pub members: Vec<FunctionId>,
+    pub members: Vec<Option<FunctionId>>,
+}
+
+#[allow(missing_docs)]
+#[derive(Debug, Copy, Clone)]
+pub enum ElementKind {
+    Passive,
+    Declared,
+    Active { table: TableId, offset: InitExpr },
 }
 
 impl Element {
@@ -74,55 +87,52 @@ impl Module {
         log::debug!("parse element section");
         for (i, segment) in section.into_iter().enumerate() {
             let segment = segment?;
+            let ty = ValType::parse(&segment.ty)?;
+            match ty {
+                ValType::Funcref => {}
+                _ => bail!("only funcref type allowed in element segments"),
+            }
+            let members = segment
+                .items
+                .get_items_reader()?
+                .into_iter()
+                .map(|e| -> Result<_> {
+                    Ok(match e? {
+                        wasmparser::ElementItem::Func(f) => Some(ids.get_func(f)?),
+                        wasmparser::ElementItem::Null => None,
+                    })
+                })
+                .collect::<Result<_>>()?;
+            let id = self.elements.arena.next_id();
 
-            match segment.kind {
-                wasmparser::ElementKind::Passive { .. } | wasmparser::ElementKind::Declared => {
-                    bail!("passive element segments not supported yet");
-                }
+            let kind = match segment.kind {
+                wasmparser::ElementKind::Passive => ElementKind::Passive,
+                wasmparser::ElementKind::Declared => ElementKind::Declared,
                 wasmparser::ElementKind::Active {
                     table_index,
                     init_expr,
                 } => {
                     let table = ids.get_table(table_index)?;
-                    let table = match &mut self.tables.get_mut(table).kind {
-                        TableKind::Function(t) => t,
-                        TableKind::Anyref(_) => {
-                            bail!("active anyref segments not supported yet");
-                        }
-                    };
+                    self.tables.get_mut(table).elem_segments.insert(id);
 
                     let offset = InitExpr::eval(&init_expr, ids)
                         .with_context(|| format!("in segment {}", i))?;
-                    let functions =
-                        segment
-                            .items
-                            .get_items_reader()?
-                            .into_iter()
-                            .map(|e| -> Result<_> {
-                                Ok(match e? {
-                                    wasmparser::ElementItem::Func(f) => Some(ids.get_func(f)?),
-                                    wasmparser::ElementItem::Null => None,
-                                })
-                            });
-
                     match offset {
-                        InitExpr::Value(Value::I32(n)) => {
-                            let offset = n as usize;
-                            for (i, id) in functions.enumerate() {
-                                while i + offset + 1 > table.elements.len() {
-                                    table.elements.push(None);
-                                }
-                                table.elements[i + offset] = id?;
-                            }
-                        }
+                        InitExpr::Value(Value::I32(_)) => {}
                         InitExpr::Global(global) if self.globals.get(global).ty == ValType::I32 => {
-                            let list = functions.collect::<Result<_>>()?;
-                            table.relative_elements.push((global, list));
                         }
                         _ => bail!("non-i32 constant in segment {}", i),
                     }
+                    ElementKind::Active { table, offset }
                 }
-            }
+            };
+            self.elements.arena.alloc(Element {
+                id,
+                ty,
+                kind,
+                members,
+            });
+            ids.push_element(id);
         }
         Ok(())
     }
@@ -130,128 +140,65 @@ impl Module {
 
 impl Emit for ModuleElements {
     fn emit(&self, cx: &mut EmitContext) {
-        log::debug!("emit element section");
-        // Sort table ids for a deterministic emission for now, eventually we
-        // may want some sort of sorting heuristic here.
-        let mut active = cx
-            .module
-            .tables
-            .iter()
-            .filter_map(|t| match &t.kind {
-                TableKind::Function(list) => Some((t.id(), list)),
-                TableKind::Anyref(_) => None,
-            })
-            .collect::<Vec<_>>();
-        active.sort_by_key(|pair| pair.0);
-
-        // Append segments as we find them for all table initializers. We can
-        // skip initializers for unused tables, and otherwise we just want to
-        // create an initializer for each contiguous chunk of function indices.
-        let mut chunks = Vec::new();
-        for (table_id, table) in active.iter() {
-            let mut offset = 0;
-            let mut len = 0;
-            for (i, item) in table.elements.iter().enumerate() {
-                if item.is_some() {
-                    if len == 0 {
-                        offset = i;
-                    }
-                    len += 1;
-                } else {
-                    if len > 0 {
-                        chunks.push((table_id, table, offset, len));
-                    }
-                    len = 0;
-                }
-            }
-
-            if len > 0 {
-                chunks.push((table_id, table, offset, len));
-            }
-        }
-
-        let passive = self.iter().count();
-        let relative = active
-            .iter()
-            .map(|(_, table)| table.relative_elements.len())
-            .sum::<usize>();
-        let total = passive + relative + chunks.len();
-
-        if total == 0 {
+        if self.arena.len() == 0 {
             return;
         }
         let mut cx = cx.start_section(Section::Element);
-        cx.encoder.usize(total);
+        cx.encoder.usize(self.arena.len());
 
-        // Emits the leading data for describing a table's index
-        //
-        // Note that much of this is in accordance with the
-        // currently-in-progress bulk-memory proposal for WebAssembly.
-        let active_table_header = |cx: &mut EmitContext, index: u32, exprs: bool| {
-            let exprs_bit = if exprs { 0x4 } else { 0x0 };
-            if index == 0 {
-                cx.encoder.byte(0x00 | exprs_bit);
-            } else {
-                cx.encoder.byte(0x02 | exprs_bit);
-                cx.encoder.u32(index);
+        for (id, element) in self.arena.iter() {
+            cx.indices.push_element(id);
+            let exprs = element.members.iter().any(|i| i.is_none());
+            let exprs_bit = if exprs { 0x04 } else { 0x00 };
+            let mut encode_ty = true;
+            match &element.kind {
+                ElementKind::Active { table, offset } => {
+                    let table_index = cx.indices.get_table_index(*table);
+                    if table_index == 0 {
+                        cx.encoder.byte(0x00 | exprs_bit);
+                        offset.emit(&mut cx);
+                        encode_ty = false;
+                    } else {
+                        cx.encoder.byte(0x02 | exprs_bit);
+                        cx.encoder.u32(table_index);
+                        offset.emit(&mut cx);
+                    }
+                }
+                ElementKind::Passive => {
+                    cx.encoder.byte(0x01 | exprs_bit);
+                }
+                ElementKind::Declared => {
+                    cx.encoder.byte(0x03 | exprs_bit);
+                }
+            };
+            if encode_ty {
+                if exprs {
+                    element.ty.emit(&mut cx.encoder);
+                } else {
+                    cx.encoder.byte(0x00);
+                }
             }
-        };
 
-        // Emit all contiguous chunks of functions pointers that are located at
-        // constant offsets
-        for (&id, table, offset, len) in chunks {
-            let table_index = cx.indices.get_table_index(id);
-            active_table_header(&mut cx, table_index, false);
-            InitExpr::Value(Value::I32(offset as i32)).emit(&mut cx);
-            cx.encoder.usize(len);
-            for item in table.elements[offset..][..len].iter() {
-                let index = cx.indices.get_func_index(item.unwrap());
-                cx.encoder.u32(index);
-            }
-        }
-
-        // Emit all chunks of function pointers that are located at relative
-        // global offsets.
-        for (id, table) in active.iter() {
-            let table_index = cx.indices.get_table_index(*id);
-            for (global, list) in table.relative_elements.iter() {
-                let exprs = list.iter().any(|i| i.is_none());
-                active_table_header(&mut cx, table_index, exprs);
-                InitExpr::Global(*global).emit(&mut cx);
-                cx.encoder.usize(list.len());
-                for func in list {
-                    match func {
-                        Some(id) => {
-                            let index = cx.indices.get_func_index(*id);
-                            if exprs {
-                                cx.encoder.byte(0xd2);
-                                cx.encoder.u32(index);
-                                cx.encoder.byte(0x0b);
-                            } else {
-                                cx.encoder.u32(index);
-                            }
-                        }
-                        None => {
-                            cx.encoder.byte(0xd1);
+            cx.encoder.usize(element.members.len());
+            for func in element.members.iter() {
+                match func {
+                    Some(id) => {
+                        let index = cx.indices.get_func_index(*id);
+                        if exprs {
+                            cx.encoder.byte(0xd2);
+                            cx.encoder.u32(index);
                             cx.encoder.byte(0x0b);
+                        } else {
+                            cx.encoder.u32(index);
                         }
+                    }
+                    None => {
+                        assert!(exprs);
+                        cx.encoder.byte(0xd0);
+                        cx.encoder.byte(0x0b);
                     }
                 }
             }
-        }
-
-        // After all the active segments are added add passive segments next. We
-        // may want to sort this more intelligently in the future. Otherwise
-        // emitting a segment here is in general much simpler than above as we
-        // know there are no holes.
-        for (id, _) in self.arena.iter() {
-            cx.indices.push_element(id);
-            // TODO: sync this with the upstream spec
-            panic!(
-                "encoding a passive element segment requires either \
-                 `ref.null` or `ref.func` encodings, which aren't \
-                 currently implemented"
-            );
         }
     }
 }

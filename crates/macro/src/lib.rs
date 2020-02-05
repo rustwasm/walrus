@@ -561,6 +561,12 @@ fn create_visit(variants: &[WalrusVariant]) -> impl quote::ToTokens {
                 // ...
             }
 
+            /// Visit `ElementId`
+            #[inline]
+            fn visit_element_id(&mut self, elem: &crate::ElementId) {
+                // ...
+            }
+
             /// Visit `Value`.
             #[inline]
             fn visit_value(&mut self, value: &crate::ir::Value) {
@@ -642,6 +648,12 @@ fn create_visit(variants: &[WalrusVariant]) -> impl quote::ToTokens {
             /// Visit `TypeId`
             #[inline]
             fn visit_type_id_mut(&mut self, ty: &mut crate::TypeId) {
+                // ...
+            }
+
+            /// Visit `ElementId`
+            #[inline]
+            fn visit_element_id_mut(&mut self, elem: &mut crate::ElementId) {
                 // ...
             }
 

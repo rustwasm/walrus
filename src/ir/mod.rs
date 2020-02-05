@@ -9,8 +9,8 @@ pub use self::traversals::*;
 
 use crate::encode::Encoder;
 use crate::{
-    DataId, FunctionId, GlobalId, LocalFunction, MemoryId, ModuleTypes, TableId, TypeId, ValType,
-    ElementId,
+    DataId, ElementId, FunctionId, GlobalId, LocalFunction, MemoryId, ModuleTypes, TableId, TypeId,
+    ValType,
 };
 use id_arena::Id;
 use std::fmt;

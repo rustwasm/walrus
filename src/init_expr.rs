@@ -3,7 +3,7 @@
 use crate::emit::{Emit, EmitContext};
 use crate::ir::Value;
 use crate::parse::IndicesToIds;
-use crate::{GlobalId, Result, FunctionId};
+use crate::{FunctionId, GlobalId, Result};
 use anyhow::bail;
 
 /// A constant which is produced in WebAssembly, typically used in global

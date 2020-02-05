@@ -1,10 +1,10 @@
 //! Tables within a wasm module.
 
 use crate::emit::{Emit, EmitContext, Section};
-use crate::parse::IndicesToIds;
 use crate::map::IdHashSet;
+use crate::parse::IndicesToIds;
 use crate::tombstone_arena::{Id, Tombstone, TombstoneArena};
-use crate::{ImportId, Module, Result, ValType, Element};
+use crate::{Element, ImportId, Module, Result, ValType};
 use anyhow::bail;
 
 /// The id of a table.

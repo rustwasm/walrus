@@ -3,7 +3,7 @@
 use crate::emit::{Emit, EmitContext, Section};
 use crate::parse::IndicesToIds;
 use crate::tombstone_arena::{Id, Tombstone, TombstoneArena};
-use crate::{FunctionId, InitExpr, Module, Result, TableId, ValType, ir::Value};
+use crate::{ir::Value, FunctionId, InitExpr, Module, Result, TableId, ValType};
 use anyhow::{bail, Context};
 
 /// A passive element segment identifier

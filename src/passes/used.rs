@@ -128,8 +128,14 @@ impl Used {
             }
         }
         for elem in module.elements.iter() {
-            if let ElementKind::Active { .. } = &elem.kind {
-                stack.push_element(elem.id());
+            match elem.kind {
+                // Active segments are rooted because they initialize imported
+                // or exported tables. Declared segments can probably get gc'd
+                // but for now we're conservative and we root them.
+                ElementKind::Active { .. } | ElementKind::Declared => {
+                    stack.push_element(elem.id());
+                }
+                ElementKind::Passive => {}
             }
         }
 

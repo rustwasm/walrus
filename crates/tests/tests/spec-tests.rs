@@ -1,4 +1,4 @@
-use anyhow::Context;
+use anyhow::{bail, Context};
 use std::fs;
 use std::path::Path;
 use std::process::Command;
@@ -9,6 +9,12 @@ struct Test {
     source_filename: String,
     commands: Vec<serde_json::Value>,
 }
+
+const STABLE_FEATURES: &[&str] = &[
+    "--enable-multi-value",
+    "--enable-saturating-float-to-int",
+    "--enable-sign-extension",
+];
 
 fn run(wast: &Path) -> Result<(), anyhow::Error> {
     static INIT_LOGS: std::sync::Once = std::sync::Once::new();
@@ -23,11 +29,13 @@ fn run(wast: &Path) -> Result<(), anyhow::Error> {
         .next()
         .map(|s| s.to_str().unwrap());
     let extra_args: &[&str] = match proposal {
-        None => &[],
-        Some("mutable-global") => &[],
-        Some("sign-extension-ops") => &["--enable-sign-extension"],
-        Some("multi-value") => &["--enable-multi-value"],
-        Some("nontrapping-float-to-int-conversions") => &["--enable-saturating-float-to-int"],
+        // stable features
+        None
+        | Some("multi-value")
+        | Some("nontrapping-float-to-int-conversions")
+        | Some("sign-extension-ops")
+        | Some("mutable-global") => &[],
+
         Some("reference-types") => &["--enable-reference-types", "--enable-bulk-memory"],
         Some("bulk-memory-operations") => &["--enable-bulk-memory"],
 
@@ -37,6 +45,9 @@ fn run(wast: &Path) -> Result<(), anyhow::Error> {
         Some("simd") => return Ok(()),
         // TODO: should get tail-call working
         Some("tail-call") => return Ok(()),
+
+        // not a walrus thing, but not implemented in wabt fully yet anyway
+        Some("annotations") => return Ok(()),
 
         // Some("threads") => &["--enable-threads"],
         Some(other) => panic!("unknown wasm proposal: {}", other),
@@ -48,10 +59,13 @@ fn run(wast: &Path) -> Result<(), anyhow::Error> {
         .arg(wast)
         .arg("-o")
         .arg(&json)
+        .args(STABLE_FEATURES)
         .args(extra_args)
         .status()
         .context("executing `wast2json`")?;
     assert!(status.success());
+
+    let wabt_ok = run_spectest_interp(tempdir.path(), extra_args).is_ok();
 
     let contents = fs::read_to_string(&json).context("failed to read file")?;
     let test: Test = serde_json::from_str(&contents).context("failed to parse file")?;
@@ -128,6 +142,12 @@ fn run(wast: &Path) -> Result<(), anyhow::Error> {
         }
     }
 
+    // If wabt didn't succeed before we ran walrus there's no hope of it passing
+    // after we run walrus.
+    if !wabt_ok {
+        return Ok(());
+    }
+
     // First up run the spec-tests as-is after we round-tripped through walrus.
     // This should for sure work correctly
     run_spectest_interp(tempdir.path(), extra_args)?;
@@ -159,6 +179,7 @@ fn run_spectest_interp(cwd: &Path, extra_args: &[&str]) -> Result<(), anyhow::Er
     let output = Command::new("spectest-interp")
         .current_dir(cwd)
         .arg("foo.json")
+        .args(STABLE_FEATURES)
         .args(extra_args)
         .output()
         .context("executing `spectest-interp`")?;
@@ -181,7 +202,7 @@ fn run_spectest_interp(cwd: &Path, extra_args: &[&str]) -> Result<(), anyhow::Er
     println!("status: {}", output.status);
     println!("stdout:\n{}", String::from_utf8_lossy(&output.stdout));
     println!("stderr:\n{}", String::from_utf8_lossy(&output.stderr));
-    panic!("failed");
+    bail!("failed");
 }
 
 include!(concat!(env!("OUT_DIR"), "/spec-tests.rs"));

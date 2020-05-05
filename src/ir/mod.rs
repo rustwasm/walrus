@@ -619,7 +619,7 @@ impl Value {
                 encoder.f64(n);
             }
             Value::V128(n) => {
-                encoder.raw(&[0xfd, 0x02]); // v128.const
+                encoder.raw(&[0xfd, 0x0c]); // v128.const
                 for i in 0..16 {
                     encoder.byte((n >> (i * 8)) as u8);
                 }
@@ -796,7 +796,6 @@ pub enum BinaryOp {
     I8x16Sub,
     I8x16SubSaturateS,
     I8x16SubSaturateU,
-    I8x16Mul,
     I16x8Shl,
     I16x8ShrS,
     I16x8ShrU,
@@ -935,18 +934,19 @@ pub enum UnaryOp {
 
     V128Not,
 
+    I8x16Abs,
     I8x16Neg,
     I8x16AnyTrue,
     I8x16AllTrue,
+    I16x8Abs,
     I16x8Neg,
     I16x8AnyTrue,
     I16x8AllTrue,
+    I32x4Abs,
     I32x4Neg,
     I32x4AnyTrue,
     I32x4AllTrue,
     I64x2Neg,
-    I64x2AnyTrue,
-    I64x2AllTrue,
 
     F32x4Abs,
     F32x4Neg,
@@ -955,14 +955,10 @@ pub enum UnaryOp {
     F64x2Neg,
     F64x2Sqrt,
 
-    I32x4TruncSF32x4Sat,
-    I32x4TruncUF32x4Sat,
-    I64x2TruncSF64x2Sat,
-    I64x2TruncUF64x2Sat,
-    F32x4ConvertSI32x4,
-    F32x4ConvertUI32x4,
-    F64x2ConvertSI64x2,
-    F64x2ConvertUI64x2,
+    I32x4TruncSatF32x4S,
+    I32x4TruncSatF32x4U,
+    F32x4ConvertI32x4S,
+    F32x4ConvertI32x4U,
 
     I32TruncSSatF32,
     I32TruncUSatF32,

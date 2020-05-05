@@ -5,7 +5,7 @@
 
 use crate::ir::*;
 use crate::ValType;
-use crate::{Function, FunctionKind, InitExpr, Result};
+use crate::{ElementKind, Function, FunctionId, FunctionKind, InitExpr, Result};
 use crate::{Global, GlobalKind, Memory, MemoryId, Module, Table};
 use anyhow::{anyhow, bail, Context};
 use std::collections::HashSet;
@@ -32,8 +32,14 @@ pub fn run(module: &Module) -> Result<()> {
     for table in module.tables.iter() {
         validate_table(table)?;
     }
+    let mut defined_funcs = HashSet::new();
+    for element in module.elements.iter() {
+        if let ElementKind::Declared = element.kind {
+            defined_funcs.extend(element.members.iter().cloned().filter_map(|x| x));
+        }
+    }
     for global in module.globals.iter() {
-        validate_global(module, global)?;
+        validate_global(module, global, &defined_funcs)?;
     }
     validate_exports(module)?;
 
@@ -60,6 +66,7 @@ pub fn run(module: &Module) -> Result<()> {
                 errs: &mut errs,
                 function,
                 module,
+                defined_funcs: &defined_funcs,
             };
             dfs_in_order(&mut cx, local, local.entry_block());
             errs
@@ -120,7 +127,11 @@ fn validate_exports(module: &Module) -> Result<()> {
     Ok(())
 }
 
-fn validate_global(module: &Module, global: &Global) -> Result<()> {
+fn validate_global(
+    module: &Module,
+    global: &Global,
+    defined_funcs: &HashSet<FunctionId>,
+) -> Result<()> {
     match global.kind {
         GlobalKind::Import(_) => return Ok(()),
         GlobalKind::Local(InitExpr::Value(value)) => {
@@ -143,9 +154,12 @@ fn validate_global(module: &Module, global: &Global) -> Result<()> {
                 bail!("invalid type on global");
             }
         }
-        GlobalKind::Local(InitExpr::RefFunc(_)) => {
+        GlobalKind::Local(InitExpr::RefFunc(idx)) => {
             if !ValType::Funcref.is_subtype_of(global.ty) {
                 bail!("invalid type on global");
+            }
+            if !defined_funcs.contains(&idx) {
+                bail!("referenced function in global not declared in element segment");
             }
         }
     }
@@ -168,6 +182,7 @@ struct Validate<'a> {
     errs: &'a mut Vec<anyhow::Error>,
     function: &'a Function,
     module: &'a Module,
+    defined_funcs: &'a HashSet<FunctionId>,
 }
 
 impl Validate<'_> {
@@ -241,6 +256,12 @@ impl<'a> Visitor<'a> for Validate<'a> {
     fn visit_global_set(&mut self, e: &GlobalSet) {
         if !self.module.globals.get(e.global).mutable {
             self.err("cannot mutate immutable global");
+        }
+    }
+
+    fn visit_ref_func(&mut self, e: &RefFunc) {
+        if !self.defined_funcs.contains(&e.func) {
+            self.err("referenced function not declared in element segment");
         }
     }
 }

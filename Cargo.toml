@@ -45,6 +45,3 @@ members = [
     "./crates/tests",
     "./crates/tests-utils",
 ]
-
-[patch.crates-io]
-wasmparser = { path= "../wasmparser.rs" }

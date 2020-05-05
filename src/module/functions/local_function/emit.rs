@@ -261,131 +261,131 @@ impl<'instr> Visitor<'instr> for Emit<'_, '_> {
                     F64Max => self.encoder.byte(0xa5),
                     F64Copysign => self.encoder.byte(0xa6),
 
-                    I8x16ReplaceLane { idx } => self.encoder.raw(&[0xfd, 0x07, idx]),
-                    I16x8ReplaceLane { idx } => self.encoder.raw(&[0xfd, 0x0b, idx]),
-                    I32x4ReplaceLane { idx } => self.encoder.raw(&[0xfd, 0x0e, idx]),
-                    I64x2ReplaceLane { idx } => self.encoder.raw(&[0xfd, 0x11, idx]),
-                    F32x4ReplaceLane { idx } => self.encoder.raw(&[0xfd, 0x14, idx]),
-                    F64x2ReplaceLane { idx } => self.encoder.raw(&[0xfd, 0x17, idx]),
+                    I8x16ReplaceLane { idx } => self.encoder.raw(&[0xfd, 0x17, idx]),
+                    I16x8ReplaceLane { idx } => self.encoder.raw(&[0xfd, 0x1a, idx]),
+                    I32x4ReplaceLane { idx } => self.encoder.raw(&[0xfd, 0x1c, idx]),
+                    I64x2ReplaceLane { idx } => self.encoder.raw(&[0xfd, 0x1e, idx]),
+                    F32x4ReplaceLane { idx } => self.encoder.raw(&[0xfd, 0x20, idx]),
+                    F64x2ReplaceLane { idx } => self.encoder.raw(&[0xfd, 0x22, idx]),
 
-                    I8x16Eq => self.simd(0x18),
-                    I8x16Ne => self.simd(0x19),
-                    I8x16LtS => self.simd(0x1a),
-                    I8x16LtU => self.simd(0x1b),
-                    I8x16GtS => self.simd(0x1c),
-                    I8x16GtU => self.simd(0x1d),
-                    I8x16LeS => self.simd(0x1e),
-                    I8x16LeU => self.simd(0x1f),
-                    I8x16GeS => self.simd(0x20),
-                    I8x16GeU => self.simd(0x21),
+                    I8x16Eq => self.simd(0x23),
+                    I8x16Ne => self.simd(0x24),
+                    I8x16LtS => self.simd(0x25),
+                    I8x16LtU => self.simd(0x26),
+                    I8x16GtS => self.simd(0x27),
+                    I8x16GtU => self.simd(0x28),
+                    I8x16LeS => self.simd(0x29),
+                    I8x16LeU => self.simd(0x2a),
+                    I8x16GeS => self.simd(0x2b),
+                    I8x16GeU => self.simd(0x2c),
 
-                    I16x8Eq => self.simd(0x22),
-                    I16x8Ne => self.simd(0x23),
-                    I16x8LtS => self.simd(0x24),
-                    I16x8LtU => self.simd(0x25),
-                    I16x8GtS => self.simd(0x26),
-                    I16x8GtU => self.simd(0x27),
-                    I16x8LeS => self.simd(0x28),
-                    I16x8LeU => self.simd(0x29),
-                    I16x8GeS => self.simd(0x2a),
-                    I16x8GeU => self.simd(0x2b),
+                    I16x8Eq => self.simd(0x2d),
+                    I16x8Ne => self.simd(0x2e),
+                    I16x8LtS => self.simd(0x2f),
+                    I16x8LtU => self.simd(0x30),
+                    I16x8GtS => self.simd(0x31),
+                    I16x8GtU => self.simd(0x32),
+                    I16x8LeS => self.simd(0x33),
+                    I16x8LeU => self.simd(0x34),
+                    I16x8GeS => self.simd(0x35),
+                    I16x8GeU => self.simd(0x36),
 
-                    I32x4Eq => self.simd(0x2c),
-                    I32x4Ne => self.simd(0x2d),
-                    I32x4LtS => self.simd(0x2e),
-                    I32x4LtU => self.simd(0x2f),
-                    I32x4GtS => self.simd(0x30),
-                    I32x4GtU => self.simd(0x31),
-                    I32x4LeS => self.simd(0x32),
-                    I32x4LeU => self.simd(0x33),
-                    I32x4GeS => self.simd(0x34),
-                    I32x4GeU => self.simd(0x35),
+                    I32x4Eq => self.simd(0x37),
+                    I32x4Ne => self.simd(0x38),
+                    I32x4LtS => self.simd(0x39),
+                    I32x4LtU => self.simd(0x3a),
+                    I32x4GtS => self.simd(0x3b),
+                    I32x4GtU => self.simd(0x3c),
+                    I32x4LeS => self.simd(0x3d),
+                    I32x4LeU => self.simd(0x3e),
+                    I32x4GeS => self.simd(0x3f),
+                    I32x4GeU => self.simd(0x40),
 
-                    F32x4Eq => self.simd(0x40),
-                    F32x4Ne => self.simd(0x41),
-                    F32x4Lt => self.simd(0x42),
-                    F32x4Gt => self.simd(0x43),
-                    F32x4Le => self.simd(0x44),
-                    F32x4Ge => self.simd(0x45),
+                    F32x4Eq => self.simd(0x41),
+                    F32x4Ne => self.simd(0x42),
+                    F32x4Lt => self.simd(0x43),
+                    F32x4Gt => self.simd(0x44),
+                    F32x4Le => self.simd(0x45),
+                    F32x4Ge => self.simd(0x46),
 
-                    F64x2Eq => self.simd(0x46),
-                    F64x2Ne => self.simd(0x47),
-                    F64x2Lt => self.simd(0x48),
-                    F64x2Gt => self.simd(0x49),
-                    F64x2Le => self.simd(0x4a),
-                    F64x2Ge => self.simd(0x4b),
+                    F64x2Eq => self.simd(0x47),
+                    F64x2Ne => self.simd(0x48),
+                    F64x2Lt => self.simd(0x49),
+                    F64x2Gt => self.simd(0x4a),
+                    F64x2Le => self.simd(0x4b),
+                    F64x2Ge => self.simd(0x4c),
 
-                    V128And => self.simd(0x4d),
-                    V128AndNot => self.simd(0xd8),
-                    V128Or => self.simd(0x4e),
-                    V128Xor => self.simd(0x4f),
+                    V128And => self.simd(0x4e),
+                    V128AndNot => self.simd(0x4f),
+                    V128Or => self.simd(0x50),
+                    V128Xor => self.simd(0x51),
 
-                    I8x16Shl => self.simd(0x54),
-                    I8x16ShrS => self.simd(0x55),
-                    I8x16ShrU => self.simd(0x56),
-                    I8x16Add => self.simd(0x57),
-                    I8x16AddSaturateS => self.simd(0x58),
-                    I8x16AddSaturateU => self.simd(0x59),
-                    I8x16Sub => self.simd(0x5a),
-                    I8x16SubSaturateS => self.simd(0x5b),
-                    I8x16SubSaturateU => self.simd(0x5c),
-                    I8x16Mul => self.simd(0x5d),
-                    I16x8Shl => self.simd(0x65),
-                    I16x8ShrS => self.simd(0x66),
-                    I16x8ShrU => self.simd(0x67),
-                    I16x8Add => self.simd(0x68),
-                    I16x8AddSaturateS => self.simd(0x69),
-                    I16x8AddSaturateU => self.simd(0x6a),
-                    I16x8Sub => self.simd(0x6b),
-                    I16x8SubSaturateS => self.simd(0x6c),
-                    I16x8SubSaturateU => self.simd(0x6d),
-                    I16x8Mul => self.simd(0x6e),
-                    I32x4Shl => self.simd(0x76),
-                    I32x4ShrS => self.simd(0x77),
-                    I32x4ShrU => self.simd(0x78),
-                    I32x4Add => self.simd(0x79),
-                    I32x4Sub => self.simd(0x7c),
-                    I32x4Mul => self.simd(0x7f),
-                    I64x2Shl => self.simd(0x87),
-                    I64x2ShrS => self.simd(0x88),
-                    I64x2ShrU => self.simd(0x89),
-                    I64x2Add => self.simd(0x8a),
-                    I64x2Sub => self.simd(0x8d),
-                    I64x2Mul => self.simd(0x90),
+                    I8x16NarrowI16x8S => self.simd(0x65),
+                    I8x16NarrowI16x8U => self.simd(0x66),
+                    I8x16Shl => self.simd(0x6b),
+                    I8x16ShrS => self.simd(0x6c),
+                    I8x16ShrU => self.simd(0x6d),
+                    I8x16Add => self.simd(0x6e),
+                    I8x16AddSaturateS => self.simd(0x6f),
+                    I8x16AddSaturateU => self.simd(0x70),
+                    I8x16Sub => self.simd(0x71),
+                    I8x16SubSaturateS => self.simd(0x72),
+                    I8x16SubSaturateU => self.simd(0x73),
+                    I8x16MinS => self.simd(0x76),
+                    I8x16MinU => self.simd(0x77),
+                    I8x16MaxS => self.simd(0x78),
+                    I8x16MaxU => self.simd(0x79),
+                    I8x16RoundingAverageU => self.simd(0x7b),
 
-                    F32x4Add => self.simd(0x9a),
-                    F32x4Sub => self.simd(0x9b),
-                    F32x4Mul => self.simd(0x9c),
-                    F32x4Div => self.simd(0x9d),
-                    F32x4Min => self.simd(0x9e),
-                    F32x4Max => self.simd(0x9f),
-                    F64x2Add => self.simd(0xa5),
-                    F64x2Sub => self.simd(0xa6),
-                    F64x2Mul => self.simd(0xa7),
-                    F64x2Div => self.simd(0xa8),
-                    F64x2Min => self.simd(0xa9),
-                    F64x2Max => self.simd(0xaa),
+                    I16x8NarrowI32x4S => self.simd(0x85),
+                    I16x8NarrowI32x4U => self.simd(0x86),
+                    I16x8Shl => self.simd(0x8b),
+                    I16x8ShrS => self.simd(0x8c),
+                    I16x8ShrU => self.simd(0x8d),
+                    I16x8Add => self.simd(0x8e),
+                    I16x8AddSaturateS => self.simd(0x8f),
+                    I16x8AddSaturateU => self.simd(0x90),
+                    I16x8Sub => self.simd(0x91),
+                    I16x8SubSaturateS => self.simd(0x92),
+                    I16x8SubSaturateU => self.simd(0x93),
+                    I16x8Mul => self.simd(0x95),
+                    I16x8MinS => self.simd(0x96),
+                    I16x8MinU => self.simd(0x97),
+                    I16x8MaxS => self.simd(0x98),
+                    I16x8MaxU => self.simd(0x99),
+                    I16x8RoundingAverageU => self.simd(0x9b),
 
-                    I8x16NarrowI16x8S => self.simd(0xc6),
-                    I8x16NarrowI16x8U => self.simd(0xc7),
-                    I16x8NarrowI32x4S => self.simd(0xc8),
-                    I16x8NarrowI32x4U => self.simd(0xc8),
+                    I32x4Shl => self.simd(0xab),
+                    I32x4ShrS => self.simd(0xac),
+                    I32x4ShrU => self.simd(0xad),
+                    I32x4Add => self.simd(0xae),
+                    I32x4Sub => self.simd(0xb1),
+                    I32x4Mul => self.simd(0xb5),
+                    I32x4MinS => self.simd(0xb6),
+                    I32x4MinU => self.simd(0xb7),
+                    I32x4MaxS => self.simd(0xb8),
+                    I32x4MaxU => self.simd(0xb9),
 
-                    I8x16RoundingAverageU => self.simd(0xd9),
-                    I16x8RoundingAverageU => self.simd(0xda),
+                    I64x2Shl => self.simd(0xcb),
+                    I64x2ShrS => self.simd(0xcc),
+                    I64x2ShrU => self.simd(0xcd),
+                    I64x2Add => self.simd(0xce),
+                    I64x2Sub => self.simd(0xd1),
+                    I64x2Mul => self.simd(0xd5),
 
-                    I8x16MinS => self.simd(0x5e),
-                    I8x16MinU => self.simd(0x5f),
-                    I8x16MaxS => self.simd(0x60),
-                    I8x16MaxU => self.simd(0x61),
-                    I16x8MinS => self.simd(0x6f),
-                    I16x8MinU => self.simd(0x70),
-                    I16x8MaxS => self.simd(0x71),
-                    I16x8MaxU => self.simd(0x72),
-                    I32x4MinS => self.simd(0x80),
-                    I32x4MinU => self.simd(0x81),
-                    I32x4MaxS => self.simd(0x82),
-                    I32x4MaxU => self.simd(0x83),
+                    F32x4Add => self.simd(0xe4),
+                    F32x4Sub => self.simd(0xe5),
+                    F32x4Mul => self.simd(0xe6),
+                    F32x4Div => self.simd(0xe7),
+                    F32x4Min => self.simd(0xe8),
+                    F32x4Max => self.simd(0xe9),
+
+                    F64x2Add => self.simd(0xf0),
+                    F64x2Sub => self.simd(0xf1),
+                    F64x2Mul => self.simd(0xf2),
+                    F64x2Div => self.simd(0xf3),
+                    F64x2Min => self.simd(0xf4),
+                    F64x2Max => self.simd(0xf5),
                 }
             }
 
@@ -453,75 +453,84 @@ impl<'instr> Visitor<'instr> for Emit<'_, '_> {
                     I64Extend16S => self.encoder.byte(0xc3),
                     I64Extend32S => self.encoder.byte(0xc4),
 
-                    I8x16Splat => self.simd(0x04),
+                    I8x16Splat => self.simd(0x0f),
+                    I16x8Splat => self.simd(0x10),
+                    I32x4Splat => self.simd(0x11),
+                    I64x2Splat => self.simd(0x12),
+                    F32x4Splat => self.simd(0x13),
+                    F64x2Splat => self.simd(0x14),
                     I8x16ExtractLaneS { idx } => {
-                        self.simd(0x05);
+                        self.simd(0x15);
                         self.encoder.byte(idx);
                     }
                     I8x16ExtractLaneU { idx } => {
-                        self.simd(0x06);
-                        self.encoder.byte(idx);
-                    }
-                    I16x8Splat => self.simd(0x08),
-                    I16x8ExtractLaneS { idx } => {
-                        self.simd(0x09);
-                        self.encoder.byte(idx);
-                    }
-                    I16x8ExtractLaneU { idx } => {
-                        self.simd(0x0a);
-                        self.encoder.byte(idx);
-                    }
-                    I32x4Splat => self.simd(0x0c),
-                    I32x4ExtractLane { idx } => {
-                        self.simd(0x0d);
-                        self.encoder.byte(idx);
-                    }
-                    I64x2Splat => self.simd(0x0f),
-                    I64x2ExtractLane { idx } => {
-                        self.simd(0x10);
-                        self.encoder.byte(idx);
-                    }
-                    F32x4Splat => self.simd(0x12),
-                    F32x4ExtractLane { idx } => {
-                        self.simd(0x13);
-                        self.encoder.byte(idx);
-                    }
-                    F64x2Splat => self.simd(0x15),
-                    F64x2ExtractLane { idx } => {
                         self.simd(0x16);
                         self.encoder.byte(idx);
                     }
+                    I16x8ExtractLaneS { idx } => {
+                        self.simd(0x18);
+                        self.encoder.byte(idx);
+                    }
+                    I16x8ExtractLaneU { idx } => {
+                        self.simd(0x19);
+                        self.encoder.byte(idx);
+                    }
+                    I32x4ExtractLane { idx } => {
+                        self.simd(0x1b);
+                        self.encoder.byte(idx);
+                    }
+                    I64x2ExtractLane { idx } => {
+                        self.simd(0x1d);
+                        self.encoder.byte(idx);
+                    }
+                    F32x4ExtractLane { idx } => {
+                        self.simd(0x1f);
+                        self.encoder.byte(idx);
+                    }
+                    F64x2ExtractLane { idx } => {
+                        self.simd(0x21);
+                        self.encoder.byte(idx);
+                    }
 
-                    V128Not => self.simd(0x4c),
+                    V128Not => self.simd(0x4d),
 
-                    I8x16Neg => self.simd(0x51),
-                    I8x16AnyTrue => self.simd(0x52),
-                    I8x16AllTrue => self.simd(0x53),
-                    I16x8Neg => self.simd(0x62),
-                    I16x8AnyTrue => self.simd(0x63),
-                    I16x8AllTrue => self.simd(0x64),
-                    I32x4Neg => self.simd(0x73),
-                    I32x4AnyTrue => self.simd(0x74),
-                    I32x4AllTrue => self.simd(0x75),
-                    I64x2Neg => self.simd(0x84),
-                    I64x2AnyTrue => self.simd(0x85),
-                    I64x2AllTrue => self.simd(0x86),
+                    I8x16Abs => self.simd(0x60),
+                    I8x16Neg => self.simd(0x61),
+                    I8x16AnyTrue => self.simd(0x62),
+                    I8x16AllTrue => self.simd(0x63),
 
-                    F32x4Abs => self.simd(0x95),
-                    F32x4Neg => self.simd(0x96),
-                    F32x4Sqrt => self.simd(0x97),
-                    F64x2Abs => self.simd(0xa0),
-                    F64x2Neg => self.simd(0xa1),
-                    F64x2Sqrt => self.simd(0xa2),
+                    I16x8Abs => self.simd(0x80),
+                    I16x8Neg => self.simd(0x81),
+                    I16x8AnyTrue => self.simd(0x82),
+                    I16x8AllTrue => self.simd(0x83),
+                    I16x8WidenLowI8x16S => self.simd(0x87),
+                    I16x8WidenHighI8x16S => self.simd(0x88),
+                    I16x8WidenLowI8x16U => self.simd(0x89),
+                    I16x8WidenHighI8x16U => self.simd(0x8a),
 
-                    I32x4TruncSF32x4Sat => self.simd(0xab),
-                    I32x4TruncUF32x4Sat => self.simd(0xac),
-                    I64x2TruncSF64x2Sat => self.simd(0xad),
-                    I64x2TruncUF64x2Sat => self.simd(0xae),
-                    F32x4ConvertSI32x4 => self.simd(0xaf),
-                    F32x4ConvertUI32x4 => self.simd(0xb0),
-                    F64x2ConvertSI64x2 => self.simd(0xb1),
-                    F64x2ConvertUI64x2 => self.simd(0xb2),
+                    I32x4Abs => self.simd(0xa0),
+                    I32x4Neg => self.simd(0xa1),
+                    I32x4AnyTrue => self.simd(0xa2),
+                    I32x4AllTrue => self.simd(0xa3),
+                    I32x4WidenLowI16x8S => self.simd(0xa7),
+                    I32x4WidenHighI16x8S => self.simd(0xa8),
+                    I32x4WidenLowI16x8U => self.simd(0xa9),
+                    I32x4WidenHighI16x8U => self.simd(0xaa),
+
+                    I64x2Neg => self.simd(0xc1),
+
+                    F32x4Abs => self.simd(0xe0),
+                    F32x4Neg => self.simd(0xe1),
+                    F32x4Sqrt => self.simd(0xe3),
+
+                    F64x2Abs => self.simd(0xec),
+                    F64x2Neg => self.simd(0xed),
+                    F64x2Sqrt => self.simd(0xef),
+
+                    I32x4TruncSatF32x4S => self.simd(0xf8),
+                    I32x4TruncSatF32x4U => self.simd(0xf9),
+                    F32x4ConvertI32x4S => self.simd(0xfa),
+                    F32x4ConvertI32x4U => self.simd(0xfb),
 
                     I32TruncSSatF32 => self.encoder.raw(&[0xfc, 0x00]),
                     I32TruncUSatF32 => self.encoder.raw(&[0xfc, 0x01]),
@@ -531,15 +540,6 @@ impl<'instr> Visitor<'instr> for Emit<'_, '_> {
                     I64TruncUSatF32 => self.encoder.raw(&[0xfc, 0x05]),
                     I64TruncSSatF64 => self.encoder.raw(&[0xfc, 0x06]),
                     I64TruncUSatF64 => self.encoder.raw(&[0xfc, 0x07]),
-
-                    I16x8WidenLowI8x16S => self.simd(0xca),
-                    I16x8WidenHighI8x16S => self.simd(0xcb),
-                    I16x8WidenLowI8x16U => self.simd(0xcc),
-                    I16x8WidenHighI8x16U => self.simd(0xcd),
-                    I32x4WidenLowI16x8S => self.simd(0xce),
-                    I32x4WidenHighI16x8S => self.simd(0xcf),
-                    I32x4WidenLowI16x8U => self.simd(0xd0),
-                    I32x4WidenHighI16x8U => self.simd(0xd1),
                 }
             }
 
@@ -665,7 +665,7 @@ impl<'instr> Visitor<'instr> for Emit<'_, '_> {
                     I64 { atomic: true } => self.encoder.raw(&[0xfe, 0x18]), // i64.atomic.store
                     F32 => self.encoder.byte(0x38),                   // f32.store
                     F64 => self.encoder.byte(0x39),                   // f64.store
-                    V128 => self.simd(0x01),                          // v128.store
+                    V128 => self.simd(0x0b),                          // v128.store
                     I32_8 { atomic: false } => self.encoder.byte(0x3a), // i32.store8
                     I32_8 { atomic: true } => self.encoder.raw(&[0xfe, 0x19]), // i32.atomic.store8
                     I32_16 { atomic: false } => self.encoder.byte(0x3b), // i32.store16
@@ -811,27 +811,27 @@ impl<'instr> Visitor<'instr> for Emit<'_, '_> {
             }
 
             V128Bitselect(_) => {
-                self.simd(0x50);
-            }
-            V128Swizzle(_) => {
-                self.simd(0xc0);
+                self.simd(0x52);
             }
             V128Shuffle(e) => {
-                self.simd(0xc1);
+                self.simd(0x0d);
                 self.encoder.raw(&e.indices);
+            }
+            V128Swizzle(_) => {
+                self.simd(0x0e);
             }
             LoadSimd(e) => {
                 match e.kind {
-                    LoadSimdKind::Splat8 => self.simd(0xc2),
-                    LoadSimdKind::Splat16 => self.simd(0xc3),
-                    LoadSimdKind::Splat32 => self.simd(0xc4),
-                    LoadSimdKind::Splat64 => self.simd(0xc5),
-                    LoadSimdKind::I16x8Load8x8S => self.simd(0xd2),
-                    LoadSimdKind::I16x8Load8x8U => self.simd(0xd3),
-                    LoadSimdKind::I32x4Load16x4S => self.simd(0xd4),
-                    LoadSimdKind::I32x4Load16x4U => self.simd(0xd5),
-                    LoadSimdKind::I64x2Load32x2S => self.simd(0xd6),
-                    LoadSimdKind::I64x2Load32x2U => self.simd(0xd7),
+                    LoadSimdKind::I16x8Load8x8S => self.simd(0x01),
+                    LoadSimdKind::I16x8Load8x8U => self.simd(0x02),
+                    LoadSimdKind::I32x4Load16x4S => self.simd(0x03),
+                    LoadSimdKind::I32x4Load16x4U => self.simd(0x04),
+                    LoadSimdKind::I64x2Load32x2S => self.simd(0x05),
+                    LoadSimdKind::I64x2Load32x2U => self.simd(0x06),
+                    LoadSimdKind::Splat8 => self.simd(0x07),
+                    LoadSimdKind::Splat16 => self.simd(0x08),
+                    LoadSimdKind::Splat32 => self.simd(0x09),
+                    LoadSimdKind::Splat64 => self.simd(0x0a),
                 }
                 self.memarg(e.memory, &e.arg);
             }
@@ -842,8 +842,8 @@ impl<'instr> Visitor<'instr> for Emit<'_, '_> {
             }
             TableCopy(e) => {
                 self.encoder.raw(&[0xfc, 0x0e]);
-                self.encoder.u32(self.indices.get_table_index(e.src));
                 self.encoder.u32(self.indices.get_table_index(e.dst));
+                self.encoder.u32(self.indices.get_table_index(e.src));
             }
             ElemDrop(e) => {
                 self.encoder.raw(&[0xfc, 0x0d]);

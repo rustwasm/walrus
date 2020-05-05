@@ -309,10 +309,6 @@
     local.get 0
     local.get 1
     i8x16.sub_saturate_s)
-   (func $i8x16.mul (export "i8x16.mul") (param v128 v128) (result v128)
-    local.get 0
-    local.get 1
-    i8x16.mul)
 
    (func $i16x8.neg (export "i16x8.neg") (param v128) (result v128)
     local.get 0
@@ -401,12 +397,6 @@
    (func $i64x2.neg (export "i64x2.neg") (param v128) (result v128)
     local.get 0
     i64x2.neg)
-   (func $i64x2.any_true (export "i64x2.any_true") (param v128) (result i32)
-    local.get 0
-    i64x2.any_true)
-   (func $i64x2.all_true (export "i64x2.all_true") (param v128) (result i32)
-    local.get 0
-    i64x2.all_true)
    (func $i64x2.shl (export "i64x2.shl") (param v128 i32) (result v128)
     local.get 0
     local.get 1
@@ -759,10 +749,6 @@
       local.get 0
       local.get 1
       i8x16.sub_saturate_s)
-    (func $i8x16.mul (type 15) (param v128 v128) (result v128)
-      local.get 0
-      local.get 1
-      i8x16.mul)
     (func $i16x8.shl (type 11) (param v128 i32) (result v128)
       local.get 0
       local.get 1
@@ -973,12 +959,6 @@
     (func $i64x2.neg (type 10) (param v128) (result v128)
       local.get 0
       i64x2.neg)
-    (func $i64x2.any_true (type 6) (param v128) (result i32)
-      local.get 0
-      i64x2.any_true)
-    (func $i64x2.all_true (type 6) (param v128) (result i32)
-      local.get 0
-      i64x2.all_true)
     (func $f32x4.abs (type 10) (param v128) (result v128)
       local.get 0
       f32x4.abs)
@@ -1089,7 +1069,6 @@
     (export "i8x16.sub" (func $i8x16.sub))
     (export "i8x16.sub_saturate_u" (func $i8x16.sub_saturate_u))
     (export "i8x16.sub_saturate_s" (func $i8x16.sub_saturate_s))
-    (export "i8x16.mul" (func $i8x16.mul))
     (export "i16x8.neg" (func $i16x8.neg))
     (export "i16x8.any_true" (func $i16x8.any_true))
     (export "i16x8.all_true" (func $i16x8.all_true))
@@ -1113,8 +1092,6 @@
     (export "i32x4.sub" (func $i32x4.sub))
     (export "i32x4.mul" (func $i32x4.mul))
     (export "i64x2.neg" (func $i64x2.neg))
-    (export "i64x2.any_true" (func $i64x2.any_true))
-    (export "i64x2.all_true" (func $i64x2.all_true))
     (export "i64x2.shl" (func $i64x2.shl))
     (export "i64x2.shr_s" (func $i64x2.shr_s))
     (export "i64x2.shr_u" (func $i64x2.shr_u))

@@ -1352,7 +1352,6 @@ fn validate_instruction<'context>(
         Operator::I8x16Sub => binop(ctx, V128, BinaryOp::I8x16Sub)?,
         Operator::I8x16SubSaturateS => binop(ctx, V128, BinaryOp::I8x16SubSaturateS)?,
         Operator::I8x16SubSaturateU => binop(ctx, V128, BinaryOp::I8x16SubSaturateU)?,
-        Operator::I8x16Mul => binop(ctx, V128, BinaryOp::I8x16Mul)?,
 
         Operator::I16x8Neg => unop(ctx, V128, UnaryOp::I16x8Neg)?,
         Operator::I16x8AnyTrue => one_op(ctx, V128, I32, UnaryOp::I16x8AnyTrue)?,
@@ -1379,8 +1378,6 @@ fn validate_instruction<'context>(
         Operator::I32x4Mul => binop(ctx, V128, BinaryOp::I32x4Mul)?,
 
         Operator::I64x2Neg => unop(ctx, V128, UnaryOp::I64x2Neg)?,
-        Operator::I64x2AnyTrue => one_op(ctx, V128, I32, UnaryOp::I64x2AnyTrue)?,
-        Operator::I64x2AllTrue => one_op(ctx, V128, I32, UnaryOp::I64x2AllTrue)?,
         Operator::I64x2Shl => two_ops(ctx, V128, I32, V128, BinaryOp::I64x2Shl)?,
         Operator::I64x2ShrS => two_ops(ctx, V128, I32, V128, BinaryOp::I64x2ShrS)?,
         Operator::I64x2ShrU => two_ops(ctx, V128, I32, V128, BinaryOp::I64x2ShrU)?,
@@ -1408,14 +1405,18 @@ fn validate_instruction<'context>(
         Operator::F64x2Min => binop(ctx, V128, BinaryOp::F64x2Min)?,
         Operator::F64x2Max => binop(ctx, V128, BinaryOp::F64x2Max)?,
 
-        Operator::I32x4TruncSatF32x4S => unop(ctx, V128, UnaryOp::I32x4TruncSF32x4Sat)?,
-        Operator::I32x4TruncSatF32x4U => unop(ctx, V128, UnaryOp::I32x4TruncUF32x4Sat)?,
-        Operator::I64x2TruncSatF64x2S => unop(ctx, V128, UnaryOp::I64x2TruncSF64x2Sat)?,
-        Operator::I64x2TruncSatF64x2U => unop(ctx, V128, UnaryOp::I64x2TruncUF64x2Sat)?,
-        Operator::F32x4ConvertI32x4S => unop(ctx, V128, UnaryOp::F32x4ConvertSI32x4)?,
-        Operator::F32x4ConvertI32x4U => unop(ctx, V128, UnaryOp::F32x4ConvertUI32x4)?,
-        Operator::F64x2ConvertI64x2S => unop(ctx, V128, UnaryOp::F64x2ConvertSI64x2)?,
-        Operator::F64x2ConvertI64x2U => unop(ctx, V128, UnaryOp::F64x2ConvertUI64x2)?,
+        Operator::I32x4TruncSatF32x4S => unop(ctx, V128, UnaryOp::I32x4TruncSatF32x4S)?,
+        Operator::I32x4TruncSatF32x4U => unop(ctx, V128, UnaryOp::I32x4TruncSatF32x4U)?,
+        Operator::F32x4ConvertI32x4S => unop(ctx, V128, UnaryOp::F32x4ConvertI32x4S)?,
+        Operator::F32x4ConvertI32x4U => unop(ctx, V128, UnaryOp::F32x4ConvertI32x4U)?,
+
+        Operator::I64x2AnyTrue
+        | Operator::I64x2AllTrue
+        | Operator::I64x2TruncSatF64x2S
+        | Operator::I64x2TruncSatF64x2U
+        | Operator::F64x2ConvertI64x2S
+        | Operator::F64x2ConvertI64x2U
+        | Operator::I8x16Mul => bail!("instruction removed from spec"),
 
         Operator::I32TruncSatF32S => one_op(ctx, F32, I32, UnaryOp::I32TruncSSatF32)?,
         Operator::I32TruncSatF32U => one_op(ctx, F32, I32, UnaryOp::I32TruncUSatF32)?,
@@ -1479,6 +1480,11 @@ fn validate_instruction<'context>(
         } => {
             let src = ctx.indices.get_table(src_table)?;
             let dst = ctx.indices.get_table(dst_table)?;
+            let src_ty = ctx.module.tables.get(src).element_ty;
+            let dst_ty = ctx.module.tables.get(dst).element_ty;
+            if !src_ty.is_subtype_of(dst_ty) {
+                bail!("type mismatch: cannot copy between tables of different types");
+            }
             ctx.pop_operand_expected(Some(I32))?;
             ctx.pop_operand_expected(Some(I32))?;
             ctx.pop_operand_expected(Some(I32))?;
@@ -1488,6 +1494,11 @@ fn validate_instruction<'context>(
         Operator::TableInit { segment, table } => {
             let elem = ctx.indices.get_element(segment)?;
             let table = ctx.indices.get_table(table)?;
+            let elem_ty = ctx.module.elements.get(elem).ty;
+            let table_ty = ctx.module.tables.get(table).element_ty;
+            if !elem_ty.is_subtype_of(table_ty) {
+                bail!("type mismatch: cannot initialize table of different type");
+            }
             ctx.pop_operand_expected(Some(I32))?;
             ctx.pop_operand_expected(Some(I32))?;
             ctx.pop_operand_expected(Some(I32))?;

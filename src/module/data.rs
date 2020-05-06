@@ -113,6 +113,14 @@ impl ModuleData {
         self.arena.iter().map(|(_, f)| f)
     }
 
+    /// Add a data segment
+    pub fn add(&mut self, kind: DataKind, value: Vec<u8>) -> DataId {
+        let id = self.arena.next_id();
+        let id2 = self.arena.alloc(Data { id, kind, value });
+        debug_assert_eq!(id, id2);
+        id
+    }
+
     // Note that this is inaccordance with the upstream bulk memory proposal to
     // WebAssembly and isn't currently part of the WebAssembly standard.
     pub(crate) fn emit_data_count(&self, cx: &mut EmitContext) {

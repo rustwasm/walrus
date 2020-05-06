@@ -71,9 +71,32 @@ impl ModuleElements {
         self.arena.delete(id);
     }
 
-    /// Get a shared reference to this module's passive elements.
+    /// Get a shared reference to this module's elements.
     pub fn iter(&self) -> impl Iterator<Item = &Element> {
         self.arena.iter().map(|(_, f)| f)
+    }
+
+    /// Get a mutable reference to this module's elements.
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut Element> {
+        self.arena.iter_mut().map(|(_, f)| f)
+    }
+
+    /// Add an element segment
+    pub fn add(
+        &mut self,
+        kind: ElementKind,
+        ty: ValType,
+        members: Vec<Option<FunctionId>>,
+    ) -> ElementId {
+        let id = self.arena.next_id();
+        let id2 = self.arena.alloc(Element {
+            id,
+            kind,
+            ty,
+            members,
+        });
+        debug_assert_eq!(id, id2);
+        id
     }
 }
 

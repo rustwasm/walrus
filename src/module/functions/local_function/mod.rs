@@ -1340,6 +1340,7 @@ fn validate_instruction<'context>(
             ctx.push_operand(Some(V128));
         }
 
+        Operator::I8x16Abs => unop(ctx, V128, UnaryOp::I8x16Abs)?,
         Operator::I8x16Neg => unop(ctx, V128, UnaryOp::I8x16Neg)?,
         Operator::I8x16AnyTrue => one_op(ctx, V128, I32, UnaryOp::I8x16AnyTrue)?,
         Operator::I8x16AllTrue => one_op(ctx, V128, I32, UnaryOp::I8x16AllTrue)?,
@@ -1353,6 +1354,7 @@ fn validate_instruction<'context>(
         Operator::I8x16SubSaturateS => binop(ctx, V128, BinaryOp::I8x16SubSaturateS)?,
         Operator::I8x16SubSaturateU => binop(ctx, V128, BinaryOp::I8x16SubSaturateU)?,
 
+        Operator::I16x8Abs => unop(ctx, V128, UnaryOp::I16x8Abs)?,
         Operator::I16x8Neg => unop(ctx, V128, UnaryOp::I16x8Neg)?,
         Operator::I16x8AnyTrue => one_op(ctx, V128, I32, UnaryOp::I16x8AnyTrue)?,
         Operator::I16x8AllTrue => one_op(ctx, V128, I32, UnaryOp::I16x8AllTrue)?,
@@ -1367,6 +1369,7 @@ fn validate_instruction<'context>(
         Operator::I16x8SubSaturateU => binop(ctx, V128, BinaryOp::I16x8SubSaturateU)?,
         Operator::I16x8Mul => binop(ctx, V128, BinaryOp::I16x8Mul)?,
 
+        Operator::I32x4Abs => unop(ctx, V128, UnaryOp::I32x4Abs)?,
         Operator::I32x4Neg => unop(ctx, V128, UnaryOp::I32x4Neg)?,
         Operator::I32x4AnyTrue => one_op(ctx, V128, I32, UnaryOp::I32x4AnyTrue)?,
         Operator::I32x4AllTrue => one_op(ctx, V128, I32, UnaryOp::I32x4AllTrue)?,
@@ -1409,14 +1412,6 @@ fn validate_instruction<'context>(
         Operator::I32x4TruncSatF32x4U => unop(ctx, V128, UnaryOp::I32x4TruncSatF32x4U)?,
         Operator::F32x4ConvertI32x4S => unop(ctx, V128, UnaryOp::F32x4ConvertI32x4S)?,
         Operator::F32x4ConvertI32x4U => unop(ctx, V128, UnaryOp::F32x4ConvertI32x4U)?,
-
-        Operator::I64x2AnyTrue
-        | Operator::I64x2AllTrue
-        | Operator::I64x2TruncSatF64x2S
-        | Operator::I64x2TruncSatF64x2U
-        | Operator::F64x2ConvertI64x2S
-        | Operator::F64x2ConvertI64x2U
-        | Operator::I8x16Mul => bail!("instruction removed from spec"),
 
         Operator::I32TruncSatF32S => one_op(ctx, F32, I32, UnaryOp::I32TruncSSatF32)?,
         Operator::I32TruncSatF32U => one_op(ctx, F32, I32, UnaryOp::I32TruncUSatF32)?,

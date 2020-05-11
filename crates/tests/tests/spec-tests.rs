@@ -10,12 +10,6 @@ struct Test {
     commands: Vec<serde_json::Value>,
 }
 
-const STABLE_FEATURES: &[&str] = &[
-    "--enable-multi-value",
-    "--enable-saturating-float-to-int",
-    "--enable-sign-extension",
-];
-
 fn run(wast: &Path) -> Result<(), anyhow::Error> {
     static INIT_LOGS: std::sync::Once = std::sync::Once::new();
     INIT_LOGS.call_once(|| {
@@ -59,7 +53,6 @@ fn run(wast: &Path) -> Result<(), anyhow::Error> {
         .arg(wast)
         .arg("-o")
         .arg(&json)
-        .args(STABLE_FEATURES)
         .args(extra_args)
         .status()
         .context("executing `wast2json`")?;
@@ -179,7 +172,6 @@ fn run_spectest_interp(cwd: &Path, extra_args: &[&str]) -> Result<(), anyhow::Er
     let output = Command::new("spectest-interp")
         .current_dir(cwd)
         .arg("foo.json")
-        .args(STABLE_FEATURES)
         .args(extra_args)
         .output()
         .context("executing `spectest-interp`")?;

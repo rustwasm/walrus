@@ -7,19 +7,6 @@ use std::sync::Once;
 
 pub type Result<T> = std::result::Result<T, anyhow::Error>;
 
-pub const FEATURES: &[&str] = &[
-    "--enable-threads",
-    "--enable-bulk-memory",
-    "--enable-reference-types",
-    "--enable-simd",
-    "--enable-multi-value",
-    // TODO
-    // "--enable-saturating-float-to-int",
-    // "--enable-sign-extension",
-    // "--enable-tail-call",
-    // "--enable-annotations",
-];
-
 fn require_tool(tool: &str, repo: &str) {
     let diagnostic = format!("Could not spawn {}; do you have {} installed?", tool, repo);
     let status = Command::new(tool)
@@ -46,7 +33,7 @@ pub fn wasm_interp(path: &Path) -> Result<String> {
     // This requires a build of WABT at least as new as `41adcbfb` to get
     // `wasm-interp`'s `--dummy-import-func`.
     cmd.arg("--dummy-import-func");
-    cmd.args(FEATURES);
+    cmd.arg("--enable-all");
     println!("running: {:?}", cmd);
     let output = cmd.output().context("could notrun wasm-interp")?;
     if !output.status.success() {

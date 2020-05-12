@@ -178,7 +178,7 @@ where
                     // iteration but with smaller fuel, do that. Otherwise
                     // return the failing test case.
                     if self.fuel > 1 {
-                        self.fuel -= self.fuel / 10;
+                        self.fuel -= (self.fuel / 10).max(1);
                     } else {
                         return failing;
                     }

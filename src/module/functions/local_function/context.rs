@@ -241,7 +241,7 @@ fn impl_pop_operand_expected(
         (None, expected) => Ok(expected),
         (actual, None) => Ok(actual),
         (Some(actual), Some(expected)) => {
-            if !actual.is_subtype_of(expected) {
+            if actual != expected {
                 Err(ErrorKind::InvalidWasm)
                     .context(format!("expected type {}", expected))
                     .context(format!("found type {}", actual))

@@ -182,7 +182,7 @@ impl Used {
                         stack.push_func(*func);
                     }
                     GlobalKind::Local(InitExpr::Value(_))
-                    | GlobalKind::Local(InitExpr::RefNull) => {}
+                    | GlobalKind::Local(InitExpr::RefNull(_)) => {}
                 }
             }
 

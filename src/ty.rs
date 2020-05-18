@@ -146,12 +146,10 @@ pub enum ValType {
     F64,
     /// 128-bit vector.
     V128,
-    /// The `anyref` opaque value type
-    Anyref,
+    /// The `externref` opaque value type
+    Externref,
     /// The `funcref` value type, representing a callable function
     Funcref,
-    /// The `nullref` value type, representing a value of type `null`
-    Nullref,
 }
 
 impl ValType {
@@ -170,9 +168,8 @@ impl ValType {
             wasmparser::Type::F32 => Ok(ValType::F32),
             wasmparser::Type::F64 => Ok(ValType::F64),
             wasmparser::Type::V128 => Ok(ValType::V128),
-            wasmparser::Type::AnyRef => Ok(ValType::Anyref),
-            wasmparser::Type::AnyFunc => Ok(ValType::Funcref),
-            wasmparser::Type::NullRef => Ok(ValType::Nullref),
+            wasmparser::Type::ExternRef => Ok(ValType::Externref),
+            wasmparser::Type::FuncRef => Ok(ValType::Funcref),
             _ => bail!("not a value type"),
         }
     }
@@ -185,17 +182,7 @@ impl ValType {
             ValType::F64 => encoder.byte(0x7c),
             ValType::V128 => encoder.byte(0x7b),
             ValType::Funcref => encoder.byte(0x70),
-            ValType::Anyref => encoder.byte(0x6f),
-            ValType::Nullref => encoder.byte(0x6e),
-        }
-    }
-
-    pub(crate) fn is_subtype_of(&self, other: ValType) -> bool {
-        match (self, other) {
-            (ValType::Nullref, ValType::Funcref)
-            | (ValType::Nullref, ValType::Anyref)
-            | (ValType::Funcref, ValType::Anyref) => true,
-            (a, b) => *a == b,
+            ValType::Externref => encoder.byte(0x6f),
         }
     }
 }
@@ -211,9 +198,8 @@ impl fmt::Display for ValType {
                 ValType::F32 => "f32",
                 ValType::F64 => "f64",
                 ValType::V128 => "v128",
-                ValType::Anyref => "anyref",
+                ValType::Externref => "externref",
                 ValType::Funcref => "funcref",
-                ValType::Nullref => "nullref",
             }
         )
     }

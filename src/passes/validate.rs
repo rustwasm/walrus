@@ -149,13 +149,13 @@ fn validate_global(
                 bail!("locally defined global does not match type of import");
             }
         }
-        GlobalKind::Local(InitExpr::RefNull) => {
-            if !ValType::Nullref.is_subtype_of(global.ty) {
+        GlobalKind::Local(InitExpr::RefNull(ty)) => {
+            if global.ty != ty {
                 bail!("invalid type on global");
             }
         }
         GlobalKind::Local(InitExpr::RefFunc(idx)) => {
-            if !ValType::Funcref.is_subtype_of(global.ty) {
+            if ValType::Funcref != global.ty {
                 bail!("invalid type on global");
             }
             if !defined_funcs.contains(&idx) {

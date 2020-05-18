@@ -3,6 +3,7 @@
 use crate::emit::{Emit, EmitContext};
 use crate::ir::Value;
 use crate::parse::IndicesToIds;
+use crate::ValType;
 use crate::{FunctionId, GlobalId, Result};
 use anyhow::bail;
 
@@ -15,7 +16,7 @@ pub enum InitExpr {
     /// A constant value referenced by the global specified
     Global(GlobalId),
     /// A null reference
-    RefNull,
+    RefNull(ValType),
     /// A function initializer
     RefFunc(FunctionId),
 }
@@ -31,7 +32,7 @@ impl InitExpr {
             F64Const { value } => InitExpr::Value(Value::F64(f64::from_bits(value.bits()))),
             V128Const { value } => InitExpr::Value(Value::V128(v128_to_u128(&value))),
             GlobalGet { global_index } => InitExpr::Global(ids.get_global(global_index)?),
-            RefNull => InitExpr::RefNull,
+            RefNull { ty } => InitExpr::RefNull(ValType::parse(&ty)?),
             RefFunc { function_index } => InitExpr::RefFunc(ids.get_func(function_index)?),
             _ => bail!("invalid constant expression"),
         };
@@ -53,7 +54,10 @@ impl Emit for InitExpr {
                 cx.encoder.byte(0x23); // global.get
                 cx.encoder.u32(idx);
             }
-            InitExpr::RefNull => cx.encoder.byte(0xd0), // ref.null
+            InitExpr::RefNull(ty) => {
+                cx.encoder.byte(0xd0); // ref.null
+                ty.emit(&mut cx.encoder);
+            }
             InitExpr::RefFunc(id) => {
                 cx.encoder.byte(0xd2); // ref.func
                 cx.encoder.u32(cx.indices.get_func_index(id));

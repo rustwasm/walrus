@@ -798,11 +798,13 @@ impl<'instr> Visitor<'instr> for Emit<'_, '_> {
                 let idx = self.indices.get_table_index(e.table);
                 self.encoder.u32(idx);
             }
-            RefNull(_e) => {
+            RefNull(e) => {
                 self.encoder.byte(0xd0);
+                e.ty.emit(self.encoder);
             }
-            RefIsNull(_e) => {
+            RefIsNull(e) => {
                 self.encoder.byte(0xd1);
+                e.ty.emit(self.encoder);
             }
             RefFunc(e) => {
                 self.encoder.byte(0xd2);

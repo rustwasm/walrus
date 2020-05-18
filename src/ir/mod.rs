@@ -520,11 +520,19 @@ pub enum Instr {
         table: TableId,
     },
 
-    /// `ref.null`
-    RefNull {},
+    /// `ref.null $ty`
+    RefNull {
+        /// The type of null that we're producing
+        #[walrus(skip_visit)]
+        ty: ValType,
+    },
 
-    /// `ref.is_null`
-    RefIsNull {},
+    /// `ref.is_null $ty`
+    RefIsNull {
+        /// The type of value we're testing for null
+        #[walrus(skip_visit)]
+        ty: ValType,
+    },
 
     /// `ref.func`
     RefFunc {

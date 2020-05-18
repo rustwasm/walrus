@@ -774,18 +774,9 @@ fn validate_instruction<'context>(
                 }
 
                 for (actual, expected) in control.label_types().iter().zip(&mut types) {
-                    // If we're already a subtype, nothing to do...
-                    if actual.is_subtype_of(*expected) {
+                    if actual == expected {
                         continue;
                     }
-                    // ... otherwise attempt to "unify" ourselves with the
-                    // actual type, in which case change future expected
-                    // types...
-                    if expected.is_subtype_of(*actual) {
-                        *expected = *actual;
-                        continue;
-                    }
-                    // ... and otherwise we found an error!
                     bail!("br_table jump with non-uniform label types")
                 }
             }
@@ -1202,13 +1193,15 @@ fn validate_instruction<'context>(
             ctx.pop_operand_expected(Some(I32))?;
             ctx.alloc_instr(TableFill { table }, loc);
         }
-        Operator::RefNull => {
-            ctx.alloc_instr(RefNull {}, loc);
-            ctx.push_operand(Some(Nullref));
+        Operator::RefNull { ty } => {
+            let ty = ValType::parse(&ty)?;
+            ctx.alloc_instr(RefNull { ty }, loc);
+            ctx.push_operand(Some(ty));
         }
-        Operator::RefIsNull => {
-            ctx.pop_operand_expected(Some(Anyref))?;
-            ctx.alloc_instr(RefIsNull {}, loc);
+        Operator::RefIsNull { ty } => {
+            let ty = ValType::parse(&ty)?;
+            ctx.pop_operand_expected(Some(ty))?;
+            ctx.alloc_instr(RefIsNull { ty }, loc);
             ctx.push_operand(Some(I32));
         }
         Operator::RefFunc { function_index } => {
@@ -1477,7 +1470,7 @@ fn validate_instruction<'context>(
             let dst = ctx.indices.get_table(dst_table)?;
             let src_ty = ctx.module.tables.get(src).element_ty;
             let dst_ty = ctx.module.tables.get(dst).element_ty;
-            if !src_ty.is_subtype_of(dst_ty) {
+            if src_ty != dst_ty {
                 bail!("type mismatch: cannot copy between tables of different types");
             }
             ctx.pop_operand_expected(Some(I32))?;
@@ -1491,7 +1484,7 @@ fn validate_instruction<'context>(
             let table = ctx.indices.get_table(table)?;
             let elem_ty = ctx.module.elements.get(elem).ty;
             let table_ty = ctx.module.tables.get(table).element_ty;
-            if !elem_ty.is_subtype_of(table_ty) {
+            if elem_ty != table_ty {
                 bail!("type mismatch: cannot initialize table of different type");
             }
             ctx.pop_operand_expected(Some(I32))?;

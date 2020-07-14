@@ -142,6 +142,9 @@ impl Module {
                 Table => ExportItem::Table(ids.get_table(entry.index)?),
                 Memory => ExportItem::Memory(ids.get_memory(entry.index)?),
                 Global => ExportItem::Global(ids.get_global(entry.index)?),
+                Type | Module | Instance => {
+                    unimplemented!("module linking not supported");
+                }
             };
             self.exports.arena.alloc_with_id(|id| Export {
                 id,

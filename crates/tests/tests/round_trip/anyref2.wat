@@ -1,6 +1,6 @@
 (module
-  (table 1 anyref)
-  (func (export "a") (param i32) (result anyref)
+  (table 1 externref)
+  (func (export "a") (param i32) (result externref)
     local.get 0
     table.get 0))
 

@@ -12,8 +12,8 @@ use crate::parse::IndicesToIds;
 use crate::tombstone_arena::{Id, Tombstone, TombstoneArena};
 use crate::ty::TypeId;
 use crate::ty::ValType;
-use anyhow::bail;
 use std::cmp;
+use wasmparser::{FuncValidator, FunctionBody, OperatorsReader};
 
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
@@ -323,25 +323,19 @@ impl Module {
     /// Add the locally defined functions in the wasm module to this instance.
     pub(crate) fn parse_local_functions(
         &mut self,
-        section: wasmparser::CodeSectionReader,
-        function_section_count: u32,
+        functions: Vec<(FunctionBody<'_>, FuncValidator, OperatorsReader<'_>)>,
         indices: &mut IndicesToIds,
         on_instr_pos: Option<&(dyn Fn(&usize) -> InstrLocId + Sync + Send + 'static)>,
     ) -> Result<()> {
         log::debug!("parse code section");
-        let amt = section.get_count();
-        if amt != function_section_count {
-            bail!("code and function sections must have same number of entries")
-        }
-        let num_imports = self.funcs.arena.len() - (amt as usize);
+        let num_imports = self.funcs.arena.len() - functions.len();
 
         // First up serially create corresponding `LocalId` instances for all
         // functions as well as extract the operators parser for each function.
         // This is pretty tough to parallelize, but we can look into it later if
         // necessary and it's a bottleneck!
-        let mut bodies = Vec::with_capacity(amt as usize);
-        for (i, body) in section.into_iter().enumerate() {
-            let body = body?;
+        let mut bodies = Vec::with_capacity(functions.len());
+        for (i, (body, _validator, ops)) in functions.into_iter().enumerate() {
             let index = (num_imports + i) as u32;
             let id = indices.get_func(index)?;
             let ty = match self.funcs.arena[id].kind {
@@ -370,19 +364,7 @@ impl Module {
             let results = type_.results().to_vec();
             self.types.add_entry_ty(&results);
 
-            // WebAssembly local indices are 32 bits, so it's a validation error to
-            // have more than 2^32 locals. Sure enough there's a spec test for this!
-            let mut total = 0u32;
-            for local in body.get_locals_reader()? {
-                let (count, _) = local?;
-                total = match total.checked_add(count) {
-                    Some(n) => n,
-                    None => bail!("can't have more than 2^32 locals"),
-                };
-            }
-
-            // Now that we know we have a reasonable amount of locals, put them in
-            // our map.
+            // Next up comes all the locals of the function.
             for local in body.get_locals_reader()? {
                 let (count, ty) = local?;
                 let ty = ValType::parse(&ty)?;
@@ -396,8 +378,7 @@ impl Module {
                 }
             }
 
-            let body = body.get_operators_reader()?;
-            bodies.push((id, body, args, ty));
+            bodies.push((id, ops, args, ty));
         }
 
         // Wasm modules can often have a lot of functions and this operation can

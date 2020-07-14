@@ -119,7 +119,10 @@ impl Module {
     ) -> Result<()> {
         log::debug!("parsing type section");
         for ty in section {
-            let fun_ty = ty?;
+            let fun_ty = match ty? {
+                wasmparser::TypeDef::Func(ty) => ty,
+                _ => unimplemented!("module linking not supported"),
+            };
             let id = self.types.arena.next_id();
             let params = fun_ty
                 .params

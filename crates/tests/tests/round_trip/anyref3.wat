@@ -1,8 +1,8 @@
 (module
   (type (func))
-  (table 1 anyfunc)
-  (table 1 anyref)
-  (func (export "a") (param i32) (result anyref)
+  (table 1 funcref)
+  (table 1 externref)
+  (func (export "a") (param i32) (result externref)
     local.get 0
     call_indirect (type 0)
     local.get 0

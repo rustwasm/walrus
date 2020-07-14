@@ -36,10 +36,11 @@ pub use crate::module::producers::ModuleProducers;
 pub use crate::module::tables::{ModuleTables, Table, TableId};
 pub use crate::module::types::ModuleTypes;
 use crate::parse::IndicesToIds;
-use anyhow::{bail, Context};
+use anyhow::Context;
 use std::fs;
 use std::mem;
 use std::path::Path;
+use wasmparser::{Parser, Payload, Validator};
 
 pub use self::config::ModuleConfig;
 
@@ -112,111 +113,113 @@ impl Module {
     }
 
     fn parse(wasm: &[u8], config: &ModuleConfig) -> Result<Module> {
-        let mut parser = wasmparser::ModuleReader::new(wasm)?;
-        if parser.get_version() != 1 {
-            bail!("only support version 1 of wasm");
-        }
-
         let mut ret = Module::default();
         ret.config = config.clone();
         let mut indices = IndicesToIds::default();
-        let mut function_section_size = None;
-        let mut data_count = None;
+        let mut validator = Validator::new();
+        validator.wasm_multi_value(true);
+        if !config.only_stable_features {
+            validator
+                .wasm_reference_types(true)
+                .wasm_multi_value(true)
+                .wasm_bulk_memory(true)
+                .wasm_simd(true)
+                .wasm_threads(true);
+        }
 
-        while !parser.eof() {
-            let section = parser.read()?;
-            match section.code {
-                wasmparser::SectionCode::Data => {
-                    let reader = section.get_data_section_reader()?;
-                    ret.parse_data(reader, &mut indices, data_count)
+        let mut local_functions = Vec::new();
+
+        for payload in Parser::new(0).parse_all(wasm) {
+            match payload? {
+                Payload::Version { num, range } => {
+                    validator.version(num, &range)?;
+                }
+                Payload::DataSection(s) => {
+                    validator
+                        .data_section(&s)
                         .context("failed to parse data section")?;
+                    ret.parse_data(s, &mut indices)?;
                 }
-                wasmparser::SectionCode::Type => {
-                    let reader = section.get_type_section_reader()?;
-                    ret.parse_types(reader, &mut indices)
+                Payload::TypeSection(s) => {
+                    validator
+                        .type_section(&s)
                         .context("failed to parse type section")?;
+                    ret.parse_types(s, &mut indices)?;
                 }
-                wasmparser::SectionCode::Import => {
-                    let reader = section.get_import_section_reader()?;
-                    ret.parse_imports(reader, &mut indices)
+                Payload::ImportSection(s) => {
+                    validator
+                        .import_section(&s)
                         .context("failed to parse import section")?;
+                    ret.parse_imports(s, &mut indices)?;
                 }
-                wasmparser::SectionCode::Table => {
-                    let reader = section.get_table_section_reader()?;
-                    ret.parse_tables(reader, &mut indices)
+                Payload::TableSection(s) => {
+                    validator
+                        .table_section(&s)
                         .context("failed to parse table section")?;
+                    ret.parse_tables(s, &mut indices)?;
                 }
-                wasmparser::SectionCode::Memory => {
-                    let reader = section.get_memory_section_reader()?;
-                    ret.parse_memories(reader, &mut indices)
+                Payload::MemorySection(s) => {
+                    validator
+                        .memory_section(&s)
                         .context("failed to parse memory section")?;
+                    ret.parse_memories(s, &mut indices)?;
                 }
-                wasmparser::SectionCode::Global => {
-                    let reader = section.get_global_section_reader()?;
-                    ret.parse_globals(reader, &mut indices)
+                Payload::GlobalSection(s) => {
+                    validator
+                        .global_section(&s)
                         .context("failed to parse global section")?;
+                    ret.parse_globals(s, &mut indices)?;
                 }
-                wasmparser::SectionCode::Export => {
-                    let reader = section.get_export_section_reader()?;
-                    ret.parse_exports(reader, &mut indices)
+                Payload::ExportSection(s) => {
+                    validator
+                        .export_section(&s)
                         .context("failed to parse export section")?;
+                    ret.parse_exports(s, &mut indices)?;
                 }
-                wasmparser::SectionCode::Element => {
-                    let reader = section.get_element_section_reader()?;
-                    ret.parse_elements(reader, &mut indices)
+                Payload::ElementSection(s) => {
+                    validator
+                        .element_section(&s)
                         .context("failed to parse element section")?;
+                    ret.parse_elements(s, &mut indices)?;
                 }
-                wasmparser::SectionCode::Start => {
-                    let idx = section.get_start_section_content()?;
-                    if ret.start.is_some() {
-                        bail!("multiple start sections found");
-                    }
-                    ret.start = Some(indices.get_func(idx)?);
+                Payload::StartSection { func, range, .. } => {
+                    validator.start_section(func, &range)?;
+                    ret.start = Some(indices.get_func(func)?);
                 }
-                wasmparser::SectionCode::Function => {
-                    let reader = section.get_function_section_reader()?;
-                    function_section_size = Some(reader.get_count());
-                    ret.declare_local_functions(reader, &mut indices)
+                Payload::FunctionSection(s) => {
+                    validator
+                        .function_section(&s)
                         .context("failed to parse function section")?;
+                    ret.declare_local_functions(s, &mut indices)?;
                 }
-                wasmparser::SectionCode::Code => {
-                    let function_section_size = match function_section_size.take() {
-                        Some(i) => i,
-                        None => bail!("cannot have a code section without function section"),
-                    };
-                    let reader = section.get_code_section_reader()?;
-                    let on_instr_loc = config.on_instr_loc.as_ref().map(|f| f.as_ref());
-                    ret.parse_local_functions(
-                        reader,
-                        function_section_size,
-                        &mut indices,
-                        on_instr_loc,
-                    )
-                    .context("failed to parse code section")?;
-                }
-                wasmparser::SectionCode::DataCount => {
-                    let count = section.get_data_count_section_content()?;
-                    data_count = Some(count);
+                Payload::DataCountSection { count, range } => {
+                    validator.data_count_section(count, &range)?;
                     ret.reserve_data(count, &mut indices);
                 }
-                wasmparser::SectionCode::Custom { name, kind: _ } => {
+                Payload::CodeSectionStart { count, range, .. } => {
+                    validator.code_section_start(count, &range)?;
+                }
+                Payload::CodeSectionEntry(body) => {
+                    let (validator, ops) = validator.code_section_entry(&body)?;
+                    local_functions.push((body, validator, ops));
+                }
+                Payload::CustomSection {
+                    name,
+                    data,
+                    data_offset,
+                } => {
                     let result = match name {
-                        "producers" => {
-                            let reader = section.get_producers_section_reader()?;
-                            ret.parse_producers_section(reader)
-                        }
-                        "name" => section
-                            .get_name_section_reader()
+                        "producers" => wasmparser::ProducersSectionReader::new(data, data_offset)
+                            .map_err(anyhow::Error::from)
+                            .and_then(|s| ret.parse_producers_section(s)),
+                        "name" => wasmparser::NameSectionReader::new(data, data_offset)
                             .map_err(anyhow::Error::from)
                             .and_then(|r| ret.parse_name_section(r, &indices)),
                         _ => {
                             log::debug!("parsing custom section `{}`", name);
-                            let mut reader = section.get_binary_reader();
-                            let len = reader.bytes_remaining();
-                            let payload = reader.read_bytes(len)?;
                             ret.customs.add(RawCustomSection {
                                 name: name.to_string(),
-                                data: payload.to_vec(),
+                                data: data.to_vec(),
                             });
                             continue;
                         }
@@ -225,12 +228,40 @@ impl Module {
                         log::warn!("failed to parse `{}` custom section {}", name, e);
                     }
                 }
+                Payload::UnknownSection { id, range, .. } => {
+                    validator.unknown_section(id, &range)?;
+                    unreachable!()
+                }
+
+                Payload::End => validator.end()?,
+
+                // the module linking proposal is not implemented yet
+                Payload::AliasSection(s) => {
+                    validator.alias_section(&s)?;
+                    unreachable!()
+                }
+                Payload::InstanceSection(s) => {
+                    validator.instance_section(&s)?;
+                    unreachable!()
+                }
+                Payload::ModuleSection(s) => {
+                    validator.module_section(&s)?;
+                    unreachable!()
+                }
+                Payload::ModuleCodeSectionStart { count, range, .. } => {
+                    validator.module_code_section_start(count, &range)?;
+                    unreachable!()
+                }
+                Payload::ModuleCodeSectionEntry { .. } => unreachable!(),
             }
         }
 
-        if function_section_size.is_some() {
-            bail!("cannot define a function section without a code section");
-        }
+        ret.parse_local_functions(
+            local_functions,
+            &mut indices,
+            config.on_instr_loc.as_ref().map(|f| f.as_ref()),
+        )
+        .context("failed to parse code section")?;
 
         ret.producers
             .add_processed_by("walrus", env!("CARGO_PKG_VERSION"));
@@ -240,7 +271,7 @@ impl Module {
             crate::passes::validate::run(&ret)?;
         }
 
-        if let Some(ref on_parse) = config.on_parse {
+        if let Some(on_parse) = &config.on_parse {
             on_parse(&mut ret, &indices)?;
         }
 

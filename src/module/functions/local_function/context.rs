@@ -17,10 +17,6 @@ pub(crate) struct ControlFrame {
     /// The result type of the block (used to check its result).
     pub end_types: Box<[ValType]>,
 
-    /// The height of the operand stack at the start of the block (used to check
-    /// that operands do not underflow the current block).
-    pub height: usize,
-
     /// If `true`, then this frame is unreachable. This is used to handle
     /// stack-polymorphic typing after unconditional branches.
     pub unreachable: bool,
@@ -31,25 +27,6 @@ pub(crate) struct ControlFrame {
     /// This control frame's kind of block, eg loop vs block vs if/else.
     pub kind: BlockKind,
 }
-
-impl ControlFrame {
-    /// Get the expected types on the stack for branches to this block.
-    pub fn label_types(&self) -> &[ValType] {
-        if let BlockKind::Loop = self.kind {
-            &self.start_types
-        } else {
-            &self.end_types
-        }
-    }
-}
-
-/// The operand stack.
-///
-/// `None` is used for `Unknown` stack-polymophic values.
-///
-/// We also keep track of the instruction that created the value at each stack
-/// slot.
-pub(crate) type OperandStack = Vec<Option<ValType>>;
 
 /// The control frame stack.
 pub(crate) type ControlStack = Vec<ControlFrame>;
@@ -67,9 +44,6 @@ pub(crate) struct ValidationContext<'a> {
 
     /// The function being validated/constructed.
     pub func: &'a mut LocalFunction,
-
-    /// The operands stack.
-    pub operands: &'a mut OperandStack,
 
     /// The control frames stack.
     pub controls: &'a mut ControlStack,
@@ -91,7 +65,6 @@ impl<'a> ValidationContext<'a> {
         indices: &'a IndicesToIds,
         func_id: FunctionId,
         func: &'a mut LocalFunction,
-        operands: &'a mut OperandStack,
         controls: &'a mut ControlStack,
     ) -> ValidationContext<'a> {
         ValidationContext {
@@ -99,30 +72,9 @@ impl<'a> ValidationContext<'a> {
             indices,
             func_id,
             func,
-            operands,
             controls,
             if_else: Vec::new(),
         }
-    }
-
-    pub fn push_operand(&mut self, op: Option<ValType>) {
-        impl_push_operand(&mut self.operands, op);
-    }
-
-    pub fn pop_operand(&mut self) -> Result<Option<ValType>> {
-        impl_pop_operand(&mut self.operands, &mut self.controls)
-    }
-
-    pub fn pop_operand_expected(&mut self, expected: Option<ValType>) -> Result<Option<ValType>> {
-        impl_pop_operand_expected(&mut self.operands, &mut self.controls, expected)
-    }
-
-    pub fn push_operands(&mut self, types: &[ValType]) {
-        impl_push_operands(&mut self.operands, types);
-    }
-
-    pub fn pop_operands(&mut self, expected: &[ValType]) -> Result<()> {
-        impl_pop_operands(&mut self.operands, &self.controls, expected)
     }
 
     pub fn push_control(
@@ -136,7 +88,6 @@ impl<'a> ValidationContext<'a> {
             kind,
             self.func,
             self.controls,
-            self.operands,
             start_types,
             end_types,
         )
@@ -151,7 +102,6 @@ impl<'a> ValidationContext<'a> {
             kind,
             self.func,
             self.controls,
-            self.operands,
             ty.into(),
             start_types,
             end_types,
@@ -159,7 +109,7 @@ impl<'a> ValidationContext<'a> {
     }
 
     pub fn pop_control(&mut self) -> Result<(ControlFrame, InstrSeqId)> {
-        let frame = impl_pop_control(&mut self.controls, &mut self.operands)?;
+        let frame = impl_pop_control(&mut self.controls)?;
         let block = frame.block;
         Ok((frame, block))
     }
@@ -167,8 +117,6 @@ impl<'a> ValidationContext<'a> {
     pub fn unreachable(&mut self) {
         let frame = self.controls.last_mut().unwrap();
         frame.unreachable = true;
-        let height = frame.height;
-        self.operands.truncate(height);
     }
 
     pub fn control(&self, n: usize) -> Result<&ControlFrame> {
@@ -208,73 +156,11 @@ impl<'a> ValidationContext<'a> {
     }
 }
 
-fn impl_push_operand(operands: &mut OperandStack, op: Option<ValType>) {
-    log::trace!("push operand: {:?}", op);
-    operands.push(op);
-}
-
-fn impl_pop_operand(
-    operands: &mut OperandStack,
-    controls: &ControlStack,
-) -> Result<Option<ValType>> {
-    if let Some(f) = controls.last() {
-        if operands.len() == f.height {
-            if f.unreachable {
-                log::trace!("pop operand: None");
-                return Ok(None);
-            }
-            return Err(ErrorKind::InvalidWasm)
-                .context("popped operand past control frame height in non-unreachable code");
-        }
-    }
-    let op = operands.pop().unwrap();
-    log::trace!("pop operand: {:?}", op);
-    Ok(op)
-}
-
-fn impl_pop_operand_expected(
-    operands: &mut OperandStack,
-    controls: &ControlStack,
-    expected: Option<ValType>,
-) -> Result<Option<ValType>> {
-    match (impl_pop_operand(operands, controls)?, expected) {
-        (None, expected) => Ok(expected),
-        (actual, None) => Ok(actual),
-        (Some(actual), Some(expected)) => {
-            if actual != expected {
-                Err(ErrorKind::InvalidWasm)
-                    .context(format!("expected type {}", expected))
-                    .context(format!("found type {}", actual))
-            } else {
-                Ok(Some(expected))
-            }
-        }
-    }
-}
-
-fn impl_push_operands(operands: &mut OperandStack, types: &[ValType]) {
-    for ty in types {
-        impl_push_operand(operands, Some(*ty));
-    }
-}
-
-fn impl_pop_operands(
-    operands: &mut OperandStack,
-    controls: &ControlStack,
-    expected: &[ValType],
-) -> Result<()> {
-    for ty in expected.iter().cloned().rev() {
-        impl_pop_operand_expected(operands, controls, Some(ty))?;
-    }
-    Ok(())
-}
-
 fn impl_push_control(
     types: &ModuleTypes,
     kind: BlockKind,
     func: &mut LocalFunction,
     controls: &mut ControlStack,
-    operands: &mut OperandStack,
     start_types: Box<[ValType]>,
     end_types: Box<[ValType]>,
 ) -> Result<InstrSeqId> {
@@ -291,7 +177,6 @@ fn impl_push_control(
         kind,
         func,
         controls,
-        operands,
         ty,
         start_types,
         end_types,
@@ -303,7 +188,6 @@ fn impl_push_control_with_ty(
     kind: BlockKind,
     func: &mut LocalFunction,
     controls: &mut ControlStack,
-    operands: &mut OperandStack,
     ty: InstrSeqType,
     start_types: Box<[ValType]>,
     end_types: Box<[ValType]>,
@@ -313,15 +197,11 @@ fn impl_push_control_with_ty(
         debug_assert_eq!(types.results(ty), &end_types[..]);
     }
 
-    let height = operands.len();
-    impl_push_operands(operands, &start_types);
-
     let block = func.add_block(|id| InstrSeq::new(id, ty));
 
     controls.push(ControlFrame {
         start_types,
         end_types,
-        height,
         unreachable: false,
         block,
         kind,
@@ -330,23 +210,11 @@ fn impl_push_control_with_ty(
     block
 }
 
-fn impl_pop_control(
-    controls: &mut ControlStack,
-    operands: &mut OperandStack,
-) -> Result<ControlFrame> {
-    let frame = controls
+fn impl_pop_control(controls: &mut ControlStack) -> Result<ControlFrame> {
+    controls
         .last()
         .ok_or_else(|| ErrorKind::InvalidWasm)
         .context("attempted to pop a frame from an empty control stack")?;
-    impl_pop_operands(operands, controls, &frame.end_types)?;
-    if operands.len() != frame.height {
-        return Err(ErrorKind::InvalidWasm).context(format!(
-            "incorrect number of operands on the stack at the end of a control frame; \
-             found {}, expected {}",
-            operands.len(),
-            frame.height
-        ));
-    }
     let frame = controls.pop().unwrap();
     Ok(frame)
 }

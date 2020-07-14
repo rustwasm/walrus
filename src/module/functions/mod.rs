@@ -335,7 +335,7 @@ impl Module {
         // This is pretty tough to parallelize, but we can look into it later if
         // necessary and it's a bottleneck!
         let mut bodies = Vec::with_capacity(functions.len());
-        for (i, (body, _validator, ops)) in functions.into_iter().enumerate() {
+        for (i, (body, validator, ops)) in functions.into_iter().enumerate() {
             let index = (num_imports + i) as u32;
             let id = indices.get_func(index)?;
             let ty = match self.funcs.arena[id].kind {
@@ -378,16 +378,25 @@ impl Module {
                 }
             }
 
-            bodies.push((id, ops, args, ty));
+            bodies.push((id, ops, args, ty, validator));
         }
 
         // Wasm modules can often have a lot of functions and this operation can
         // take some time, so parse all function bodies in parallel.
         let results = maybe_parallel!(bodies.(into_iter | into_par_iter))
-            .map(|(id, body, args, ty)| {
+            .map(|(id, body, args, ty, validator)| {
                 (
                     id,
-                    LocalFunction::parse(self, indices, id, ty, args, body, on_instr_pos),
+                    LocalFunction::parse(
+                        self,
+                        indices,
+                        id,
+                        ty,
+                        args,
+                        body,
+                        on_instr_pos,
+                        validator,
+                    ),
                 )
             })
             .collect::<Vec<_>>();

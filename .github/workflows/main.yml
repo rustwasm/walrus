@@ -20,7 +20,7 @@ jobs:
     - uses: actions/checkout@v2
       with:
         repository: WebAssembly/wabt
-        ref: e88bc660cf89ca84dccda358cfbadc8a7c2bc935
+        ref: 7c88424c98f157d375458fe6b2cd392959d7d217
         path: wabt
     - name: Build wabt
       run: |

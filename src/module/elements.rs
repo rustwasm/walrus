@@ -218,6 +218,7 @@ impl Emit for ModuleElements {
                     None => {
                         assert!(exprs);
                         cx.encoder.byte(0xd0);
+                        element.ty.emit(&mut cx.encoder);
                         cx.encoder.byte(0x0b);
                     }
                 }

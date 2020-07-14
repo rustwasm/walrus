@@ -47,6 +47,10 @@ fn run(wast: &Path) -> Result<(), anyhow::Error> {
         // not a walrus thing, but not implemented in wabt fully yet anyway
         Some("annotations") => return Ok(()),
 
+        // not implemented in walrus yet
+        Some("function-references") => return Ok(()),
+        Some("exception-handling") => return Ok(()),
+
         // Some("threads") => &["--enable-threads"],
         Some(other) => panic!("unknown wasm proposal: {}", other),
     };

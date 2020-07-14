@@ -185,20 +185,15 @@ impl Module {
         &mut self,
         section: wasmparser::DataSectionReader,
         ids: &IndicesToIds,
-        data_count: Option<u32>,
     ) -> Result<()> {
         log::debug!("parse data section");
-        if let Some(count) = data_count {
-            if count != section.get_count() {
-                bail!("data count section mismatches actual data section");
-            }
-        }
+        let preallocated = self.data.arena.len() > 0;
         for (i, segment) in section.into_iter().enumerate() {
             let segment = segment?;
 
             // If we had the `DataCount` section, then we already pre-allocated
             // a data segment. Otherwise, allocate one now.
-            let id = if data_count.is_some() {
+            let id = if preallocated {
                 ids.get_data(i as u32)?
             } else {
                 self.data.arena.alloc_with_id(|id| Data {

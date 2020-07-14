@@ -417,7 +417,7 @@ impl TestCaseGenerator for WasmOptTtf {
 
             // Only generate programs that wat2wasm can handle.
             if let Ok(bytes) = wat::parse_bytes(&wat) {
-                if wasmparser::validate(&bytes, None).is_ok() {
+                if wasmparser::validate(&bytes).is_ok() {
                     return String::from_utf8(wat).unwrap();
                 }
             }

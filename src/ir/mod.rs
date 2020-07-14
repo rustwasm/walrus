@@ -527,12 +527,8 @@ pub enum Instr {
         ty: ValType,
     },
 
-    /// `ref.is_null $ty`
-    RefIsNull {
-        /// The type of value we're testing for null
-        #[walrus(skip_visit)]
-        ty: ValType,
-    },
+    /// `ref.is_null`
+    RefIsNull {},
 
     /// `ref.func`
     RefFunc {
@@ -946,14 +942,17 @@ pub enum UnaryOp {
     I8x16Neg,
     I8x16AnyTrue,
     I8x16AllTrue,
+    I8x16Bitmask,
     I16x8Abs,
     I16x8Neg,
     I16x8AnyTrue,
     I16x8AllTrue,
+    I16x8Bitmask,
     I32x4Abs,
     I32x4Neg,
     I32x4AnyTrue,
     I32x4AllTrue,
+    I32x4Bitmask,
     I64x2Neg,
 
     F32x4Abs,

@@ -1,6 +1,6 @@
 (module
-  (import "x" "y" (func (param anyref)))
-  (func (export "a") (param anyref)
+  (import "x" "y" (func (param externref)))
+  (func (export "a") (param externref)
     local.get 0
     call 0))
 

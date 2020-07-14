@@ -1198,10 +1198,9 @@ fn validate_instruction<'context>(
             ctx.alloc_instr(RefNull { ty }, loc);
             ctx.push_operand(Some(ty));
         }
-        Operator::RefIsNull { ty } => {
-            let ty = ValType::parse(&ty)?;
-            ctx.pop_operand_expected(Some(ty))?;
-            ctx.alloc_instr(RefIsNull { ty }, loc);
+        Operator::RefIsNull => {
+            // ctx.pop_operand_expected(Some(ty))?;
+            ctx.alloc_instr(RefIsNull {}, loc);
             ctx.push_operand(Some(I32));
         }
         Operator::RefFunc { function_index } => {
@@ -1462,6 +1461,10 @@ fn validate_instruction<'context>(
         Operator::I32x4MaxS => binop(ctx, V128, BinaryOp::I32x4MaxS)?,
         Operator::I32x4MaxU => binop(ctx, V128, BinaryOp::I32x4MaxU)?,
 
+        Operator::I8x16Bitmask => one_op(ctx, V128, I32, UnaryOp::I8x16Bitmask)?,
+        Operator::I16x8Bitmask => one_op(ctx, V128, I32, UnaryOp::I16x8Bitmask)?,
+        Operator::I32x4Bitmask => one_op(ctx, V128, I32, UnaryOp::I32x4Bitmask)?,
+
         Operator::TableCopy {
             src_table,
             dst_table,
@@ -1496,6 +1499,10 @@ fn validate_instruction<'context>(
         Operator::ElemDrop { segment } => {
             let elem = ctx.indices.get_element(segment)?;
             ctx.alloc_instr(ElemDrop { elem }, loc);
+        }
+
+        Operator::ReturnCall { .. } | Operator::ReturnCallIndirect { .. } => {
+            unimplemented!("not supported");
         }
     }
     Ok(())

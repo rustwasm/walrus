@@ -117,14 +117,18 @@ impl Module {
             match entry.ty {
                 wasmparser::ImportSectionEntryType::Function(idx) => {
                     let ty = ids.get_type(idx)?;
-                    let id = self.add_import_func(entry.module, entry.field, ty);
+                    let id = self.add_import_func(
+                        entry.module,
+                        entry.field.expect("module linking not supported"),
+                        ty,
+                    );
                     ids.push_func(id.0);
                 }
                 wasmparser::ImportSectionEntryType::Table(t) => {
                     let ty = ValType::parse(&t.element_type)?;
                     let id = self.add_import_table(
                         entry.module,
-                        entry.field,
+                        entry.field.expect("module linking not supported"),
                         t.limits.initial,
                         t.limits.maximum,
                         ty,
@@ -134,7 +138,7 @@ impl Module {
                 wasmparser::ImportSectionEntryType::Memory(m) => {
                     let id = self.add_import_memory(
                         entry.module,
-                        entry.field,
+                        entry.field.expect("module linking not supported"),
                         m.shared,
                         m.limits.initial,
                         m.limits.maximum,
@@ -144,11 +148,15 @@ impl Module {
                 wasmparser::ImportSectionEntryType::Global(g) => {
                     let id = self.add_import_global(
                         entry.module,
-                        entry.field,
+                        entry.field.expect("module linking not supported"),
                         ValType::parse(&g.content_type)?,
                         g.mutable,
                     );
                     ids.push_global(id.0);
+                }
+                wasmparser::ImportSectionEntryType::Module(_)
+                | wasmparser::ImportSectionEntryType::Instance(_) => {
+                    unimplemented!("module linking not implemented");
                 }
             }
         }

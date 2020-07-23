@@ -48,15 +48,15 @@
       i32.atomic.rmw.add
       i32.const 0
       i32.const 1
-      atomic.notify
+      memory.atomic.notify
       i32.const 0
       i32.const 1
       i64.const 2
-      i32.atomic.wait
+      memory.atomic.wait32
       i32.const 0
       i64.const 1
       i64.const 2
-      i64.atomic.wait
+      memory.atomic.wait64
       i32.add
       i32.add
       i32.add

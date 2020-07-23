@@ -40,7 +40,7 @@ use anyhow::Context;
 use std::fs;
 use std::mem;
 use std::path::Path;
-use wasmparser::{Parser, Payload, Validator};
+use wasmparser::{Parser, Payload, Validator, WasmFeatures};
 
 pub use self::config::ModuleConfig;
 
@@ -117,15 +117,14 @@ impl Module {
         ret.config = config.clone();
         let mut indices = IndicesToIds::default();
         let mut validator = Validator::new();
-        validator.wasm_multi_value(true);
-        if !config.only_stable_features {
-            validator
-                .wasm_reference_types(true)
-                .wasm_multi_value(true)
-                .wasm_bulk_memory(true)
-                .wasm_simd(true)
-                .wasm_threads(true);
-        }
+        validator.wasm_features(WasmFeatures {
+            reference_types: !config.only_stable_features,
+            multi_value: true,
+            bulk_memory: !config.only_stable_features,
+            simd: !config.only_stable_features,
+            threads: !config.only_stable_features,
+            ..WasmFeatures::default()
+        });
 
         let mut local_functions = Vec::new();
 
@@ -200,8 +199,8 @@ impl Module {
                     validator.code_section_start(count, &range)?;
                 }
                 Payload::CodeSectionEntry(body) => {
-                    let (validator, ops) = validator.code_section_entry(&body)?;
-                    local_functions.push((body, validator, ops));
+                    let validator = validator.code_section_entry()?;
+                    local_functions.push((body, validator));
                 }
                 Payload::CustomSection {
                     name,

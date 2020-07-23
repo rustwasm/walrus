@@ -13,7 +13,7 @@ use crate::tombstone_arena::{Id, Tombstone, TombstoneArena};
 use crate::ty::TypeId;
 use crate::ty::ValType;
 use std::cmp;
-use wasmparser::{FuncValidator, FunctionBody, OperatorsReader};
+use wasmparser::{FuncValidator, FunctionBody, ValidatorResources};
 
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
@@ -323,7 +323,7 @@ impl Module {
     /// Add the locally defined functions in the wasm module to this instance.
     pub(crate) fn parse_local_functions(
         &mut self,
-        functions: Vec<(FunctionBody<'_>, FuncValidator, OperatorsReader<'_>)>,
+        functions: Vec<(FunctionBody<'_>, FuncValidator<ValidatorResources>)>,
         indices: &mut IndicesToIds,
         on_instr_pos: Option<&(dyn Fn(&usize) -> InstrLocId + Sync + Send + 'static)>,
     ) -> Result<()> {
@@ -335,7 +335,7 @@ impl Module {
         // This is pretty tough to parallelize, but we can look into it later if
         // necessary and it's a bottleneck!
         let mut bodies = Vec::with_capacity(functions.len());
-        for (i, (body, validator, ops)) in functions.into_iter().enumerate() {
+        for (i, (body, mut validator)) in functions.into_iter().enumerate() {
             let index = (num_imports + i) as u32;
             let id = indices.get_func(index)?;
             let ty = match self.funcs.arena[id].kind {
@@ -365,8 +365,12 @@ impl Module {
             self.types.add_entry_ty(&results);
 
             // Next up comes all the locals of the function.
-            for local in body.get_locals_reader()? {
-                let (count, ty) = local?;
+            let mut reader = body.get_binary_reader();
+            for _ in 0..reader.read_var_u32()? {
+                let pos = reader.original_position();
+                let count = reader.read_var_u32()?;
+                let ty = reader.read_type()?;
+                validator.define_locals(pos, count, ty)?;
                 let ty = ValType::parse(&ty)?;
                 for _ in 0..count {
                     let local_id = self.locals.add(ty);
@@ -378,7 +382,7 @@ impl Module {
                 }
             }
 
-            bodies.push((id, ops, args, ty, validator));
+            bodies.push((id, reader, args, ty, validator));
         }
 
         // Wasm modules can often have a lot of functions and this operation can

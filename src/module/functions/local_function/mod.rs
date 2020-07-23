@@ -11,7 +11,7 @@ use crate::map::{IdHashMap, IdHashSet};
 use crate::parse::IndicesToIds;
 use crate::{Data, DataId, FunctionBuilder, FunctionId, Module, Result, TypeId, ValType};
 use std::collections::BTreeMap;
-use wasmparser::Operator;
+use wasmparser::{FuncValidator, Operator, ValidatorResources};
 
 /// A function defined locally within the wasm module.
 #[derive(Debug)]
@@ -42,9 +42,9 @@ impl LocalFunction {
         id: FunctionId,
         ty: TypeId,
         args: Vec<LocalId>,
-        mut body: wasmparser::OperatorsReader,
+        mut body: wasmparser::BinaryReader<'_>,
         on_instr_pos: Option<&(dyn Fn(&usize) -> InstrLocId + Sync + Send + 'static)>,
-        mut validator: wasmparser::FuncValidator,
+        mut validator: FuncValidator<ValidatorResources>,
     ) -> Result<LocalFunction> {
         let mut func = LocalFunction {
             builder: FunctionBuilder::without_entry(ty),
@@ -64,7 +64,8 @@ impl LocalFunction {
         let entry = ctx.push_control_with_ty(BlockKind::FunctionEntry, ty);
         ctx.func.builder.entry = Some(entry);
         while !body.eof() {
-            let (inst, pos) = body.read_with_offset()?;
+            let pos = body.original_position();
+            let inst = body.read_operator()?;
             let loc = if let Some(ref on_instr_pos) = on_instr_pos {
                 on_instr_pos(&pos)
             } else {
@@ -73,7 +74,7 @@ impl LocalFunction {
             validator.op(pos, &inst)?;
             append_instruction(&mut ctx, inst, loc);
         }
-        validator.finish()?;
+        validator.finish(body.original_position())?;
 
         debug_assert!(ctx.controls.is_empty());
 
@@ -644,16 +645,23 @@ fn append_instruction<'context>(
 
         Operator::BrTable { table } => {
             let mut blocks = Vec::with_capacity(table.len());
-            let (labels, default) = table.read_table().unwrap();
-            let default = ctx.control(default as usize).unwrap();
-
-            let default = default.block;
-            for label in labels.iter() {
-                let control = ctx.control(*label as usize).unwrap();
-                blocks.push(control.block);
+            let mut default = None;
+            for pair in table.targets() {
+                let (target, is_default) = pair.unwrap();
+                let control = ctx.control(target as usize).unwrap();
+                if is_default {
+                    default = Some(control.block);
+                } else {
+                    blocks.push(control.block);
+                }
             }
-            let blocks = blocks.into_boxed_slice();
-            ctx.alloc_instr(BrTable { blocks, default }, loc);
+            ctx.alloc_instr(
+                BrTable {
+                    blocks: blocks.into(),
+                    default: default.unwrap(),
+                },
+                loc,
+            );
             ctx.unreachable();
         }
 
@@ -929,7 +937,7 @@ fn append_instruction<'context>(
         Operator::I64AtomicRmw32CmpxchgU { memarg } => {
             cmpxchg(ctx, memarg, AtomicWidth::I64_32);
         }
-        Operator::AtomicNotify { ref memarg } => {
+        Operator::MemoryAtomicNotify { ref memarg } => {
             let memory = ctx.indices.get_memory(0).unwrap();
             ctx.alloc_instr(
                 AtomicNotify {
@@ -939,9 +947,10 @@ fn append_instruction<'context>(
                 loc,
             );
         }
-        Operator::I32AtomicWait { ref memarg } | Operator::I64AtomicWait { ref memarg } => {
+        Operator::MemoryAtomicWait32 { ref memarg }
+        | Operator::MemoryAtomicWait64 { ref memarg } => {
             let sixty_four = match inst {
-                Operator::I32AtomicWait { .. } => false,
+                Operator::MemoryAtomicWait32 { .. } => false,
                 _ => true,
             };
             let memory = ctx.indices.get_memory(0).unwrap();

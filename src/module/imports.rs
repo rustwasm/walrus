@@ -5,6 +5,7 @@ use crate::parse::IndicesToIds;
 use crate::tombstone_arena::{Id, Tombstone, TombstoneArena};
 use crate::{FunctionId, GlobalId, MemoryId, Result, TableId};
 use crate::{Module, TypeId, ValType};
+use anyhow::bail;
 
 /// The id of an import.
 pub type ImportId = Id<Import>;
@@ -136,12 +137,18 @@ impl Module {
                     ids.push_table(id.0);
                 }
                 wasmparser::ImportSectionEntryType::Memory(m) => {
+                    let (shared, limits) = match m {
+                        wasmparser::MemoryType::M32 { shared, limits } => (shared, limits),
+                        wasmparser::MemoryType::M64 { .. } => {
+                            bail!("64-bit memories not supported")
+                        }
+                    };
                     let id = self.add_import_memory(
                         entry.module,
                         entry.field.expect("module linking not supported"),
-                        m.shared,
-                        m.limits.initial,
-                        m.limits.maximum,
+                        shared,
+                        limits.initial,
+                        limits.maximum,
                     );
                     ids.push_memory(id.0);
                 }

@@ -9,7 +9,7 @@ use crate::encode::Encoder;
 use crate::ir::*;
 use crate::map::{IdHashMap, IdHashSet};
 use crate::parse::IndicesToIds;
-use crate::{Data, DataId, FunctionBuilder, FunctionId, Module, Result, TypeId, ValType};
+use crate::{Data, DataId, FunctionBuilder, FunctionId, MemoryId, Module, Result, TypeId, ValType};
 use std::collections::BTreeMap;
 use wasmparser::{FuncValidator, Operator, ValidatorResources};
 
@@ -301,28 +301,29 @@ fn append_instruction<'context>(
         ctx.alloc_instr(Binop { op }, loc);
     };
 
-    let mem_arg = |arg: &wasmparser::MemoryImmediate| -> MemArg {
-        MemArg {
-            align: 1 << (arg.flags as i32),
-            offset: arg.offset,
-        }
-    };
+    let mem_arg =
+        |ctx: &mut ValidationContext, arg: &wasmparser::MemoryImmediate| -> (MemoryId, MemArg) {
+            (
+                ctx.indices.get_memory(arg.memory).unwrap(),
+                MemArg {
+                    align: 1 << (arg.align as i32),
+                    offset: arg.offset,
+                },
+            )
+        };
 
     let load = |ctx: &mut ValidationContext, arg, kind| {
-        let memory = ctx.indices.get_memory(0).unwrap();
-        let arg = mem_arg(&arg);
+        let (memory, arg) = mem_arg(ctx, &arg);
         ctx.alloc_instr(Load { arg, kind, memory }, loc);
     };
 
     let store = |ctx: &mut ValidationContext, arg, kind| {
-        let memory = ctx.indices.get_memory(0).unwrap();
-        let arg = mem_arg(&arg);
+        let (memory, arg) = mem_arg(ctx, &arg);
         ctx.alloc_instr(Store { arg, kind, memory }, loc);
     };
 
     let atomicrmw = |ctx: &mut ValidationContext, arg, op, width| {
-        let memory = ctx.indices.get_memory(0).unwrap();
-        let arg = mem_arg(&arg);
+        let (memory, arg) = mem_arg(ctx, &arg);
         ctx.alloc_instr(
             AtomicRmw {
                 arg,
@@ -335,14 +336,12 @@ fn append_instruction<'context>(
     };
 
     let cmpxchg = |ctx: &mut ValidationContext, arg, width| {
-        let memory = ctx.indices.get_memory(0).unwrap();
-        let arg = mem_arg(&arg);
+        let (memory, arg) = mem_arg(ctx, &arg);
         ctx.alloc_instr(Cmpxchg { arg, memory, width }, loc);
     };
 
     let load_simd = |ctx: &mut ValidationContext, arg, kind| {
-        let memory = ctx.indices.get_memory(0).unwrap();
-        let arg = mem_arg(&arg);
+        let (memory, arg) = mem_arg(ctx, &arg);
         ctx.alloc_instr(LoadSimd { memory, arg, kind }, loc);
     };
     match inst {
@@ -665,16 +664,16 @@ fn append_instruction<'context>(
             ctx.unreachable();
         }
 
-        Operator::MemorySize { reserved: _ } => {
-            let memory = ctx.indices.get_memory(0).unwrap();
+        Operator::MemorySize { mem, .. } => {
+            let memory = ctx.indices.get_memory(mem).unwrap();
             ctx.alloc_instr(MemorySize { memory }, loc);
         }
-        Operator::MemoryGrow { reserved: _ } => {
-            let memory = ctx.indices.get_memory(0).unwrap();
+        Operator::MemoryGrow { mem, .. } => {
+            let memory = ctx.indices.get_memory(mem).unwrap();
             ctx.alloc_instr(MemoryGrow { memory }, loc);
         }
-        Operator::MemoryInit { segment } => {
-            let memory = ctx.indices.get_memory(0).unwrap();
+        Operator::MemoryInit { segment, mem } => {
+            let memory = ctx.indices.get_memory(mem).unwrap();
             let data = ctx.indices.get_data(segment).unwrap();
             ctx.alloc_instr(MemoryInit { memory, data }, loc);
         }
@@ -682,18 +681,13 @@ fn append_instruction<'context>(
             let data = ctx.indices.get_data(segment).unwrap();
             ctx.alloc_instr(DataDrop { data }, loc);
         }
-        Operator::MemoryCopy => {
-            let memory = ctx.indices.get_memory(0).unwrap();
-            ctx.alloc_instr(
-                MemoryCopy {
-                    src: memory,
-                    dst: memory,
-                },
-                loc,
-            );
+        Operator::MemoryCopy { src, dst } => {
+            let src = ctx.indices.get_memory(src).unwrap();
+            let dst = ctx.indices.get_memory(dst).unwrap();
+            ctx.alloc_instr(MemoryCopy { src, dst }, loc);
         }
-        Operator::MemoryFill => {
-            let memory = ctx.indices.get_memory(0).unwrap();
+        Operator::MemoryFill { mem } => {
+            let memory = ctx.indices.get_memory(mem).unwrap();
             ctx.alloc_instr(MemoryFill { memory }, loc);
         }
 
@@ -938,14 +932,8 @@ fn append_instruction<'context>(
             cmpxchg(ctx, memarg, AtomicWidth::I64_32);
         }
         Operator::MemoryAtomicNotify { ref memarg } => {
-            let memory = ctx.indices.get_memory(0).unwrap();
-            ctx.alloc_instr(
-                AtomicNotify {
-                    memory,
-                    arg: mem_arg(memarg),
-                },
-                loc,
-            );
+            let (memory, arg) = mem_arg(ctx, memarg);
+            ctx.alloc_instr(AtomicNotify { memory, arg }, loc);
         }
         Operator::MemoryAtomicWait32 { ref memarg }
         | Operator::MemoryAtomicWait64 { ref memarg } => {
@@ -953,12 +941,12 @@ fn append_instruction<'context>(
                 Operator::MemoryAtomicWait32 { .. } => false,
                 _ => true,
             };
-            let memory = ctx.indices.get_memory(0).unwrap();
+            let (memory, arg) = mem_arg(ctx, memarg);
             ctx.alloc_instr(
                 AtomicWait {
                     sixty_four,
                     memory,
-                    arg: mem_arg(memarg),
+                    arg,
                 },
                 loc,
             );

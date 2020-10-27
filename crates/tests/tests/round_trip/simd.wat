@@ -289,26 +289,26 @@
     local.get 0
     local.get 1
     i8x16.add)
-   (func $i8x16.add_saturate_u (export "i8x16.add_saturate_u") (param v128 v128) (result v128)
+   (func $i8x16.add_sat_u (export "i8x16.add_sat_u") (param v128 v128) (result v128)
     local.get 0
     local.get 1
-    i8x16.add_saturate_u)
-   (func $i8x16.add_saturate_s (export "i8x16.add_saturate_s") (param v128 v128) (result v128)
+    i8x16.add_sat_u)
+   (func $i8x16.add_sat_s (export "i8x16.add_sat_s") (param v128 v128) (result v128)
     local.get 0
     local.get 1
-    i8x16.add_saturate_s)
+    i8x16.add_sat_s)
    (func $i8x16.sub (export "i8x16.sub") (param v128 v128) (result v128)
     local.get 0
     local.get 1
     i8x16.sub)
-   (func $i8x16.sub_saturate_u (export "i8x16.sub_saturate_u") (param v128 v128) (result v128)
+   (func $i8x16.sub_sat_u (export "i8x16.sub_sat_u") (param v128 v128) (result v128)
     local.get 0
     local.get 1
-    i8x16.sub_saturate_u)
-   (func $i8x16.sub_saturate_s (export "i8x16.sub_saturate_s") (param v128 v128) (result v128)
+    i8x16.sub_sat_u)
+   (func $i8x16.sub_sat_s (export "i8x16.sub_sat_s") (param v128 v128) (result v128)
     local.get 0
     local.get 1
-    i8x16.sub_saturate_s)
+    i8x16.sub_sat_s)
 
    (func $i16x8.neg (export "i16x8.neg") (param v128) (result v128)
     local.get 0
@@ -335,26 +335,26 @@
     local.get 0
     local.get 1
     i16x8.add)
-   (func $i16x8.add_saturate_u (export "i16x8.add_saturate_u") (param v128 v128) (result v128)
+   (func $i16x8.add_sat_u (export "i16x8.add_sat_u") (param v128 v128) (result v128)
     local.get 0
     local.get 1
-    i16x8.add_saturate_u)
-   (func $i16x8.add_saturate_s (export "i16x8.add_saturate_s") (param v128 v128) (result v128)
+    i16x8.add_sat_u)
+   (func $i16x8.add_sat_s (export "i16x8.add_sat_s") (param v128 v128) (result v128)
     local.get 0
     local.get 1
-    i16x8.add_saturate_s)
+    i16x8.add_sat_s)
    (func $i16x8.sub (export "i16x8.sub") (param v128 v128) (result v128)
     local.get 0
     local.get 1
     i16x8.sub)
-   (func $i16x8.sub_saturate_u (export "i16x8.sub_saturate_u") (param v128 v128) (result v128)
+   (func $i16x8.sub_sat_u (export "i16x8.sub_sat_u") (param v128 v128) (result v128)
     local.get 0
     local.get 1
-    i16x8.sub_saturate_u)
-   (func $i16x8.sub_saturate_s (export "i16x8.sub_saturate_s") (param v128 v128) (result v128)
+    i16x8.sub_sat_u)
+   (func $i16x8.sub_sat_s (export "i16x8.sub_sat_s") (param v128 v128) (result v128)
     local.get 0
     local.get 1
-    i16x8.sub_saturate_s)
+    i16x8.sub_sat_s)
    (func $i16x8.mul (export "i16x8.mul") (param v128 v128) (result v128)
     local.get 0
     local.get 1
@@ -729,26 +729,26 @@
       local.get 0
       local.get 1
       i8x16.add)
-    (func $i8x16.add_saturate_u (type 15) (param v128 v128) (result v128)
+    (func $i8x16.add_sat_u (type 15) (param v128 v128) (result v128)
       local.get 0
       local.get 1
-      i8x16.add_saturate_u)
-    (func $i8x16.add_saturate_s (type 15) (param v128 v128) (result v128)
+      i8x16.add_sat_u)
+    (func $i8x16.add_sat_s (type 15) (param v128 v128) (result v128)
       local.get 0
       local.get 1
-      i8x16.add_saturate_s)
+      i8x16.add_sat_s)
     (func $i8x16.sub (type 15) (param v128 v128) (result v128)
       local.get 0
       local.get 1
       i8x16.sub)
-    (func $i8x16.sub_saturate_u (type 15) (param v128 v128) (result v128)
+    (func $i8x16.sub_sat_u (type 15) (param v128 v128) (result v128)
       local.get 0
       local.get 1
-      i8x16.sub_saturate_u)
-    (func $i8x16.sub_saturate_s (type 15) (param v128 v128) (result v128)
+      i8x16.sub_sat_u)
+    (func $i8x16.sub_sat_s (type 15) (param v128 v128) (result v128)
       local.get 0
       local.get 1
-      i8x16.sub_saturate_s)
+      i8x16.sub_sat_s)
     (func $i16x8.shl (type 11) (param v128 i32) (result v128)
       local.get 0
       local.get 1
@@ -765,26 +765,26 @@
       local.get 0
       local.get 1
       i16x8.add)
-    (func $i16x8.add_saturate_u (type 15) (param v128 v128) (result v128)
+    (func $i16x8.add_sat_u (type 15) (param v128 v128) (result v128)
       local.get 0
       local.get 1
-      i16x8.add_saturate_u)
-    (func $i16x8.add_saturate_s (type 15) (param v128 v128) (result v128)
+      i16x8.add_sat_u)
+    (func $i16x8.add_sat_s (type 15) (param v128 v128) (result v128)
       local.get 0
       local.get 1
-      i16x8.add_saturate_s)
+      i16x8.add_sat_s)
     (func $i16x8.sub (type 15) (param v128 v128) (result v128)
       local.get 0
       local.get 1
       i16x8.sub)
-    (func $i16x8.sub_saturate_u (type 15) (param v128 v128) (result v128)
+    (func $i16x8.sub_sat_u (type 15) (param v128 v128) (result v128)
       local.get 0
       local.get 1
-      i16x8.sub_saturate_u)
-    (func $i16x8.sub_saturate_s (type 15) (param v128 v128) (result v128)
+      i16x8.sub_sat_u)
+    (func $i16x8.sub_sat_s (type 15) (param v128 v128) (result v128)
       local.get 0
       local.get 1
-      i16x8.sub_saturate_s)
+      i16x8.sub_sat_s)
     (func $i16x8.mul (type 15) (param v128 v128) (result v128)
       local.get 0
       local.get 1
@@ -1064,11 +1064,11 @@
     (export "i8x16.shr_s" (func $i8x16.shr_s))
     (export "i8x16.shr_u" (func $i8x16.shr_u))
     (export "i8x16.add" (func $i8x16.add))
-    (export "i8x16.add_saturate_u" (func $i8x16.add_saturate_u))
-    (export "i8x16.add_saturate_s" (func $i8x16.add_saturate_s))
+    (export "i8x16.add_sat_u" (func $i8x16.add_sat_u))
+    (export "i8x16.add_sat_s" (func $i8x16.add_sat_s))
     (export "i8x16.sub" (func $i8x16.sub))
-    (export "i8x16.sub_saturate_u" (func $i8x16.sub_saturate_u))
-    (export "i8x16.sub_saturate_s" (func $i8x16.sub_saturate_s))
+    (export "i8x16.sub_sat_u" (func $i8x16.sub_sat_u))
+    (export "i8x16.sub_sat_s" (func $i8x16.sub_sat_s))
     (export "i16x8.neg" (func $i16x8.neg))
     (export "i16x8.any_true" (func $i16x8.any_true))
     (export "i16x8.all_true" (func $i16x8.all_true))
@@ -1076,11 +1076,11 @@
     (export "i16x8.shr_s" (func $i16x8.shr_s))
     (export "i16x8.shr_u" (func $i16x8.shr_u))
     (export "i16x8.add" (func $i16x8.add))
-    (export "i16x8.add_saturate_u" (func $i16x8.add_saturate_u))
-    (export "i16x8.add_saturate_s" (func $i16x8.add_saturate_s))
+    (export "i16x8.add_sat_u" (func $i16x8.add_sat_u))
+    (export "i16x8.add_sat_s" (func $i16x8.add_sat_s))
     (export "i16x8.sub" (func $i16x8.sub))
-    (export "i16x8.sub_saturate_u" (func $i16x8.sub_saturate_u))
-    (export "i16x8.sub_saturate_s" (func $i16x8.sub_saturate_s))
+    (export "i16x8.sub_sat_u" (func $i16x8.sub_sat_u))
+    (export "i16x8.sub_sat_s" (func $i16x8.sub_sat_s))
     (export "i16x8.mul" (func $i16x8.mul))
     (export "i32x4.neg" (func $i32x4.neg))
     (export "i32x4.any_true" (func $i32x4.any_true))

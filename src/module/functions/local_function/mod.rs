@@ -984,12 +984,12 @@ fn append_instruction<'context>(
             ctx.alloc_instr(RefFunc { func }, loc);
         }
 
-        Operator::V8x16Swizzle => {
-            ctx.alloc_instr(V128Swizzle {}, loc);
+        Operator::I8x16Swizzle => {
+            ctx.alloc_instr(I8x16Swizzle {}, loc);
         }
 
-        Operator::V8x16Shuffle { lanes } => {
-            ctx.alloc_instr(V128Shuffle { indices: lanes }, loc);
+        Operator::I8x16Shuffle { lanes } => {
+            ctx.alloc_instr(I8x16Shuffle { indices: lanes }, loc);
         }
 
         Operator::I8x16Splat => unop(ctx, UnaryOp::I8x16Splat),
@@ -1072,11 +1072,11 @@ fn append_instruction<'context>(
         Operator::I8x16ShrS => binop(ctx, BinaryOp::I8x16ShrS),
         Operator::I8x16ShrU => binop(ctx, BinaryOp::I8x16ShrU),
         Operator::I8x16Add => binop(ctx, BinaryOp::I8x16Add),
-        Operator::I8x16AddSaturateS => binop(ctx, BinaryOp::I8x16AddSaturateS),
-        Operator::I8x16AddSaturateU => binop(ctx, BinaryOp::I8x16AddSaturateU),
+        Operator::I8x16AddSatS => binop(ctx, BinaryOp::I8x16AddSatS),
+        Operator::I8x16AddSatU => binop(ctx, BinaryOp::I8x16AddSatU),
         Operator::I8x16Sub => binop(ctx, BinaryOp::I8x16Sub),
-        Operator::I8x16SubSaturateS => binop(ctx, BinaryOp::I8x16SubSaturateS),
-        Operator::I8x16SubSaturateU => binop(ctx, BinaryOp::I8x16SubSaturateU),
+        Operator::I8x16SubSatS => binop(ctx, BinaryOp::I8x16SubSatS),
+        Operator::I8x16SubSatU => binop(ctx, BinaryOp::I8x16SubSatU),
 
         Operator::I16x8Abs => unop(ctx, UnaryOp::I16x8Abs),
         Operator::I16x8Neg => unop(ctx, UnaryOp::I16x8Neg),
@@ -1086,11 +1086,11 @@ fn append_instruction<'context>(
         Operator::I16x8ShrS => binop(ctx, BinaryOp::I16x8ShrS),
         Operator::I16x8ShrU => binop(ctx, BinaryOp::I16x8ShrU),
         Operator::I16x8Add => binop(ctx, BinaryOp::I16x8Add),
-        Operator::I16x8AddSaturateS => binop(ctx, BinaryOp::I16x8AddSaturateS),
-        Operator::I16x8AddSaturateU => binop(ctx, BinaryOp::I16x8AddSaturateU),
+        Operator::I16x8AddSatS => binop(ctx, BinaryOp::I16x8AddSatS),
+        Operator::I16x8AddSatU => binop(ctx, BinaryOp::I16x8AddSatU),
         Operator::I16x8Sub => binop(ctx, BinaryOp::I16x8Sub),
-        Operator::I16x8SubSaturateS => binop(ctx, BinaryOp::I16x8SubSaturateS),
-        Operator::I16x8SubSaturateU => binop(ctx, BinaryOp::I16x8SubSaturateU),
+        Operator::I16x8SubSatS => binop(ctx, BinaryOp::I16x8SubSatS),
+        Operator::I16x8SubSatU => binop(ctx, BinaryOp::I16x8SubSatU),
         Operator::I16x8Mul => binop(ctx, BinaryOp::I16x8Mul),
 
         Operator::I32x4Abs => unop(ctx, UnaryOp::I32x4Abs),
@@ -1121,6 +1121,12 @@ fn append_instruction<'context>(
         Operator::F32x4Div => binop(ctx, BinaryOp::F32x4Div),
         Operator::F32x4Min => binop(ctx, BinaryOp::F32x4Min),
         Operator::F32x4Max => binop(ctx, BinaryOp::F32x4Max),
+        Operator::F32x4Ceil => unop(ctx, UnaryOp::F32x4Ceil),
+        Operator::F32x4Floor => unop(ctx, UnaryOp::F32x4Floor),
+        Operator::F32x4Trunc => unop(ctx, UnaryOp::F32x4Trunc),
+        Operator::F32x4Nearest => unop(ctx, UnaryOp::F32x4Nearest),
+        Operator::F32x4PMin => binop(ctx, BinaryOp::F32x4PMin),
+        Operator::F32x4PMax => binop(ctx, BinaryOp::F32x4PMax),
 
         Operator::F64x2Abs => unop(ctx, UnaryOp::F64x2Abs),
         Operator::F64x2Neg => unop(ctx, UnaryOp::F64x2Neg),
@@ -1131,6 +1137,12 @@ fn append_instruction<'context>(
         Operator::F64x2Div => binop(ctx, BinaryOp::F64x2Div),
         Operator::F64x2Min => binop(ctx, BinaryOp::F64x2Min),
         Operator::F64x2Max => binop(ctx, BinaryOp::F64x2Max),
+        Operator::F64x2Ceil => unop(ctx, UnaryOp::F64x2Ceil),
+        Operator::F64x2Floor => unop(ctx, UnaryOp::F64x2Floor),
+        Operator::F64x2Trunc => unop(ctx, UnaryOp::F64x2Trunc),
+        Operator::F64x2Nearest => unop(ctx, UnaryOp::F64x2Nearest),
+        Operator::F64x2PMin => binop(ctx, BinaryOp::F64x2PMin),
+        Operator::F64x2PMax => binop(ctx, BinaryOp::F64x2PMax),
 
         Operator::I32x4TruncSatF32x4S => unop(ctx, UnaryOp::I32x4TruncSatF32x4S),
         Operator::I32x4TruncSatF32x4U => unop(ctx, UnaryOp::I32x4TruncSatF32x4U),
@@ -1146,10 +1158,12 @@ fn append_instruction<'context>(
         Operator::I64TruncSatF64S => unop(ctx, UnaryOp::I64TruncSSatF64),
         Operator::I64TruncSatF64U => unop(ctx, UnaryOp::I64TruncUSatF64),
 
-        Operator::V8x16LoadSplat { memarg } => load_simd(ctx, memarg, LoadSimdKind::Splat8),
-        Operator::V16x8LoadSplat { memarg } => load_simd(ctx, memarg, LoadSimdKind::Splat16),
-        Operator::V32x4LoadSplat { memarg } => load_simd(ctx, memarg, LoadSimdKind::Splat32),
-        Operator::V64x2LoadSplat { memarg } => load_simd(ctx, memarg, LoadSimdKind::Splat64),
+        Operator::V128Load8Splat { memarg } => load_simd(ctx, memarg, LoadSimdKind::Splat8),
+        Operator::V128Load16Splat { memarg } => load_simd(ctx, memarg, LoadSimdKind::Splat16),
+        Operator::V128Load32Splat { memarg } => load_simd(ctx, memarg, LoadSimdKind::Splat32),
+        Operator::V128Load64Splat { memarg } => load_simd(ctx, memarg, LoadSimdKind::Splat64),
+        Operator::V128Load32Zero { memarg } => load_simd(ctx, memarg, LoadSimdKind::V128Load32Zero),
+        Operator::V128Load64Zero { memarg } => load_simd(ctx, memarg, LoadSimdKind::V128Load64Zero),
 
         Operator::I8x16NarrowI16x8S => binop(ctx, BinaryOp::I8x16NarrowI16x8S),
         Operator::I8x16NarrowI16x8U => binop(ctx, BinaryOp::I8x16NarrowI16x8U),
@@ -1163,12 +1177,12 @@ fn append_instruction<'context>(
         Operator::I32x4WidenLowI16x8U => unop(ctx, UnaryOp::I32x4WidenLowI16x8U),
         Operator::I32x4WidenHighI16x8S => unop(ctx, UnaryOp::I32x4WidenHighI16x8S),
         Operator::I32x4WidenHighI16x8U => unop(ctx, UnaryOp::I32x4WidenHighI16x8U),
-        Operator::I16x8Load8x8S { memarg } => load_simd(ctx, memarg, LoadSimdKind::I16x8Load8x8S),
-        Operator::I16x8Load8x8U { memarg } => load_simd(ctx, memarg, LoadSimdKind::I16x8Load8x8U),
-        Operator::I32x4Load16x4S { memarg } => load_simd(ctx, memarg, LoadSimdKind::I32x4Load16x4S),
-        Operator::I32x4Load16x4U { memarg } => load_simd(ctx, memarg, LoadSimdKind::I32x4Load16x4U),
-        Operator::I64x2Load32x2S { memarg } => load_simd(ctx, memarg, LoadSimdKind::I64x2Load32x2S),
-        Operator::I64x2Load32x2U { memarg } => load_simd(ctx, memarg, LoadSimdKind::I64x2Load32x2U),
+        Operator::V128Load8x8S { memarg } => load_simd(ctx, memarg, LoadSimdKind::V128Load8x8S),
+        Operator::V128Load8x8U { memarg } => load_simd(ctx, memarg, LoadSimdKind::V128Load8x8U),
+        Operator::V128Load16x4S { memarg } => load_simd(ctx, memarg, LoadSimdKind::V128Load16x4S),
+        Operator::V128Load16x4U { memarg } => load_simd(ctx, memarg, LoadSimdKind::V128Load16x4U),
+        Operator::V128Load32x2S { memarg } => load_simd(ctx, memarg, LoadSimdKind::V128Load32x2S),
+        Operator::V128Load32x2U { memarg } => load_simd(ctx, memarg, LoadSimdKind::V128Load32x2U),
         Operator::I8x16RoundingAverageU => binop(ctx, BinaryOp::I8x16RoundingAverageU),
         Operator::I16x8RoundingAverageU => binop(ctx, BinaryOp::I16x8RoundingAverageU),
 
@@ -1188,6 +1202,8 @@ fn append_instruction<'context>(
         Operator::I8x16Bitmask => unop(ctx, UnaryOp::I8x16Bitmask),
         Operator::I16x8Bitmask => unop(ctx, UnaryOp::I16x8Bitmask),
         Operator::I32x4Bitmask => unop(ctx, UnaryOp::I32x4Bitmask),
+
+        Operator::I32x4DotI16x8S => binop(ctx, BinaryOp::I32x4DotI16x8S),
 
         Operator::TableCopy {
             src_table,

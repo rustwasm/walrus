@@ -539,11 +539,11 @@ pub enum Instr {
     /// `v128.bitselect`
     V128Bitselect {},
 
-    /// `v128.swizzle`
-    V128Swizzle {},
+    /// `i8x16.swizzle`
+    I8x16Swizzle {},
 
-    /// `v128.shuffle`
-    V128Shuffle {
+    /// `i8x16.shuffle`
+    I8x16Shuffle {
         /// The indices that are used to create the final vector of this
         /// instruction
         #[walrus(skip_visit)]
@@ -795,20 +795,20 @@ pub enum BinaryOp {
     I8x16ShrS,
     I8x16ShrU,
     I8x16Add,
-    I8x16AddSaturateS,
-    I8x16AddSaturateU,
+    I8x16AddSatS,
+    I8x16AddSatU,
     I8x16Sub,
-    I8x16SubSaturateS,
-    I8x16SubSaturateU,
+    I8x16SubSatS,
+    I8x16SubSatU,
     I16x8Shl,
     I16x8ShrS,
     I16x8ShrU,
     I16x8Add,
-    I16x8AddSaturateS,
-    I16x8AddSaturateU,
+    I16x8AddSatS,
+    I16x8AddSatU,
     I16x8Sub,
-    I16x8SubSaturateS,
-    I16x8SubSaturateU,
+    I16x8SubSatS,
+    I16x8SubSatU,
     I16x8Mul,
     I32x4Shl,
     I32x4ShrS,
@@ -829,12 +829,16 @@ pub enum BinaryOp {
     F32x4Div,
     F32x4Min,
     F32x4Max,
+    F32x4PMin,
+    F32x4PMax,
     F64x2Add,
     F64x2Sub,
     F64x2Mul,
     F64x2Div,
     F64x2Min,
     F64x2Max,
+    F64x2PMin,
+    F64x2PMax,
 
     I8x16NarrowI16x8S,
     I8x16NarrowI16x8U,
@@ -855,6 +859,8 @@ pub enum BinaryOp {
     I32x4MinU,
     I32x4MaxS,
     I32x4MaxU,
+
+    I32x4DotI16x8S,
 }
 
 /// Possible unary operations in wasm
@@ -958,9 +964,17 @@ pub enum UnaryOp {
     F32x4Abs,
     F32x4Neg,
     F32x4Sqrt,
+    F32x4Ceil,
+    F32x4Floor,
+    F32x4Trunc,
+    F32x4Nearest,
     F64x2Abs,
     F64x2Neg,
     F64x2Sqrt,
+    F64x2Ceil,
+    F64x2Floor,
+    F64x2Trunc,
+    F64x2Nearest,
 
     I32x4TruncSatF32x4S,
     I32x4TruncSatF32x4U,
@@ -1014,12 +1028,15 @@ pub enum LoadSimdKind {
     Splat16,
     Splat32,
     Splat64,
-    I16x8Load8x8S,
-    I16x8Load8x8U,
-    I32x4Load16x4S,
-    I32x4Load16x4U,
-    I64x2Load32x2S,
-    I64x2Load32x2U,
+
+    V128Load8x8S,
+    V128Load8x8U,
+    V128Load16x4S,
+    V128Load16x4U,
+    V128Load32x2S,
+    V128Load32x2U,
+    V128Load32Zero,
+    V128Load64Zero,
 }
 
 /// The kinds of extended loads which can happen
@@ -1212,8 +1229,8 @@ impl Instr {
             | Instr::RefIsNull(..)
             | Instr::RefFunc(..)
             | Instr::V128Bitselect(..)
-            | Instr::V128Swizzle(..)
-            | Instr::V128Shuffle(..)
+            | Instr::I8x16Swizzle(..)
+            | Instr::I8x16Shuffle(..)
             | Instr::LoadSimd(..)
             | Instr::AtomicFence(..)
             | Instr::TableInit(..)

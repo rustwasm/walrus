@@ -33,10 +33,7 @@ fn run(wast: &Path) -> Result<(), anyhow::Error> {
         Some("simd") => &["--enable-simd"],
         Some("bulk-memory-operations") => &["--enable-bulk-memory"],
 
-        // Some("reference-types") => &["--enable-reference-types", "--enable-bulk-memory"],
-        // TODO: waiting for wabt to update its implementation of reference
-        // types.
-        Some("reference-types") => return Ok(()),
+        Some("reference-types") => &["--enable-reference-types", "--enable-bulk-memory"],
 
         // TODO: should get threads working
         Some("threads") => return Ok(()),
@@ -49,6 +46,7 @@ fn run(wast: &Path) -> Result<(), anyhow::Error> {
         // not implemented in walrus yet
         Some("function-references") => return Ok(()),
         Some("exception-handling") => return Ok(()),
+        Some("memory64") => return Ok(()),
 
         // Some("threads") => &["--enable-threads"],
         Some(other) => panic!("unknown wasm proposal: {}", other),

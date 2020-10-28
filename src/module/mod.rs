@@ -265,11 +265,6 @@ impl Module {
         ret.producers
             .add_processed_by("walrus", env!("CARGO_PKG_VERSION"));
 
-        // TODO: probably run this in a different location
-        if !ret.config.skip_strict_validate {
-            crate::passes::validate::run(&ret)?;
-        }
-
         if let Some(on_parse) = &config.on_parse {
             on_parse(&mut ret, &indices)?;
         }

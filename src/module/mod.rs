@@ -206,6 +206,7 @@ impl Module {
                     name,
                     data,
                     data_offset,
+                    range: _range,
                 } => {
                     let result = match name {
                         "producers" => wasmparser::ProducersSectionReader::new(data, data_offset)
@@ -234,7 +235,7 @@ impl Module {
 
                 Payload::End => validator.end()?,
 
-                // the module linking proposal is not implemented yet
+                // the module linking proposal is not implemented yet.
                 Payload::AliasSection(s) => {
                     validator.alias_section(&s)?;
                     unreachable!()
@@ -243,15 +244,24 @@ impl Module {
                     validator.instance_section(&s)?;
                     unreachable!()
                 }
-                Payload::ModuleSection(s) => {
-                    validator.module_section(&s)?;
+                Payload::ModuleSectionEntry {
+                    parser: _,
+                    range: _,
+                } => {
+                    validator.module_section_entry();
                     unreachable!()
                 }
-                Payload::ModuleCodeSectionStart { count, range, .. } => {
-                    validator.module_code_section_start(count, &range)?;
+                Payload::ModuleSectionStart {
+                    count,
+                    range,
+                    size: _,
+                } => {
+                    validator.module_section_start(count, &range)?;
                     unreachable!()
                 }
-                Payload::ModuleCodeSectionEntry { .. } => unreachable!(),
+
+                // exception handling is not implemented yet.
+                Payload::EventSection(_) => unreachable!(),
             }
         }
 

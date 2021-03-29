@@ -500,15 +500,15 @@ impl<'instr> Visitor<'instr> for Emit<'_, '_> {
 
                     V128Not => self.simd(0x4d),
 
+                    V128AnyTrue => self.simd(0x53),
+
                     I8x16Abs => self.simd(0x60),
                     I8x16Neg => self.simd(0x61),
-                    I8x16AnyTrue => self.simd(0x62),
                     I8x16AllTrue => self.simd(0x63),
                     I8x16Bitmask => self.simd(0x64),
 
                     I16x8Abs => self.simd(0x80),
                     I16x8Neg => self.simd(0x81),
-                    I16x8AnyTrue => self.simd(0x82),
                     I16x8AllTrue => self.simd(0x83),
                     I16x8Bitmask => self.simd(0x84),
                     I16x8WidenLowI8x16S => self.simd(0x87),
@@ -518,7 +518,6 @@ impl<'instr> Visitor<'instr> for Emit<'_, '_> {
 
                     I32x4Abs => self.simd(0xa0),
                     I32x4Neg => self.simd(0xa1),
-                    I32x4AnyTrue => self.simd(0xa2),
                     I32x4AllTrue => self.simd(0xa3),
                     I32x4Bitmask => self.simd(0xa4),
                     I32x4WidenLowI16x8S => self.simd(0xa7),

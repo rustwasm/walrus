@@ -165,6 +165,9 @@ impl Module {
                 | wasmparser::ImportSectionEntryType::Instance(_) => {
                     unimplemented!("module linking not implemented");
                 }
+                wasmparser::ImportSectionEntryType::Event(_) => {
+                    unimplemented!("exception handling not implemented")
+                }
             }
         }
 

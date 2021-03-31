@@ -28,13 +28,13 @@ jobs:
         cd wabt
         cmake . -DBUILD_TESTS=OFF
         make -j$(nproc) wast2json spectest-interp wasm-interp
-        echo ::add-path::`pwd`
+        echo `pwd` > $GITHUB_PATH
 
     - name: Install binaryen
       run: |
         set -e
         curl -L https://github.com/WebAssembly/binaryen/releases/download/1.39.1/binaryen-1.39.1-x86_64-linux.tar.gz | tar xzf -
-        echo "##[add-path]`pwd`/binaryen-1.39.1"
+        echo "`pwd`/binaryen-1.39.1" > $GITHUB_PATH
     - run: cargo build --all
     - run: cargo test --all
     - run: cargo check --benches
@@ -52,12 +52,12 @@ jobs:
       run: |
         set -e
         curl -L https://github.com/WebAssembly/wabt/releases/download/1.0.13/wabt-1.0.13-linux.tar.gz | tar xzf -
-        echo "##[add-path]`pwd`/wabt-1.0.13"
+        echo "`pwd`/wabt-1.0.13" > $GITHUB_PATH
     - name: Install binaryen
       run: |
         set -e
         curl -L https://github.com/WebAssembly/binaryen/releases/download/1.39.1/binaryen-1.39.1-x86_64-linux.tar.gz | tar xzf -
-        echo "##[add-path]`pwd`/binaryen-1.39.1"
+        echo "`pwd`/binaryen-1.39.1" > $GITHUB_PATH
     - name: Run fuzzer
       run: cargo test -p walrus-fuzz-utils > fuzz.log || (tail -n 1000 fuzz.log && exit 1)
       env:
@@ -79,12 +79,12 @@ jobs:
       run: |
         set -e
         curl -L https://github.com/WebAssembly/wabt/releases/download/1.0.13/wabt-1.0.13-linux.tar.gz | tar xzf -
-        echo "##[add-path]`pwd`/wabt-1.0.13"
+        echo "`pwd`/wabt-1.0.13" > $GITHUB_PATH
     - name: Install binaryen
       run: |
         set -e
         curl -L https://github.com/WebAssembly/binaryen/releases/download/1.39.1/binaryen-1.39.1-x86_64-linux.tar.gz | tar xzf -
-        echo "##[add-path]`pwd`/binaryen-1.39.1"
+        echo "`pwd`/binaryen-1.39.1" > $GITHUB_PATH
     - name: Run fuzzer
       run: |
         cargo fuzz run ${{ matrix.test }} -- -max_total_time=300 -rss_limit_mb=4096 > fuzz.log 2>&1 || (tail -n 1000 fuzz.log && exit 1)

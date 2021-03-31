@@ -263,13 +263,13 @@
     local.get 1
     local.get 2
     v128.bitselect)
+   (func $v128.any_true (export "v128.any_true") (param v128) (result i32)
+    local.get 0
+    v128.any_true)
 
    (func $i8x16.neg (export "i8x16.neg") (param v128) (result v128)
     local.get 0
     i8x16.neg)
-   (func $i8x16.any_true (export "i8x16.any_true") (param v128) (result i32)
-    local.get 0
-    i8x16.any_true)
    (func $i8x16.all_true (export "i8x16.all_true") (param v128) (result i32)
     local.get 0
     i8x16.all_true)
@@ -313,9 +313,6 @@
    (func $i16x8.neg (export "i16x8.neg") (param v128) (result v128)
     local.get 0
     i16x8.neg)
-   (func $i16x8.any_true (export "i16x8.any_true") (param v128) (result i32)
-    local.get 0
-    i16x8.any_true)
    (func $i16x8.all_true (export "i16x8.all_true") (param v128) (result i32)
     local.get 0
     i16x8.all_true)
@@ -363,9 +360,6 @@
    (func $i32x4.neg (export "i32x4.neg") (param v128) (result v128)
     local.get 0
     i32x4.neg)
-   (func $i32x4.any_true (export "i32x4.any_true") (param v128) (result i32)
-    local.get 0
-    i32x4.any_true)
    (func $i32x4.all_true (export "i32x4.all_true") (param v128) (result i32)
     local.get 0
     i32x4.all_true)
@@ -929,30 +923,24 @@
     (func $v128.not (type 10) (param v128) (result v128)
       local.get 0
       v128.not)
+    (func $v128.any_true (type 6) (param v128) (result i32)
+      local.get 0
+      v128.any_true)
     (func $i8x16.neg (type 10) (param v128) (result v128)
       local.get 0
       i8x16.neg)
-    (func $i8x16.any_true (type 6) (param v128) (result i32)
-      local.get 0
-      i8x16.any_true)
     (func $i8x16.all_true (type 6) (param v128) (result i32)
       local.get 0
       i8x16.all_true)
     (func $i16x8.neg (type 10) (param v128) (result v128)
       local.get 0
       i16x8.neg)
-    (func $i16x8.any_true (type 6) (param v128) (result i32)
-      local.get 0
-      i16x8.any_true)
     (func $i16x8.all_true (type 6) (param v128) (result i32)
       local.get 0
       i16x8.all_true)
     (func $i32x4.neg (type 10) (param v128) (result v128)
       local.get 0
       i32x4.neg)
-    (func $i32x4.any_true (type 6) (param v128) (result i32)
-      local.get 0
-      i32x4.any_true)
     (func $i32x4.all_true (type 6) (param v128) (result i32)
       local.get 0
       i32x4.all_true)
@@ -1057,8 +1045,8 @@
     (export "v128.or" (func $v128.or))
     (export "v128.xor" (func $v128.xor))
     (export "v128.bitselect" (func $v128.bitselect))
+    (export "v128.any_true" (func $v128.any_true))
     (export "i8x16.neg" (func $i8x16.neg))
-    (export "i8x16.any_true" (func $i8x16.any_true))
     (export "i8x16.all_true" (func $i8x16.all_true))
     (export "i8x16.shl" (func $i8x16.shl))
     (export "i8x16.shr_s" (func $i8x16.shr_s))
@@ -1070,7 +1058,6 @@
     (export "i8x16.sub_sat_u" (func $i8x16.sub_sat_u))
     (export "i8x16.sub_sat_s" (func $i8x16.sub_sat_s))
     (export "i16x8.neg" (func $i16x8.neg))
-    (export "i16x8.any_true" (func $i16x8.any_true))
     (export "i16x8.all_true" (func $i16x8.all_true))
     (export "i16x8.shl" (func $i16x8.shl))
     (export "i16x8.shr_s" (func $i16x8.shr_s))
@@ -1083,7 +1070,6 @@
     (export "i16x8.sub_sat_s" (func $i16x8.sub_sat_s))
     (export "i16x8.mul" (func $i16x8.mul))
     (export "i32x4.neg" (func $i32x4.neg))
-    (export "i32x4.any_true" (func $i32x4.any_true))
     (export "i32x4.all_true" (func $i32x4.all_true))
     (export "i32x4.shl" (func $i32x4.shl))
     (export "i32x4.shr_s" (func $i32x4.shr_s))

@@ -36,7 +36,7 @@ pub use crate::module::producers::ModuleProducers;
 pub use crate::module::tables::{ModuleTables, Table, TableId};
 pub use crate::module::types::ModuleTypes;
 use crate::parse::IndicesToIds;
-use anyhow::Context;
+use anyhow::{bail, Context};
 use std::fs;
 use std::mem;
 use std::path::Path;
@@ -239,18 +239,18 @@ impl Module {
                 // the module linking proposal is not implemented yet.
                 Payload::AliasSection(s) => {
                     validator.alias_section(&s)?;
-                    unreachable!()
+                    bail!("not supported yet");
                 }
                 Payload::InstanceSection(s) => {
                     validator.instance_section(&s)?;
-                    unreachable!()
+                    bail!("not supported yet");
                 }
                 Payload::ModuleSectionEntry {
                     parser: _,
                     range: _,
                 } => {
                     validator.module_section_entry();
-                    unreachable!()
+                    bail!("not supported yet");
                 }
                 Payload::ModuleSectionStart {
                     count,
@@ -258,11 +258,14 @@ impl Module {
                     size: _,
                 } => {
                     validator.module_section_start(count, &range)?;
-                    unreachable!()
+                    bail!("not supported yet");
                 }
 
                 // exception handling is not implemented yet.
-                Payload::EventSection(_) => unreachable!(),
+                Payload::EventSection(reader) => {
+                    validator.event_section(&reader)?;
+                    bail!("not supported yet");
+                }
             }
         }
 

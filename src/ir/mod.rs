@@ -772,6 +772,13 @@ pub enum BinaryOp {
     I32x4GeS,
     I32x4GeU,
 
+    I64x2Eq,
+    I64x2Ne,
+    I64x2LtS,
+    I64x2GtS,
+    I64x2LeS,
+    I64x2GeS,
+
     F32x4Eq,
     F32x4Ne,
     F32x4Lt,
@@ -861,6 +868,20 @@ pub enum BinaryOp {
     I32x4MaxU,
 
     I32x4DotI16x8S,
+
+    I16x8Q15MulrSatS,
+    I16x8ExtMulLowI8x16S,
+    I16x8ExtMulHighI8x16S,
+    I16x8ExtMulLowI8x16U,
+    I16x8ExtMulHighI8x16U,
+    I32x4ExtMulLowI16x8S,
+    I32x4ExtMulHighI16x8S,
+    I32x4ExtMulLowI16x8U,
+    I32x4ExtMulHighI16x8U,
+    I64x2ExtMulLowI32x4S,
+    I64x2ExtMulHighI32x4S,
+    I64x2ExtMulLowI32x4U,
+    I64x2ExtMulHighI32x4U,
 }
 
 /// Possible unary operations in wasm
@@ -946,6 +967,7 @@ pub enum UnaryOp {
     V128AnyTrue,
 
     I8x16Abs,
+    I8x16Popcnt,
     I8x16Neg,
     I8x16AllTrue,
     I8x16Bitmask,
@@ -957,7 +979,10 @@ pub enum UnaryOp {
     I32x4Neg,
     I32x4AllTrue,
     I32x4Bitmask,
+    I64x2Abs,
     I64x2Neg,
+    I64x2AllTrue,
+    I64x2Bitmask,
 
     F32x4Abs,
     F32x4Neg,
@@ -973,6 +998,21 @@ pub enum UnaryOp {
     F64x2Floor,
     F64x2Trunc,
     F64x2Nearest,
+
+    I16x8ExtAddPairwiseI8x16S,
+    I16x8ExtAddPairwiseI8x16U,
+    I32x4ExtAddPairwiseI16x8S,
+    I32x4ExtAddPairwiseI16x8U,
+    I64x2ExtendLowI32x4S,
+    I64x2ExtendHighI32x4S,
+    I64x2ExtendLowI32x4U,
+    I64x2ExtendHighI32x4U,
+    I32x4TruncSatF64x2SZero,
+    I32x4TruncSatF64x2UZero,
+    F64x2ConvertLowI32x4S,
+    F64x2ConvertLowI32x4U,
+    F32x4DemoteF64x2Zero,
+    F64x2PromoteLowF32x4,
 
     I32x4TruncSatF32x4S,
     I32x4TruncSatF32x4U,
@@ -1035,6 +1075,15 @@ pub enum LoadSimdKind {
     V128Load32x2U,
     V128Load32Zero,
     V128Load64Zero,
+
+    V128Load8Lane(u8),
+    V128Load16Lane(u8),
+    V128Load32Lane(u8),
+    V128Load64Lane(u8),
+    V128Store8Lane(u8),
+    V128Store16Lane(u8),
+    V128Store32Lane(u8),
+    V128Store64Lane(u8),
 }
 
 /// The kinds of extended loads which can happen

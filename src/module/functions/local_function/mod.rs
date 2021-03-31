@@ -1043,6 +1043,12 @@ fn append_instruction<'context>(
         Operator::I32x4LeU => binop(ctx, BinaryOp::I32x4LeU),
         Operator::I32x4GeS => binop(ctx, BinaryOp::I32x4GeS),
         Operator::I32x4GeU => binop(ctx, BinaryOp::I32x4GeU),
+        Operator::I64x2Eq => binop(ctx, BinaryOp::I64x2Eq),
+        Operator::I64x2Ne => binop(ctx, BinaryOp::I64x2Ne),
+        Operator::I64x2LtS => binop(ctx, BinaryOp::I64x2LtS),
+        Operator::I64x2GtS => binop(ctx, BinaryOp::I64x2GtS),
+        Operator::I64x2LeS => binop(ctx, BinaryOp::I64x2LeS),
+        Operator::I64x2GeS => binop(ctx, BinaryOp::I64x2GeS),
         Operator::F32x4Eq => binop(ctx, BinaryOp::F32x4Eq),
         Operator::F32x4Ne => binop(ctx, BinaryOp::F32x4Ne),
         Operator::F32x4Lt => binop(ctx, BinaryOp::F32x4Lt),
@@ -1066,6 +1072,7 @@ fn append_instruction<'context>(
         Operator::V128Bitselect => ctx.alloc_instr(V128Bitselect {}, loc),
 
         Operator::I8x16Abs => unop(ctx, UnaryOp::I8x16Abs),
+        Operator::I8x16Popcnt => unop(ctx, UnaryOp::I8x16Popcnt),
         Operator::I8x16Neg => unop(ctx, UnaryOp::I8x16Neg),
         Operator::I8x16AllTrue => unop(ctx, UnaryOp::I8x16AllTrue),
         Operator::I8x16Shl => binop(ctx, BinaryOp::I8x16Shl),
@@ -1102,6 +1109,8 @@ fn append_instruction<'context>(
         Operator::I32x4Sub => binop(ctx, BinaryOp::I32x4Sub),
         Operator::I32x4Mul => binop(ctx, BinaryOp::I32x4Mul),
 
+        Operator::I64x2Abs => unop(ctx, UnaryOp::I64x2Abs),
+        Operator::I64x2AllTrue => unop(ctx, UnaryOp::I64x2AllTrue),
         Operator::I64x2Neg => unop(ctx, UnaryOp::I64x2Neg),
         Operator::I64x2Shl => binop(ctx, BinaryOp::I64x2Shl),
         Operator::I64x2ShrS => binop(ctx, BinaryOp::I64x2ShrS),
@@ -1125,6 +1134,35 @@ fn append_instruction<'context>(
         Operator::F32x4Nearest => unop(ctx, UnaryOp::F32x4Nearest),
         Operator::F32x4PMin => binop(ctx, BinaryOp::F32x4PMin),
         Operator::F32x4PMax => binop(ctx, BinaryOp::F32x4PMax),
+
+        Operator::I16x8ExtAddPairwiseI8x16S => unop(ctx, UnaryOp::I16x8ExtAddPairwiseI8x16S),
+        Operator::I16x8ExtAddPairwiseI8x16U => unop(ctx, UnaryOp::I16x8ExtAddPairwiseI8x16U),
+        Operator::I32x4ExtAddPairwiseI16x8S => unop(ctx, UnaryOp::I32x4ExtAddPairwiseI16x8S),
+        Operator::I32x4ExtAddPairwiseI16x8U => unop(ctx, UnaryOp::I32x4ExtAddPairwiseI16x8U),
+        Operator::I64x2ExtendLowI32x4S => unop(ctx, UnaryOp::I64x2ExtendLowI32x4S),
+        Operator::I64x2ExtendHighI32x4S => unop(ctx, UnaryOp::I64x2ExtendHighI32x4S),
+        Operator::I64x2ExtendLowI32x4U => unop(ctx, UnaryOp::I64x2ExtendLowI32x4U),
+        Operator::I64x2ExtendHighI32x4U => unop(ctx, UnaryOp::I64x2ExtendHighI32x4U),
+        Operator::I32x4TruncSatF64x2SZero => unop(ctx, UnaryOp::I32x4TruncSatF64x2SZero),
+        Operator::I32x4TruncSatF64x2UZero => unop(ctx, UnaryOp::I32x4TruncSatF64x2UZero),
+        Operator::F64x2ConvertLowI32x4S => unop(ctx, UnaryOp::F64x2ConvertLowI32x4S),
+        Operator::F64x2ConvertLowI32x4U => unop(ctx, UnaryOp::F64x2ConvertLowI32x4U),
+        Operator::F32x4DemoteF64x2Zero => unop(ctx, UnaryOp::F32x4DemoteF64x2Zero),
+        Operator::F64x2PromoteLowF32x4 => unop(ctx, UnaryOp::F64x2PromoteLowF32x4),
+
+        Operator::I16x8Q15MulrSatS => binop(ctx, BinaryOp::I16x8Q15MulrSatS),
+        Operator::I16x8ExtMulLowI8x16S => binop(ctx, BinaryOp::I16x8ExtMulLowI8x16S),
+        Operator::I16x8ExtMulHighI8x16S => binop(ctx, BinaryOp::I16x8ExtMulHighI8x16S),
+        Operator::I16x8ExtMulLowI8x16U => binop(ctx, BinaryOp::I16x8ExtMulLowI8x16U),
+        Operator::I16x8ExtMulHighI8x16U => binop(ctx, BinaryOp::I16x8ExtMulHighI8x16U),
+        Operator::I32x4ExtMulLowI16x8S => binop(ctx, BinaryOp::I32x4ExtMulLowI16x8S),
+        Operator::I32x4ExtMulHighI16x8S => binop(ctx, BinaryOp::I32x4ExtMulHighI16x8S),
+        Operator::I32x4ExtMulLowI16x8U => binop(ctx, BinaryOp::I32x4ExtMulLowI16x8U),
+        Operator::I32x4ExtMulHighI16x8U => binop(ctx, BinaryOp::I32x4ExtMulHighI16x8U),
+        Operator::I64x2ExtMulLowI32x4S => binop(ctx, BinaryOp::I64x2ExtMulLowI32x4S),
+        Operator::I64x2ExtMulHighI32x4S => binop(ctx, BinaryOp::I64x2ExtMulHighI32x4S),
+        Operator::I64x2ExtMulLowI32x4U => binop(ctx, BinaryOp::I64x2ExtMulLowI32x4U),
+        Operator::I64x2ExtMulHighI32x4U => binop(ctx, BinaryOp::I64x2ExtMulHighI32x4U),
 
         Operator::F64x2Abs => unop(ctx, UnaryOp::F64x2Abs),
         Operator::F64x2Neg => unop(ctx, UnaryOp::F64x2Neg),
@@ -1163,6 +1201,30 @@ fn append_instruction<'context>(
         Operator::V128Load32Zero { memarg } => load_simd(ctx, memarg, LoadSimdKind::V128Load32Zero),
         Operator::V128Load64Zero { memarg } => load_simd(ctx, memarg, LoadSimdKind::V128Load64Zero),
 
+        Operator::V128Load8Lane { memarg, lane } => {
+            load_simd(ctx, memarg, LoadSimdKind::V128Load8Lane(lane))
+        }
+        Operator::V128Load16Lane { memarg, lane } => {
+            load_simd(ctx, memarg, LoadSimdKind::V128Load16Lane(lane))
+        }
+        Operator::V128Load32Lane { memarg, lane } => {
+            load_simd(ctx, memarg, LoadSimdKind::V128Load32Lane(lane))
+        }
+        Operator::V128Load64Lane { memarg, lane } => {
+            load_simd(ctx, memarg, LoadSimdKind::V128Load64Lane(lane))
+        }
+        Operator::V128Store8Lane { memarg, lane } => {
+            load_simd(ctx, memarg, LoadSimdKind::V128Store8Lane(lane))
+        }
+        Operator::V128Store16Lane { memarg, lane } => {
+            load_simd(ctx, memarg, LoadSimdKind::V128Store16Lane(lane))
+        }
+        Operator::V128Store32Lane { memarg, lane } => {
+            load_simd(ctx, memarg, LoadSimdKind::V128Store32Lane(lane))
+        }
+        Operator::V128Store64Lane { memarg, lane } => {
+            load_simd(ctx, memarg, LoadSimdKind::V128Store64Lane(lane))
+        }
         Operator::I8x16NarrowI16x8S => binop(ctx, BinaryOp::I8x16NarrowI16x8S),
         Operator::I8x16NarrowI16x8U => binop(ctx, BinaryOp::I8x16NarrowI16x8U),
         Operator::I16x8NarrowI32x4S => binop(ctx, BinaryOp::I16x8NarrowI32x4S),
@@ -1200,6 +1262,7 @@ fn append_instruction<'context>(
         Operator::I8x16Bitmask => unop(ctx, UnaryOp::I8x16Bitmask),
         Operator::I16x8Bitmask => unop(ctx, UnaryOp::I16x8Bitmask),
         Operator::I32x4Bitmask => unop(ctx, UnaryOp::I32x4Bitmask),
+        Operator::I64x2Bitmask => unop(ctx, UnaryOp::I64x2Bitmask),
 
         Operator::I32x4DotI16x8S => binop(ctx, BinaryOp::I32x4DotI16x8S),
 
@@ -1231,52 +1294,7 @@ fn append_instruction<'context>(
         | Operator::Rethrow { relative_depth: _ }
         | Operator::Unwind
         | Operator::Delegate { relative_depth: _ }
-        | Operator::CatchAll
-        | Operator::V128Load8Lane { memarg: _, lane: _ }
-        | Operator::V128Load16Lane { memarg: _, lane: _ }
-        | Operator::V128Load32Lane { memarg: _, lane: _ }
-        | Operator::V128Load64Lane { memarg: _, lane: _ }
-        | Operator::V128Store8Lane { memarg: _, lane: _ }
-        | Operator::V128Store16Lane { memarg: _, lane: _ }
-        | Operator::V128Store32Lane { memarg: _, lane: _ }
-        | Operator::V128Store64Lane { memarg: _, lane: _ }
-        | Operator::I64x2Eq
-        | Operator::I64x2Ne
-        | Operator::I64x2LtS
-        | Operator::I64x2GtS
-        | Operator::I64x2LeS
-        | Operator::I64x2GeS
-        | Operator::I8x16Popcnt
-        | Operator::I16x8ExtAddPairwiseI8x16S
-        | Operator::I16x8ExtAddPairwiseI8x16U
-        | Operator::I16x8Q15MulrSatS
-        | Operator::I16x8ExtMulLowI8x16S
-        | Operator::I16x8ExtMulHighI8x16S
-        | Operator::I16x8ExtMulLowI8x16U
-        | Operator::I16x8ExtMulHighI8x16U
-        | Operator::I32x4ExtAddPairwiseI16x8S
-        | Operator::I32x4ExtAddPairwiseI16x8U
-        | Operator::I32x4ExtMulLowI16x8S
-        | Operator::I32x4ExtMulHighI16x8S
-        | Operator::I32x4ExtMulLowI16x8U
-        | Operator::I32x4ExtMulHighI16x8U
-        | Operator::I64x2Abs
-        | Operator::I64x2AllTrue
-        | Operator::I64x2Bitmask
-        | Operator::I64x2ExtendLowI32x4S
-        | Operator::I64x2ExtendHighI32x4S
-        | Operator::I64x2ExtendLowI32x4U
-        | Operator::I64x2ExtendHighI32x4U
-        | Operator::I64x2ExtMulLowI32x4S
-        | Operator::I64x2ExtMulHighI32x4S
-        | Operator::I64x2ExtMulLowI32x4U
-        | Operator::I64x2ExtMulHighI32x4U
-        | Operator::I32x4TruncSatF64x2SZero
-        | Operator::I32x4TruncSatF64x2UZero
-        | Operator::F64x2ConvertLowI32x4S
-        | Operator::F64x2ConvertLowI32x4U
-        | Operator::F32x4DemoteF64x2Zero
-        | Operator::F64x2PromoteLowF32x4 => {
+        | Operator::CatchAll => {
             unimplemented!("not supported")
         }
     }

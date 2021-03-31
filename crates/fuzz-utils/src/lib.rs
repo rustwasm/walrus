@@ -151,18 +151,17 @@ where
         let timeout = time::Duration::from_secs(self.timeout);
         let mut failing = Ok(());
         loop {
+            // Used all of our time, and didn't find any failing test cases.
+            if start.elapsed() > timeout {
+                return Ok(());
+            }
+
             match self.run_one() {
                 Ok(()) => {
                     // We reduced fuel as far as we could, so return the last
                     // failing test case.
                     if failing.is_err() {
                         return failing;
-                    }
-
-                    // Used all of our time, and didn't find any failing test cases.
-                    if time::Instant::now().duration_since(start) > timeout {
-                        assert!(failing.is_ok());
-                        return Ok(());
                     }
 
                     // This did not produce a failing test case, so generate a
@@ -393,27 +392,29 @@ impl TestCaseGenerator for WasmOptTtf {
             let input_tmp = tempfile::NamedTempFile::new().expect("should create temp file OK");
             fs::write(input_tmp.path(), input).expect("should write to temp file OK");
 
-            let wat =
-                match walrus_tests_utils::wasm_opt(input_tmp.path(), vec!["-ttf", "--emit-text"]) {
-                    Ok(ref w) if Some(w) == last_wat.as_ref() => {
-                        // We're stuck in a loop generating the same wat that
-                        // `wat2wasm` can't handle over and over. This is
-                        // typically because we're using an RNG that is derived
-                        // from some fuzzer's output, and it is yielding all
-                        // zeros or something. Just return the most basic wat
-                        // module.
-                        return "(module)".to_string();
-                    }
-                    Ok(w) => w,
-                    Err(e) => {
-                        // Sometimes `wasm-opt -ttf` fails to generate wasm
-                        // modules, so we just try again with the next output
-                        // from the RNG.
-                        eprintln!("Warning: `wasm-opt -ttf` failed:");
-                        print_err(&e);
-                        continue;
-                    }
-                };
+            let wat = match walrus_tests_utils::wasm_opt(
+                input_tmp.path(),
+                vec!["-ttf", "--emit-text", "--disable-simd", "--disable-threads"],
+            ) {
+                Ok(ref w) if Some(w) == last_wat.as_ref() => {
+                    // We're stuck in a loop generating the same wat that
+                    // `wat2wasm` can't handle over and over. This is
+                    // typically because we're using an RNG that is derived
+                    // from some fuzzer's output, and it is yielding all
+                    // zeros or something. Just return the most basic wat
+                    // module.
+                    return "(module)".to_string();
+                }
+                Ok(w) => w,
+                Err(e) => {
+                    // Sometimes `wasm-opt -ttf` fails to generate wasm
+                    // modules, so we just try again with the next output
+                    // from the RNG.
+                    eprintln!("Warning: `wasm-opt -ttf` failed:");
+                    print_err(&e);
+                    continue;
+                }
+            };
 
             // Only generate programs that wat2wasm can handle.
             if let Ok(bytes) = wat::parse_bytes(&wat) {

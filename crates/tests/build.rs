@@ -6,35 +6,10 @@ use walkdir::WalkDir;
 
 fn is_known_failing(name: &str) -> bool {
     match name {
-        // TODO issues to investigate: wasm parsed when it shouldn't
+        // enabling multi-memory means that these tests fail, but the failure is
+        // benign.
         "tests_spec_tests_proposals_bulk_memory_operations_binary_wast"
         | "tests_spec_tests_proposals_reference_types_binary_wast" => true,
-
-        // SIMD isn't fully implemented yet.
-        "tests_spec_tests_proposals_simd_simd_boolean_wast"
-        | "tests_spec_tests_proposals_simd_simd_conversions_wast"
-        | "tests_spec_tests_proposals_simd_simd_f32x4_rounding_wast"
-        | "tests_spec_tests_proposals_simd_simd_f64x2_rounding_wast"
-        | "tests_spec_tests_proposals_simd_simd_i16x8_extadd_pairwise_i8x16_wast"
-        | "tests_spec_tests_proposals_simd_simd_i16x8_extmul_i8x16_wast"
-        | "tests_spec_tests_proposals_simd_simd_i16x8_q15mulr_sat_s_wast"
-        | "tests_spec_tests_proposals_simd_simd_i32x4_extadd_pairwise_i16x8_wast"
-        | "tests_spec_tests_proposals_simd_simd_i32x4_extmul_i16x8_wast"
-        | "tests_spec_tests_proposals_simd_simd_i32x4_trunc_sat_f64x2_wast"
-        | "tests_spec_tests_proposals_simd_simd_i64x2_arith2_wast"
-        | "tests_spec_tests_proposals_simd_simd_i64x2_cmp_wast"
-        | "tests_spec_tests_proposals_simd_simd_i64x2_extmul_i32x4_wast"
-        | "tests_spec_tests_proposals_simd_simd_i8x16_arith2_wast"
-        | "tests_spec_tests_proposals_simd_simd_int_to_int_extend_wast"
-        | "tests_spec_tests_proposals_simd_simd_load16_lane_wast"
-        | "tests_spec_tests_proposals_simd_simd_load32_lane_wast"
-        | "tests_spec_tests_proposals_simd_simd_load64_lane_wast"
-        | "tests_spec_tests_proposals_simd_simd_load8_lane_wast"
-        | "tests_spec_tests_proposals_simd_simd_load_zero_wast"
-        | "tests_spec_tests_proposals_simd_simd_store16_lane_wast"
-        | "tests_spec_tests_proposals_simd_simd_store32_lane_wast"
-        | "tests_spec_tests_proposals_simd_simd_store64_lane_wast"
-        | "tests_spec_tests_proposals_simd_simd_store8_lane_wast" => true,
 
         _ => false,
     }

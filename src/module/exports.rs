@@ -145,6 +145,9 @@ impl Module {
                 Type | Module | Instance => {
                     unimplemented!("module linking not supported");
                 }
+                Event => {
+                    unimplemented!("exception handling not supported");
+                }
             };
             self.exports.arena.alloc_with_id(|id| Export {
                 id,

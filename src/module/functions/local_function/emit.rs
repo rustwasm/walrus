@@ -261,12 +261,12 @@ impl<'instr> Visitor<'instr> for Emit<'_, '_> {
                     F64Max => self.encoder.byte(0xa5),
                     F64Copysign => self.encoder.byte(0xa6),
 
-                    I8x16ReplaceLane { idx } => self.encoder.raw(&[0xfd, 0x17, idx]),
-                    I16x8ReplaceLane { idx } => self.encoder.raw(&[0xfd, 0x1a, idx]),
-                    I32x4ReplaceLane { idx } => self.encoder.raw(&[0xfd, 0x1c, idx]),
-                    I64x2ReplaceLane { idx } => self.encoder.raw(&[0xfd, 0x1e, idx]),
-                    F32x4ReplaceLane { idx } => self.encoder.raw(&[0xfd, 0x20, idx]),
-                    F64x2ReplaceLane { idx } => self.encoder.raw(&[0xfd, 0x22, idx]),
+                    I8x16ReplaceLane { idx } => self.encoder.raw(&[0xfd, 23, idx]),
+                    I16x8ReplaceLane { idx } => self.encoder.raw(&[0xfd, 26, idx]),
+                    I32x4ReplaceLane { idx } => self.encoder.raw(&[0xfd, 28, idx]),
+                    I64x2ReplaceLane { idx } => self.encoder.raw(&[0xfd, 30, idx]),
+                    F32x4ReplaceLane { idx } => self.encoder.raw(&[0xfd, 32, idx]),
+                    F64x2ReplaceLane { idx } => self.encoder.raw(&[0xfd, 34, idx]),
 
                     I8x16Eq => self.simd(0x23),
                     I8x16Ne => self.simd(0x24),
@@ -300,6 +300,13 @@ impl<'instr> Visitor<'instr> for Emit<'_, '_> {
                     I32x4LeU => self.simd(0x3e),
                     I32x4GeS => self.simd(0x3f),
                     I32x4GeU => self.simd(0x40),
+
+                    I64x2Eq => self.simd(214),
+                    I64x2Ne => self.simd(215),
+                    I64x2LtS => self.simd(216),
+                    I64x2GtS => self.simd(217),
+                    I64x2LeS => self.simd(218),
+                    I64x2GeS => self.simd(219),
 
                     F32x4Eq => self.simd(0x41),
                     F32x4Ne => self.simd(0x42),
@@ -392,6 +399,20 @@ impl<'instr> Visitor<'instr> for Emit<'_, '_> {
                     F64x2PMax => self.simd(0xf7),
 
                     I32x4DotI16x8S => self.simd(0xba),
+
+                    I16x8Q15MulrSatS => self.simd(130),
+                    I16x8ExtMulLowI8x16S => self.simd(156),
+                    I16x8ExtMulHighI8x16S => self.simd(157),
+                    I16x8ExtMulLowI8x16U => self.simd(158),
+                    I16x8ExtMulHighI8x16U => self.simd(159),
+                    I32x4ExtMulLowI16x8S => self.simd(188),
+                    I32x4ExtMulHighI16x8S => self.simd(189),
+                    I32x4ExtMulLowI16x8U => self.simd(190),
+                    I32x4ExtMulHighI16x8U => self.simd(191),
+                    I64x2ExtMulLowI32x4S => self.simd(220),
+                    I64x2ExtMulHighI32x4S => self.simd(221),
+                    I64x2ExtMulLowI32x4U => self.simd(222),
+                    I64x2ExtMulHighI32x4U => self.simd(223),
                 }
             }
 
@@ -459,42 +480,42 @@ impl<'instr> Visitor<'instr> for Emit<'_, '_> {
                     I64Extend16S => self.encoder.byte(0xc3),
                     I64Extend32S => self.encoder.byte(0xc4),
 
-                    I8x16Splat => self.simd(0x0f),
-                    I16x8Splat => self.simd(0x10),
-                    I32x4Splat => self.simd(0x11),
-                    I64x2Splat => self.simd(0x12),
-                    F32x4Splat => self.simd(0x13),
-                    F64x2Splat => self.simd(0x14),
+                    I8x16Splat => self.simd(15),
+                    I16x8Splat => self.simd(16),
+                    I32x4Splat => self.simd(17),
+                    I64x2Splat => self.simd(18),
+                    F32x4Splat => self.simd(19),
+                    F64x2Splat => self.simd(20),
                     I8x16ExtractLaneS { idx } => {
-                        self.simd(0x15);
+                        self.simd(21);
                         self.encoder.byte(idx);
                     }
                     I8x16ExtractLaneU { idx } => {
-                        self.simd(0x16);
+                        self.simd(22);
                         self.encoder.byte(idx);
                     }
                     I16x8ExtractLaneS { idx } => {
-                        self.simd(0x18);
+                        self.simd(24);
                         self.encoder.byte(idx);
                     }
                     I16x8ExtractLaneU { idx } => {
-                        self.simd(0x19);
+                        self.simd(25);
                         self.encoder.byte(idx);
                     }
                     I32x4ExtractLane { idx } => {
-                        self.simd(0x1b);
+                        self.simd(27);
                         self.encoder.byte(idx);
                     }
                     I64x2ExtractLane { idx } => {
-                        self.simd(0x1d);
+                        self.simd(29);
                         self.encoder.byte(idx);
                     }
                     F32x4ExtractLane { idx } => {
-                        self.simd(0x1f);
+                        self.simd(31);
                         self.encoder.byte(idx);
                     }
                     F64x2ExtractLane { idx } => {
-                        self.simd(0x21);
+                        self.simd(33);
                         self.encoder.byte(idx);
                     }
 
@@ -503,13 +524,14 @@ impl<'instr> Visitor<'instr> for Emit<'_, '_> {
                     V128AnyTrue => self.simd(0x53),
 
                     I8x16Abs => self.simd(0x60),
+                    I8x16Popcnt => self.simd(98),
                     I8x16Neg => self.simd(0x61),
-                    I8x16AllTrue => self.simd(0x63),
+                    I8x16AllTrue => self.simd(99),
                     I8x16Bitmask => self.simd(0x64),
 
                     I16x8Abs => self.simd(0x80),
                     I16x8Neg => self.simd(0x81),
-                    I16x8AllTrue => self.simd(0x83),
+                    I16x8AllTrue => self.simd(131),
                     I16x8Bitmask => self.simd(0x84),
                     I16x8WidenLowI8x16S => self.simd(0x87),
                     I16x8WidenHighI8x16S => self.simd(0x88),
@@ -518,35 +540,38 @@ impl<'instr> Visitor<'instr> for Emit<'_, '_> {
 
                     I32x4Abs => self.simd(0xa0),
                     I32x4Neg => self.simd(0xa1),
-                    I32x4AllTrue => self.simd(0xa3),
+                    I32x4AllTrue => self.simd(163),
                     I32x4Bitmask => self.simd(0xa4),
                     I32x4WidenLowI16x8S => self.simd(0xa7),
                     I32x4WidenHighI16x8S => self.simd(0xa8),
                     I32x4WidenLowI16x8U => self.simd(0xa9),
                     I32x4WidenHighI16x8U => self.simd(0xaa),
 
-                    I64x2Neg => self.simd(0xc1),
+                    I64x2Abs => self.simd(192),
+                    I64x2Neg => self.simd(193),
+                    I64x2AllTrue => self.simd(195),
+                    I64x2Bitmask => self.simd(196),
 
-                    F32x4Abs => self.simd(0xe0),
-                    F32x4Neg => self.simd(0xe1),
-                    F32x4Sqrt => self.simd(0xe3),
-                    F32x4Ceil => self.simd(0xd8),
-                    F32x4Floor => self.simd(0xd9),
-                    F32x4Trunc => self.simd(0xda),
-                    F32x4Nearest => self.simd(0xdb),
+                    F32x4Abs => self.simd(224),
+                    F32x4Neg => self.simd(225),
+                    F32x4Sqrt => self.simd(227),
+                    F32x4Ceil => self.simd(103),
+                    F32x4Floor => self.simd(104),
+                    F32x4Trunc => self.simd(105),
+                    F32x4Nearest => self.simd(106),
 
-                    F64x2Abs => self.simd(0xec),
-                    F64x2Neg => self.simd(0xed),
-                    F64x2Sqrt => self.simd(0xef),
-                    F64x2Ceil => self.simd(0xdc),
-                    F64x2Floor => self.simd(0xdd),
-                    F64x2Trunc => self.simd(0xde),
-                    F64x2Nearest => self.simd(0xdf),
+                    F64x2Abs => self.simd(236),
+                    F64x2Neg => self.simd(237),
+                    F64x2Sqrt => self.simd(239),
+                    F64x2Ceil => self.simd(116),
+                    F64x2Floor => self.simd(117),
+                    F64x2Trunc => self.simd(122),
+                    F64x2Nearest => self.simd(148),
 
-                    I32x4TruncSatF32x4S => self.simd(0xf8),
-                    I32x4TruncSatF32x4U => self.simd(0xf9),
-                    F32x4ConvertI32x4S => self.simd(0xfa),
-                    F32x4ConvertI32x4U => self.simd(0xfb),
+                    I32x4TruncSatF32x4S => self.simd(248),
+                    I32x4TruncSatF32x4U => self.simd(249),
+                    F32x4ConvertI32x4S => self.simd(250),
+                    F32x4ConvertI32x4U => self.simd(251),
 
                     I32TruncSSatF32 => self.encoder.raw(&[0xfc, 0x00]),
                     I32TruncUSatF32 => self.encoder.raw(&[0xfc, 0x01]),
@@ -556,6 +581,21 @@ impl<'instr> Visitor<'instr> for Emit<'_, '_> {
                     I64TruncUSatF32 => self.encoder.raw(&[0xfc, 0x05]),
                     I64TruncSSatF64 => self.encoder.raw(&[0xfc, 0x06]),
                     I64TruncUSatF64 => self.encoder.raw(&[0xfc, 0x07]),
+
+                    I16x8ExtAddPairwiseI8x16S => self.simd(124),
+                    I16x8ExtAddPairwiseI8x16U => self.simd(125),
+                    I32x4ExtAddPairwiseI16x8S => self.simd(126),
+                    I32x4ExtAddPairwiseI16x8U => self.simd(127),
+                    I64x2ExtendLowI32x4S => self.simd(199),
+                    I64x2ExtendHighI32x4S => self.simd(200),
+                    I64x2ExtendLowI32x4U => self.simd(201),
+                    I64x2ExtendHighI32x4U => self.simd(202),
+                    I32x4TruncSatF64x2SZero => self.simd(252),
+                    I32x4TruncSatF64x2UZero => self.simd(253),
+                    F64x2ConvertLowI32x4S => self.simd(254),
+                    F64x2ConvertLowI32x4U => self.simd(255),
+                    F32x4DemoteF64x2Zero => self.simd(94),
+                    F64x2PromoteLowF32x4 => self.simd(95),
                 }
             }
 
@@ -642,7 +682,7 @@ impl<'instr> Visitor<'instr> for Emit<'_, '_> {
                     I64 { atomic: true } => self.encoder.raw(&[0xfe, 0x11]), // i64.atomic.load
                     F32 => self.encoder.byte(0x2a),                   // f32.load
                     F64 => self.encoder.byte(0x2b),                   // f64.load
-                    V128 => self.simd(0x00),
+                    V128 => self.simd(0),
                     I32_8 { kind: SignExtend } => self.encoder.byte(0x2c),
                     I32_8 { kind: ZeroExtend } => self.encoder.byte(0x2d),
                     I32_8 {
@@ -681,7 +721,7 @@ impl<'instr> Visitor<'instr> for Emit<'_, '_> {
                     I64 { atomic: true } => self.encoder.raw(&[0xfe, 0x18]), // i64.atomic.store
                     F32 => self.encoder.byte(0x38),                   // f32.store
                     F64 => self.encoder.byte(0x39),                   // f64.store
-                    V128 => self.simd(0x0b),                          // v128.store
+                    V128 => self.simd(11),                            // v128.store
                     I32_8 { atomic: false } => self.encoder.byte(0x3a), // i32.store8
                     I32_8 { atomic: true } => self.encoder.raw(&[0xfe, 0x19]), // i32.atomic.store8
                     I32_16 { atomic: false } => self.encoder.byte(0x3b), // i32.store16
@@ -831,28 +871,47 @@ impl<'instr> Visitor<'instr> for Emit<'_, '_> {
                 self.simd(0x52);
             }
             I8x16Shuffle(e) => {
-                self.simd(0x0d);
+                self.simd(13);
                 self.encoder.raw(&e.indices);
             }
             I8x16Swizzle(_) => {
-                self.simd(0x0e);
+                self.simd(14);
             }
             LoadSimd(e) => {
                 match e.kind {
-                    LoadSimdKind::V128Load8x8S => self.simd(0x01),
-                    LoadSimdKind::V128Load8x8U => self.simd(0x02),
-                    LoadSimdKind::V128Load16x4S => self.simd(0x03),
-                    LoadSimdKind::V128Load16x4U => self.simd(0x04),
-                    LoadSimdKind::V128Load32x2S => self.simd(0x05),
-                    LoadSimdKind::V128Load32x2U => self.simd(0x06),
-                    LoadSimdKind::Splat8 => self.simd(0x07),
-                    LoadSimdKind::Splat16 => self.simd(0x08),
-                    LoadSimdKind::Splat32 => self.simd(0x09),
-                    LoadSimdKind::Splat64 => self.simd(0x0a),
-                    LoadSimdKind::V128Load32Zero => self.simd(0xfc),
-                    LoadSimdKind::V128Load64Zero => self.simd(0xfd),
+                    LoadSimdKind::V128Load8x8S => self.simd(1),
+                    LoadSimdKind::V128Load8x8U => self.simd(2),
+                    LoadSimdKind::V128Load16x4S => self.simd(3),
+                    LoadSimdKind::V128Load16x4U => self.simd(4),
+                    LoadSimdKind::V128Load32x2S => self.simd(5),
+                    LoadSimdKind::V128Load32x2U => self.simd(6),
+                    LoadSimdKind::Splat8 => self.simd(7),
+                    LoadSimdKind::Splat16 => self.simd(8),
+                    LoadSimdKind::Splat32 => self.simd(9),
+                    LoadSimdKind::Splat64 => self.simd(10),
+                    LoadSimdKind::V128Load32Zero => self.simd(92),
+                    LoadSimdKind::V128Load64Zero => self.simd(93),
+                    LoadSimdKind::V128Load8Lane(_) => self.simd(84),
+                    LoadSimdKind::V128Load16Lane(_) => self.simd(85),
+                    LoadSimdKind::V128Load32Lane(_) => self.simd(86),
+                    LoadSimdKind::V128Load64Lane(_) => self.simd(87),
+                    LoadSimdKind::V128Store8Lane(_) => self.simd(88),
+                    LoadSimdKind::V128Store16Lane(_) => self.simd(89),
+                    LoadSimdKind::V128Store32Lane(_) => self.simd(90),
+                    LoadSimdKind::V128Store64Lane(_) => self.simd(91),
                 }
                 self.memarg(e.memory, &e.arg);
+                match e.kind {
+                    LoadSimdKind::V128Load8Lane(l)
+                    | LoadSimdKind::V128Load16Lane(l)
+                    | LoadSimdKind::V128Load32Lane(l)
+                    | LoadSimdKind::V128Load64Lane(l)
+                    | LoadSimdKind::V128Store8Lane(l)
+                    | LoadSimdKind::V128Store16Lane(l)
+                    | LoadSimdKind::V128Store32Lane(l)
+                    | LoadSimdKind::V128Store64Lane(l) => self.encoder.byte(l),
+                    _ => {}
+                }
             }
             TableInit(e) => {
                 self.encoder.raw(&[0xfc, 0x0c]);

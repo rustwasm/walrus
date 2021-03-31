@@ -892,9 +892,18 @@ impl Emit<'_, '_> {
     }
 
     fn memarg(&mut self, id: MemoryId, arg: &MemArg) {
-        assert_eq!(self.indices.get_memory_index(id), 0);
-        self.encoder.u32(arg.align.trailing_zeros());
-        self.encoder.u32(arg.offset);
+        let mem_index = self.indices.get_memory_index(id);
+        if mem_index == 0 {
+            self.encoder.u32(arg.align.trailing_zeros());
+            self.encoder.u32(arg.offset);
+        } else {
+            assert!(arg.align.trailing_zeros() < (1 << 6), "alignment too large");
+            let multi_memory_flag = 1 << 6;
+            let flags = arg.align.trailing_zeros() | multi_memory_flag;
+            self.encoder.u32(flags);
+            self.encoder.u32(arg.offset);
+            self.encoder.u32(mem_index);
+        };
     }
 
     fn simd(&mut self, opcode: u32) {

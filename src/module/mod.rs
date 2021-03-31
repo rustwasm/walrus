@@ -123,6 +123,7 @@ impl Module {
             bulk_memory: !config.only_stable_features,
             simd: !config.only_stable_features,
             threads: !config.only_stable_features,
+            multi_memory: !config.only_stable_features,
             ..WasmFeatures::default()
         });
 

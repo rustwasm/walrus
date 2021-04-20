@@ -79,7 +79,11 @@ impl IndicesToIds {
             .and_then(|list| list.get(index as usize));
         match ret {
             Some(x) => Ok(*x),
-            None => bail!("index `{}` is out of bounds for local", index,),
+            None => bail!(
+                "index `{}` in function `{}` is out of bounds for local",
+                index,
+                function.index(),
+            ),
         }
     }
 }

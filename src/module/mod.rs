@@ -37,6 +37,7 @@ pub use crate::module::tables::{ModuleTables, Table, TableId};
 pub use crate::module::types::ModuleTypes;
 use crate::parse::IndicesToIds;
 use anyhow::{bail, Context};
+use log::warn;
 use std::fs;
 use std::mem;
 use std::path::Path;
@@ -371,9 +372,27 @@ impl Module {
         names: wasmparser::NameSectionReader,
         indices: &IndicesToIds,
     ) -> Result<()> {
+        // Like ? but `continue`s the current loop and prints a warning, rather
+        // than returning from the parse_name_section function.
+        //
+        // This is important because different compilers (notably emscripten)
+        // put a lot of garbage into this section, which we want to parse on a
+        // best-effort basis.
+        macro_rules! try_continue {
+            ($x:expr) => {
+                match $x {
+                    Ok(x) => x,
+                    Err(e) => {
+                        warn!("when parsing name section: {}", e);
+                        continue;
+                    }
+                }
+            };
+        }
+
         log::debug!("parse name section");
         for name in names {
-            match name? {
+            match try_continue!(name) {
                 wasmparser::Name::Module(m) => {
                     self.name = Some(m.get_name()?.to_string());
                 }
@@ -381,7 +400,7 @@ impl Module {
                     let mut map = f.get_map()?;
                     for _ in 0..map.get_count() {
                         let naming = map.read()?;
-                        let id = indices.get_func(naming.index)?;
+                        let id = try_continue!(indices.get_func(naming.index));
                         self.funcs.get_mut(id).name = Some(naming.name.to_string());
                     }
                 }
@@ -402,7 +421,7 @@ impl Module {
                             {
                                 continue;
                             }
-                            let id = indices.get_local(func_id, naming.index)?;
+                            let id = try_continue!(indices.get_local(func_id, naming.index));
                             self.locals.get_mut(id).name = Some(naming.name.to_string());
                         }
                     }

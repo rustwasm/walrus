@@ -372,27 +372,9 @@ impl Module {
         names: wasmparser::NameSectionReader,
         indices: &IndicesToIds,
     ) -> Result<()> {
-        // Like ? but `continue`s the current loop and prints a warning, rather
-        // than returning from the parse_name_section function.
-        //
-        // This is important because different compilers (notably emscripten)
-        // put a lot of garbage into this section, which we want to parse on a
-        // best-effort basis.
-        macro_rules! try_continue {
-            ($x:expr) => {
-                match $x {
-                    Ok(x) => x,
-                    Err(e) => {
-                        warn!("when parsing name section: {}", e);
-                        continue;
-                    }
-                }
-            };
-        }
-
         log::debug!("parse name section");
         for name in names {
-            match try_continue!(name) {
+            match name? {
                 wasmparser::Name::Module(m) => {
                     self.name = Some(m.get_name()?.to_string());
                 }
@@ -400,8 +382,13 @@ impl Module {
                     let mut map = f.get_map()?;
                     for _ in 0..map.get_count() {
                         let naming = map.read()?;
-                        let id = try_continue!(indices.get_func(naming.index));
-                        self.funcs.get_mut(id).name = Some(naming.name.to_string());
+                        match indices.get_func(naming.index) {
+                            Ok(id) => self.funcs.get_mut(id).name = Some(naming.name.to_string()),
+                            // It looks like emscripten doesn't properly GC the
+                            // name section under certain circumstances, so
+                            // nonexistent symbols can be present.
+                            Err(e) => warn!("in name section: {}", e),
+                        }
                     }
                 }
                 wasmparser::Name::Local(l) => {
@@ -421,8 +408,12 @@ impl Module {
                             {
                                 continue;
                             }
-                            let id = try_continue!(indices.get_local(func_id, naming.index));
-                            self.locals.get_mut(id).name = Some(naming.name.to_string());
+                            match indices.get_local(func_id, naming.index) {
+                                Ok(id) => {
+                                    self.locals.get_mut(id).name = Some(naming.name.to_string())
+                                }
+                                Err(e) => warn!("in name section: {}", e),
+                            }
                         }
                     }
                 }

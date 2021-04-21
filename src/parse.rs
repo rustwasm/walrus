@@ -73,11 +73,14 @@ impl IndicesToIds {
 
     /// Gets the ID for a particular index
     pub fn get_local(&self, function: FunctionId, index: u32) -> Result<LocalId> {
-        let ret = self
-            .locals
-            .get(&function)
-            .and_then(|list| list.get(index as usize));
-        match ret {
+        let locals = match self.locals.get(&function) {
+            Some(x) => x,
+            None => bail!(
+                "function index `{}` is out of bounds for local",
+                function.index()
+            ),
+        };
+        match locals.get(index as usize) {
             Some(x) => Ok(*x),
             None => bail!(
                 "index `{}` in function `{}` is out of bounds for local",

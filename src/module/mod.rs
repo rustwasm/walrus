@@ -384,9 +384,9 @@ impl Module {
                         let naming = map.read()?;
                         match indices.get_func(naming.index) {
                             Ok(id) => self.funcs.get_mut(id).name = Some(naming.name.to_string()),
-                            // It looks like emscripten doesn't properly GC the
-                            // name section under certain circumstances, so
-                            // nonexistent symbols can be present.
+                            // If some tool fails to GC function names properly,
+                            // it doesn't really hurt anything to ignore the
+                            // broken references and keep going.
                             Err(e) => warn!("in name section: {}", e),
                         }
                     }
@@ -412,6 +412,9 @@ impl Module {
                                 Ok(id) => {
                                     self.locals.get_mut(id).name = Some(naming.name.to_string())
                                 }
+                                // It looks like emscripten leaves broken
+                                // function references in the locals subsection
+                                // sometimes.
                                 Err(e) => warn!("in name section: {}", e),
                             }
                         }

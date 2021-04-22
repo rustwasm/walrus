@@ -37,6 +37,7 @@ pub use crate::module::tables::{ModuleTables, Table, TableId};
 pub use crate::module::types::ModuleTypes;
 use crate::parse::IndicesToIds;
 use anyhow::{bail, Context};
+use log::warn;
 use std::fs;
 use std::mem;
 use std::path::Path;
@@ -381,8 +382,13 @@ impl Module {
                     let mut map = f.get_map()?;
                     for _ in 0..map.get_count() {
                         let naming = map.read()?;
-                        let id = indices.get_func(naming.index)?;
-                        self.funcs.get_mut(id).name = Some(naming.name.to_string());
+                        match indices.get_func(naming.index) {
+                            Ok(id) => self.funcs.get_mut(id).name = Some(naming.name.to_string()),
+                            // If some tool fails to GC function names properly,
+                            // it doesn't really hurt anything to ignore the
+                            // broken references and keep going.
+                            Err(e) => warn!("in name section: {}", e),
+                        }
                     }
                 }
                 wasmparser::Name::Local(l) => {
@@ -402,8 +408,15 @@ impl Module {
                             {
                                 continue;
                             }
-                            let id = indices.get_local(func_id, naming.index)?;
-                            self.locals.get_mut(id).name = Some(naming.name.to_string());
+                            match indices.get_local(func_id, naming.index) {
+                                Ok(id) => {
+                                    self.locals.get_mut(id).name = Some(naming.name.to_string())
+                                }
+                                // It looks like emscripten leaves broken
+                                // function references in the locals subsection
+                                // sometimes.
+                                Err(e) => warn!("in name section: {}", e),
+                            }
                         }
                     }
                 }

@@ -4,17 +4,4 @@ updates:
   directory: "/"
   schedule:
     interval: daily
-    time: "08:00"
   open-pull-requests-limit: 10
-  allow:
-  - dependency-type: direct
-  - dependency-type: indirect
-  ignore:
-  - dependency-name: wasmparser
-    versions:
-    - 0.73.0
-    - 0.73.1
-    - 0.74.0
-    - 0.75.0
-    - 0.76.0
-    - 0.77.0

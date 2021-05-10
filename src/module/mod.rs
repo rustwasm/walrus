@@ -420,6 +420,7 @@ impl Module {
                         }
                     }
                 }
+                wasmparser::Name::Unknown { ty, .. } => warn!("unknown name subsection {}", ty),
             }
         }
         Ok(())

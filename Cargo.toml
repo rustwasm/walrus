@@ -35,7 +35,7 @@ wasmparser = "0.78.0"
 parallel = ['rayon', 'id-arena/rayon']
 
 [dev-dependencies]
-env_logger = "0.8.1"
+env_logger = "0.9.0"
 criterion = "0.3.0"
 
 [workspace]

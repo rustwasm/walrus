@@ -44,7 +44,7 @@ fn main() -> walrus::Result<()> {
     // https://github.com/WebAssembly/testsuite/blob/7816043/fac.wast#L46-L66
     let mut factorial = FunctionBuilder::new(&mut module.types, &[ValType::I32], &[ValType::I32]);
 
-    // Create our paramter and our two locals.
+    // Create our parameter and our two locals.
     let n = module.locals.add(ValType::I32);
     let i = module.locals.add(ValType::I32);
     let res = module.locals.add(ValType::I32);

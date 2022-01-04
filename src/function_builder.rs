@@ -154,6 +154,11 @@ impl FunctionBuilder {
         let func = LocalFunction::new(args, self);
         funcs.add_local(func)
     }
+
+    /// Returns the [crate::LocalFunction] built by this builder.
+    pub fn local_func(self, args: Vec<LocalId>) -> LocalFunction {
+        LocalFunction::new(args, self)
+    }
 }
 
 /// A builder returned by instruction sequence-construction methods to build up

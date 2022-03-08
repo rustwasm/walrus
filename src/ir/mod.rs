@@ -2,7 +2,7 @@
 //!
 //! The goal is to match wasm instructions as closely as possible, but translate
 //! the stack machine into an instruction tree. Additionally all control frames
-//! are representd as `Block`s.
+//! are represented as `Block`s.
 
 mod traversals;
 pub use self::traversals::*;

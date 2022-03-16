@@ -320,7 +320,7 @@ mod tests {
             .i32_const(6)
             .drop();
 
-        let func_id = builder.finish(vec![], &mut module.funcs);
+        let func_id = builder.finish(vec![], vec![], &mut module.funcs);
         module.funcs.get_mut(func_id).kind.unwrap_local_mut()
     }
 

@@ -21,6 +21,9 @@ pub struct LocalFunction {
 
     /// Arguments to this function, and the locals that they're assigned to.
     pub args: Vec<LocalId>,
+
+    /// Locals of this function, excluding arguments.
+    pub locals: Vec<LocalId>,
     //
     // TODO: provenance: (InstrSeqId, usize) -> offset in code section of the
     // original instruction. This will be necessary for preserving debug info.
@@ -28,8 +31,16 @@ pub struct LocalFunction {
 
 impl LocalFunction {
     /// Creates a new definition of a local function from its components.
-    pub(crate) fn new(args: Vec<LocalId>, builder: FunctionBuilder) -> LocalFunction {
-        LocalFunction { args, builder }
+    pub(crate) fn new(
+        args: Vec<LocalId>,
+        locals: Vec<LocalId>,
+        builder: FunctionBuilder,
+    ) -> LocalFunction {
+        LocalFunction {
+            args,
+            locals,
+            builder,
+        }
     }
 
     /// Construct a new `LocalFunction`.
@@ -42,6 +53,7 @@ impl LocalFunction {
         id: FunctionId,
         ty: TypeId,
         args: Vec<LocalId>,
+        locals: Vec<LocalId>,
         mut body: wasmparser::BinaryReader<'_>,
         on_instr_pos: Option<&(dyn Fn(&usize) -> InstrLocId + Sync + Send + 'static)>,
         mut validator: FuncValidator<ValidatorResources>,
@@ -49,6 +61,7 @@ impl LocalFunction {
         let mut func = LocalFunction {
             builder: FunctionBuilder::without_entry(ty),
             args,
+            locals,
         };
 
         let result: Vec<_> = module.types.get(ty).results().iter().cloned().collect();

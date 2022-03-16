@@ -95,7 +95,7 @@ fn main() -> walrus::Result<()> {
         })
         .local_get(res);
 
-    let factorial = factorial.finish(vec![n], &mut module.funcs);
+    let factorial = factorial.finish(vec![], vec![n], &mut module.funcs);
 
     // Export the `factorial` function.
     module.exports.add("factorial", factorial);

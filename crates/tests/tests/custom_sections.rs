@@ -101,8 +101,9 @@ fn smoke_test_code_transform() {
 
         let mut builder = walrus::FunctionBuilder::new(&mut module.types, &[], &[ValType::I32]);
         builder.func_body().i32_const(1337);
+        let args = vec![];
         let locals = vec![];
-        let f_id = builder.finish(locals, &mut module.funcs);
+        let f_id = builder.finish(args, locals, &mut module.funcs);
 
         module.exports.add("f", f_id);
 

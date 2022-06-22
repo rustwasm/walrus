@@ -121,7 +121,7 @@ impl From<TypeId> for InstrSeqType {
 }
 
 /// A symbolic original wasm operator source location.
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord)]
 pub struct InstrLocId(u32);
 
 const DEFAULT_INSTR_LOC_ID: u32 = 0xffff_ffff;

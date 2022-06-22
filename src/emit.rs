@@ -2,6 +2,8 @@
 //! structures. E.g. translating from globally unique identifiers down to the
 //! raw wasm structure's index spaces.
 
+use id_arena::Id;
+
 use crate::encode::{Encoder, MAX_U32_LENGTH};
 use crate::ir::Local;
 use crate::map::{IdHashMap, IdHashSet};
@@ -16,6 +18,7 @@ pub struct EmitContext<'a> {
     pub encoder: Encoder<'a>,
     pub locals: IdHashMap<Function, IdHashSet<Local>>,
     pub code_transform: CodeTransform,
+    pub function_ranges: Vec<(Id<Function>, wasmparser::Range)>,
 }
 
 pub struct SubContext<'a, 'cx> {

@@ -13,7 +13,8 @@ use crate::tombstone_arena::{Id, Tombstone, TombstoneArena};
 use crate::ty::TypeId;
 use crate::ty::ValType;
 use std::cmp;
-use wasmparser::{FuncValidator, FunctionBody, ValidatorResources};
+use std::collections::BTreeMap;
+use wasmparser::{FuncValidator, FunctionBody, Range, ValidatorResources};
 
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
@@ -139,6 +140,9 @@ pub struct ImportedFunction {
 pub struct ModuleFunctions {
     /// The arena containing this module's functions.
     arena: TombstoneArena<Function>,
+
+    /// Original code section offset.
+    pub(crate) code_section_offset: usize,
 }
 
 impl ModuleFunctions {
@@ -441,14 +445,14 @@ fn used_local_functions<'a>(cx: &mut EmitContext<'a>) -> Vec<(FunctionId, &'a Lo
 }
 
 fn collect_non_default_code_offsets(
-    code_transform: &mut Vec<(InstrLocId, usize)>,
+    code_transform: &mut BTreeMap<InstrLocId, usize>,
     code_offset: usize,
     map: Vec<(InstrLocId, usize)>,
 ) {
     for (src, dst) in map {
         let dst = dst + code_offset;
         if !src.is_default() {
-            code_transform.push((src, dst));
+            code_transform.insert(src, dst);
         }
     }
 }
@@ -462,6 +466,7 @@ impl Emit for ModuleFunctions {
         }
 
         let mut cx = cx.start_section(Section::Code);
+        let code_section_start_offset = cx.encoder.pos();
         cx.encoder.usize(functions.len());
 
         let generate_map = cx.module.config.preserve_code_transform;
@@ -485,13 +490,26 @@ impl Emit for ModuleFunctions {
         cx.indices.locals.reserve(bytes.len());
         for (wasm, id, used_locals, local_indices, map) in bytes {
             cx.encoder.usize(wasm.len());
-            let code_offset = cx.encoder.pos();
+            let code_start_offset = cx.encoder.pos();
             cx.encoder.raw(&wasm);
+            let code_end_offset = cx.encoder.pos();
             if let Some(map) = map {
-                collect_non_default_code_offsets(&mut cx.code_transform, code_offset, map);
+                collect_non_default_code_offsets(
+                    &mut cx.code_transform,
+                    code_start_offset - code_section_start_offset,
+                    map,
+                );
             }
             cx.indices.locals.insert(id, local_indices);
             cx.locals.insert(id, used_locals);
+
+            cx.function_ranges.push((
+                id,
+                Range {
+                    start: code_start_offset - code_section_start_offset,
+                    end: code_end_offset - code_section_start_offset,
+                },
+            ));
         }
     }
 }

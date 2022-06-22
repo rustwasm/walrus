@@ -3,6 +3,7 @@
 mod config;
 mod custom;
 mod data;
+mod debug;
 mod elements;
 mod exports;
 mod functions;
@@ -23,6 +24,7 @@ pub use crate::module::custom::{
     UntypedCustomSectionId,
 };
 pub use crate::module::data::{ActiveData, ActiveDataLocation, Data, DataId, DataKind, ModuleData};
+pub use crate::module::debug::ModuleDebugData;
 pub use crate::module::elements::ElementKind;
 pub use crate::module::elements::{Element, ElementId, ModuleElements};
 pub use crate::module::exports::{Export, ExportId, ExportItem, ModuleExports};
@@ -38,6 +40,7 @@ pub use crate::module::types::ModuleTypes;
 use crate::parse::IndicesToIds;
 use anyhow::{bail, Context};
 use log::warn;
+use std::collections::BTreeMap;
 use std::fs;
 use std::mem;
 use std::path::Path;
@@ -67,6 +70,8 @@ pub struct Module {
     pub producers: ModuleProducers,
     /// Custom sections found in this module.
     pub customs: ModuleCustomSections,
+    /// Dwarf debug data.
+    pub debug: ModuleDebugData,
     /// The name of this module, used for debugging purposes in the `name`
     /// custom section.
     pub name: Option<String>,
@@ -79,7 +84,7 @@ pub struct Module {
 /// Note that an input offset may be mapped to multiple output offsets, and vice
 /// versa, due to transformations like function inlinining or constant
 /// propagation.
-pub type CodeTransform = Vec<(InstrLocId, usize)>;
+pub type CodeTransform = BTreeMap<InstrLocId, usize>;
 
 impl Module {
     /// Create a default, empty module that uses the given configuration.
@@ -199,6 +204,7 @@ impl Module {
                 }
                 Payload::CodeSectionStart { count, range, .. } => {
                     validator.code_section_start(count, &range)?;
+                    ret.funcs.code_section_offset = range.start;
                 }
                 Payload::CodeSectionEntry(body) => {
                     let validator = validator.code_section_entry()?;
@@ -314,7 +320,8 @@ impl Module {
             indices,
             encoder: Encoder::new(&mut wasm),
             locals: Default::default(),
-            code_transform: Vec::new(),
+            code_transform: BTreeMap::new(),
+            function_ranges: Vec::new(),
         };
         self.types.emit(&mut cx);
         self.imports.emit(&mut cx);
@@ -339,11 +346,16 @@ impl Module {
             self.producers.emit(&mut cx);
         }
 
+        if self.config.generate_dwarf {
+            self.debug.emit(&mut cx, &customs);
+        } else {
+            log::debug!("skipping DWARF custom section");
+        }
+
         let indices = mem::replace(cx.indices, Default::default());
 
         for (_id, section) in customs.iter_mut() {
-            if !self.config.generate_dwarf && section.name().starts_with(".debug") {
-                log::debug!("skipping DWARF custom section {}", section.name());
+            if section.name().starts_with(".debug") {
                 continue;
             }
 

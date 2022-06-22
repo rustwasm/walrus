@@ -10,7 +10,7 @@ use crate::map::{IdHashMap, IdHashSet};
 use crate::parse::IndicesToIds;
 use crate::{Data, DataId, FunctionBuilder, FunctionId, MemoryId, Module, Result, TypeId, ValType};
 use std::collections::BTreeMap;
-use wasmparser::{FuncValidator, Operator, ValidatorResources};
+use wasmparser::{FuncValidator, Operator, Range, ValidatorResources};
 
 /// A function defined locally within the wasm module.
 #[derive(Debug)]
@@ -20,15 +20,23 @@ pub struct LocalFunction {
 
     /// Arguments to this function, and the locals that they're assigned to.
     pub args: Vec<LocalId>,
-    //
-    // TODO: provenance: (InstrSeqId, usize) -> offset in code section of the
-    // original instruction. This will be necessary for preserving debug info.
+
+    /// InstrSeqId list mapping to original instruction
+    pub instruction_mapping: Vec<(usize, InstrLocId)>,
+
+    /// Original function binary range.
+    pub original_range: Option<Range>,
 }
 
 impl LocalFunction {
     /// Creates a new definition of a local function from its components.
     pub(crate) fn new(args: Vec<LocalId>, builder: FunctionBuilder) -> LocalFunction {
-        LocalFunction { args, builder }
+        LocalFunction {
+            args,
+            builder,
+            instruction_mapping: Vec::new(),
+            original_range: None,
+        }
     }
 
     /// Construct a new `LocalFunction`.
@@ -45,9 +53,19 @@ impl LocalFunction {
         on_instr_pos: Option<&(dyn Fn(&usize) -> InstrLocId + Sync + Send + 'static)>,
         mut validator: FuncValidator<ValidatorResources>,
     ) -> Result<LocalFunction> {
+        let code_address_offset = module.funcs.code_section_offset;
+        let function_body_size = body.range().end - body.range().start;
+        let function_body_size_bit =
+            (std::mem::size_of::<usize>() as u32 * 8 - function_body_size.leading_zeros() - 1) / 7
+                + 1;
         let mut func = LocalFunction {
             builder: FunctionBuilder::without_entry(ty),
             args,
+            instruction_mapping: Vec::new(),
+            original_range: Some(wasmparser::Range {
+                start: body.range().start - code_address_offset - (function_body_size_bit as usize),
+                end: body.range().end - code_address_offset,
+            }),
         };
 
         let result: Vec<_> = module.types.get(ty).results().iter().cloned().collect();
@@ -61,6 +79,7 @@ impl LocalFunction {
             "the function entry type should have already been created before parsing the body",
         );
         let entry = ctx.push_control_with_ty(BlockKind::FunctionEntry, ty);
+        let mut instruction_mapping = BTreeMap::new();
         ctx.func.builder.entry = Some(entry);
         while !body.eof() {
             let pos = body.original_position();
@@ -72,7 +91,9 @@ impl LocalFunction {
             };
             validator.op(pos, &inst)?;
             append_instruction(&mut ctx, inst, loc);
+            instruction_mapping.insert(pos - code_address_offset, loc);
         }
+        ctx.func.instruction_mapping = instruction_mapping.into_iter().collect();
         validator.finish(body.original_position())?;
 
         debug_assert!(ctx.controls.is_empty());

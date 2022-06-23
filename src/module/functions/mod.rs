@@ -487,6 +487,7 @@ impl Emit for ModuleFunctions {
             })
             .collect::<Vec<_>>();
 
+        let mut instruction_map = BTreeMap::new();
         cx.indices.locals.reserve(bytes.len());
         for (wasm, id, used_locals, local_indices, map) in bytes {
             cx.encoder.usize(wasm.len());
@@ -495,7 +496,7 @@ impl Emit for ModuleFunctions {
             let code_end_offset = cx.encoder.pos();
             if let Some(map) = map {
                 collect_non_default_code_offsets(
-                    &mut cx.code_transform,
+                    &mut instruction_map,
                     code_start_offset - code_section_start_offset,
                     map,
                 );
@@ -503,7 +504,7 @@ impl Emit for ModuleFunctions {
             cx.indices.locals.insert(id, local_indices);
             cx.locals.insert(id, used_locals);
 
-            cx.function_ranges.push((
+            cx.code_transform.function_ranges.push((
                 id,
                 Range {
                     start: code_start_offset - code_section_start_offset,
@@ -511,5 +512,6 @@ impl Emit for ModuleFunctions {
                 },
             ));
         }
+        cx.code_transform.instruction_map = instruction_map.into_iter().collect();
     }
 }

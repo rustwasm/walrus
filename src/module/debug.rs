@@ -1,4 +1,4 @@
-use crate::emit::{Emit, EmitContext};
+use crate::emit::EmitContext;
 use crate::{FunctionKind, ModuleCustomSections};
 use gimli::*;
 use std::borrow::Cow;
@@ -249,7 +249,7 @@ impl ModuleDebugData {
         let mut address_convert_table = BTreeMap::new();
         let mut instrument_address_convert_table = BTreeMap::new();
 
-        for (func_id, func_range) in cx.function_ranges.iter() {
+        for (func_id, func_range) in cx.code_transform.function_ranges.iter() {
             if let FunctionKind::Local(ref func) = cx.module.funcs.get(*func_id).kind {
                 if let Some(original_range) = func.original_range {
                     address_convert_table.insert(
@@ -267,9 +267,7 @@ impl ModuleDebugData {
         let instrument_address_convert_table = instrument_address_convert_table
             .into_iter()
             .collect::<Vec<_>>();
-        let code_transform = std::mem::take(&mut cx.code_transform);
-        let code_transform = code_transform.into_iter().collect::<Vec<_>>();
-        println!("entries={}", code_transform.len());
+        let code_transform = &cx.code_transform;
         let convert_address = |address: u64| -> Option<write::Address> {
             let address = address as usize;
             let comparor = |range: &(wasmparser::Range, isize)| {
@@ -306,6 +304,7 @@ impl ModuleDebugData {
                 Err(_) => None,
             }
         };
+        let instruction_map = &code_transform.instruction_map;
         let convert_instrument_address = |address: u64| -> Option<u64> {
             let address = address as usize;
 
@@ -320,10 +319,10 @@ impl ModuleDebugData {
 
             print!("{:#X} -> {} ", address, instr_id.data());
 
-            match code_transform.binary_search_by_key(&instr_id, |i| i.0) {
+            match instruction_map.binary_search_by_key(&instr_id, |i| i.0) {
                 Ok(id) => {
-                    println!("-> {:#X}", code_transform[id].1);
-                    Some(code_transform[id].1 as u64)
+                    println!("-> {:#X}", instruction_map[id].1);
+                    Some(instruction_map[id].1 as u64)
                 }
                 Err(_) => {
                     println!("-> unknown");

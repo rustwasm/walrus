@@ -39,8 +39,8 @@ pub use crate::module::tables::{ModuleTables, Table, TableId};
 pub use crate::module::types::ModuleTypes;
 use crate::parse::IndicesToIds;
 use anyhow::{bail, Context};
+use id_arena::Id;
 use log::warn;
-use std::collections::BTreeMap;
 use std::fs;
 use std::mem;
 use std::path::Path;
@@ -78,13 +78,20 @@ pub struct Module {
     pub(crate) config: ModuleConfig,
 }
 
-/// Maps from an offset of an instruction in the input Wasm to its offset in the
-/// output Wasm.
-///
-/// Note that an input offset may be mapped to multiple output offsets, and vice
-/// versa, due to transformations like function inlinining or constant
-/// propagation.
-pub type CodeTransform = BTreeMap<InstrLocId, usize>;
+/// Code transformation records, which is used to transform DWARF debug entries.
+#[derive(Debug, Default)]
+pub struct CodeTransform {
+    /// Maps from an offset of an instruction in the input Wasm to its offset in the
+    /// output Wasm.
+    ///
+    /// Note that an input offset may be mapped to multiple output offsets, and vice
+    /// versa, due to transformations like function inlinining or constant
+    /// propagation.
+    pub instruction_map: Vec<(InstrLocId, usize)>,
+
+    ///
+    pub function_ranges: Vec<(Id<Function>, wasmparser::Range)>,
+}
 
 impl Module {
     /// Create a default, empty module that uses the given configuration.
@@ -320,8 +327,7 @@ impl Module {
             indices,
             encoder: Encoder::new(&mut wasm),
             locals: Default::default(),
-            code_transform: BTreeMap::new(),
-            function_ranges: Vec::new(),
+            code_transform: Default::default(),
         };
         self.types.emit(&mut cx);
         self.imports.emit(&mut cx);

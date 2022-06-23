@@ -21,9 +21,7 @@ pub struct LocalFunction {
 
     /// Arguments to this function, and the locals that they're assigned to.
     pub args: Vec<LocalId>,
-    //
-    // TODO: provenance: (InstrSeqId, usize) -> offset in code section of the
-    // original instruction. This will be necessary for preserving debug info.
+
     /// InstrSeqId list mapping to original instruction
     pub instruction_mapping: Vec<(usize, InstrLocId)>,
 

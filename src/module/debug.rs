@@ -146,6 +146,8 @@ impl ModuleDebugData {
         let mut address = None;
         let mut from_base_address = 0;
         let mut base_address = 0;
+        let mut previous_from_raw_address = 0;
+        let mut previous_raw_address = 0;
         let mut non_existent_symbol = false;
         while let Some(instruction) = instructions.next_instruction(from_program.header())? {
             match instruction {
@@ -167,6 +169,8 @@ impl ModuleDebugData {
                             non_existent_symbol = true;
                         }
                     }
+                    previous_from_raw_address = 0;
+                    previous_raw_address = 0;
                     from_row.execute(read::LineInstruction::SetAddress(0), &mut from_program);
                 }
                 read::LineInstruction::DefineFile(_) => {
@@ -174,46 +178,53 @@ impl ModuleDebugData {
                 }
                 _ => {
                     if from_row.execute(instruction, &mut from_program) {
-                        if !program.in_sequence() {
-                            program.begin_sequence(address);
-                            address = None;
-                        }
-                        if from_row.end_sequence() {
-                            program.end_sequence(from_row.address());
-                        } else if !non_existent_symbol {
-                            program.row().address_offset = if let Some(address) =
+                        if !non_existent_symbol {
+                            if !program.in_sequence() {
+                                program.begin_sequence(address);
+                                address = None;
+                            }
+                            let row_address = if let Some(address) =
                                 convert_instrument_address(from_row.address() + from_base_address)
                             {
                                 address - base_address
                             } else {
-                                from_row.address()
+                                previous_raw_address + from_row.address()
+                                    - previous_from_raw_address
                             };
-                            program.row().op_index = from_row.op_index();
-                            program.row().file = {
-                                let file = from_row.file_index();
-                                if file > files.len() as u64 {
-                                    return Err(write::ConvertError::InvalidFileIndex);
-                                }
-                                if file == 0 && program.version() <= 4 {
-                                    return Err(write::ConvertError::InvalidFileIndex);
-                                }
-                                files[(file - 1) as usize]
-                            };
-                            program.row().line = match from_row.line() {
-                                Some(line) => line.get(),
-                                None => 0,
-                            };
-                            program.row().column = match from_row.column() {
-                                read::ColumnType::LeftEdge => 0,
-                                read::ColumnType::Column(val) => val.get(),
-                            };
-                            program.row().discriminator = from_row.discriminator();
-                            program.row().is_statement = from_row.is_stmt();
-                            program.row().basic_block = from_row.basic_block();
-                            program.row().prologue_end = from_row.prologue_end();
-                            program.row().epilogue_begin = from_row.epilogue_begin();
-                            program.row().isa = from_row.isa();
-                            program.generate_row();
+                            previous_from_raw_address = from_row.address();
+                            previous_raw_address = row_address;
+
+                            if from_row.end_sequence() {
+                                program.end_sequence(row_address);
+                            } else {
+                                program.row().address_offset = row_address;
+                                program.row().op_index = from_row.op_index();
+                                program.row().file = {
+                                    let file = from_row.file_index();
+                                    if file > files.len() as u64 {
+                                        return Err(write::ConvertError::InvalidFileIndex);
+                                    }
+                                    if file == 0 && program.version() <= 4 {
+                                        return Err(write::ConvertError::InvalidFileIndex);
+                                    }
+                                    files[(file - 1) as usize]
+                                };
+                                program.row().line = match from_row.line() {
+                                    Some(line) => line.get(),
+                                    None => 0,
+                                };
+                                program.row().column = match from_row.column() {
+                                    read::ColumnType::LeftEdge => 0,
+                                    read::ColumnType::Column(val) => val.get(),
+                                };
+                                program.row().discriminator = from_row.discriminator();
+                                program.row().is_statement = from_row.is_stmt();
+                                program.row().basic_block = from_row.basic_block();
+                                program.row().prologue_end = from_row.prologue_end();
+                                program.row().epilogue_begin = from_row.epilogue_begin();
+                                program.row().isa = from_row.isa();
+                                program.generate_row();
+                            }
                         }
                         from_row.reset(from_program.header());
                     }
@@ -271,7 +282,7 @@ impl ModuleDebugData {
         let convert_address = |address: u64| -> Option<write::Address> {
             let address = address as usize;
             let comparor = |range: &(wasmparser::Range, isize)| {
-                if range.0.end <= address {
+                if range.0.end < address {
                     Ordering::Less
                 } else if address < range.0.start {
                     Ordering::Greater
@@ -289,7 +300,7 @@ impl ModuleDebugData {
         let convert_address_or_none = |address: u64| -> Option<write::Address> {
             let address = address as usize;
             let comparor = |range: &(wasmparser::Range, isize)| {
-                if range.0.end <= address {
+                if range.0.end < address {
                     Ordering::Less
                 } else if address < range.0.start {
                     Ordering::Greater
@@ -312,22 +323,13 @@ impl ModuleDebugData {
                 match instrument_address_convert_table.binary_search_by_key(&address, |i| i.0) {
                     Ok(id) => instrument_address_convert_table[id].1,
                     Err(_) => {
-                        println!("{:#X} -> unknown", address);
                         return None;
                     }
                 };
 
-            print!("{:#X} -> {} ", address, instr_id.data());
-
             match instruction_map.binary_search_by_key(&instr_id, |i| i.0) {
-                Ok(id) => {
-                    println!("-> {:#X}", instruction_map[id].1);
-                    Some(instruction_map[id].1 as u64)
-                }
-                Err(_) => {
-                    println!("-> unknown");
-                    None
-                }
+                Ok(id) => Some(instruction_map[id].1 as u64),
+                Err(_) => None,
             }
         };
 

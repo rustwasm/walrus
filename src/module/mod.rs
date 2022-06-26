@@ -141,6 +141,7 @@ impl Module {
         });
 
         let mut local_functions = Vec::new();
+        let mut debug_sections = Vec::new();
 
         for payload in Parser::new(0).parse_all(wasm) {
             match payload? {
@@ -232,10 +233,17 @@ impl Module {
                             .and_then(|r| ret.parse_name_section(r, &indices)),
                         _ => {
                             log::debug!("parsing custom section `{}`", name);
-                            ret.customs.add(RawCustomSection {
-                                name: name.to_string(),
-                                data: data.to_vec(),
-                            });
+                            if name.starts_with(".debug") {
+                                debug_sections.push(RawCustomSection {
+                                    name: name.to_string(),
+                                    data: data.to_vec(),
+                                });
+                            } else {
+                                ret.customs.add(RawCustomSection {
+                                    name: name.to_string(),
+                                    data: data.to_vec(),
+                                });
+                            }
                             continue;
                         }
                     };
@@ -289,6 +297,9 @@ impl Module {
             config.on_instr_loc.as_ref().map(|f| f.as_ref()),
         )
         .context("failed to parse code section")?;
+
+        ret.parse_debug_sections(debug_sections)
+            .context("failed to parse debug data section")?;
 
         ret.producers
             .add_processed_by("walrus", env!("CARGO_PKG_VERSION"));
@@ -353,7 +364,7 @@ impl Module {
         }
 
         if self.config.generate_dwarf {
-            self.debug.emit(&mut cx, &customs);
+            self.debug.emit(&mut cx);
         } else {
             log::debug!("skipping DWARF custom section");
         }

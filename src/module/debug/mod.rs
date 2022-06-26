@@ -1,21 +1,46 @@
-use crate::emit::EmitContext;
-use crate::{FunctionKind, ModuleCustomSections};
+mod dwarf;
+
+use crate::emit::{Emit, EmitContext};
+use crate::{CustomSection, FunctionKind, Module, RawCustomSection};
 use gimli::*;
-use std::borrow::Cow;
 use std::cmp::Ordering;
-use std::collections::BTreeMap;
 
 /// The set of de-duplicated types within a module.
 #[derive(Debug, Default)]
-pub struct ModuleDebugData {}
+pub struct ModuleDebugData {
+    /// DWARF debug data
+    pub dwarf: read::Dwarf<Vec<u8>>,
+}
+
+impl Module {
+    pub(crate) fn parse_debug_sections(
+        &mut self,
+        mut debug_sections: Vec<RawCustomSection>,
+    ) -> Result<()> {
+        let load_section = |id: gimli::SectionId| -> Result<Vec<u8>> {
+            Ok(
+                match debug_sections
+                    .iter_mut()
+                    .find(|section| section.name() == id.name())
+                {
+                    Some(section) => std::mem::replace(&mut section.data, Vec::new()),
+                    None => Vec::new(),
+                },
+            )
+        };
+
+        self.debug.dwarf = read::Dwarf::load(load_section)?;
+
+        Ok(())
+    }
+}
 
 impl ModuleDebugData {
     /// c
-    pub fn convert_attributes<R: Reader<Offset = usize>>(
+    fn convert_attributes<R: Reader<Offset = usize>>(
         from_unit: read::Unit<R>,
         dwarf: &read::Dwarf<R>,
         convert_address: &dyn Fn(u64) -> Option<write::Address>,
-        convert_instrument_address: &dyn Fn(u64) -> Option<u64>,
     ) -> Option<write::LineProgram> {
         match from_unit.line_program {
             Some(ref from_program) => {
@@ -24,7 +49,6 @@ impl ModuleDebugData {
                     from_program,
                     dwarf,
                     convert_address,
-                    convert_instrument_address,
                 )
                 .expect("cannot convert line program");
                 Some(line_program)
@@ -33,111 +57,127 @@ impl ModuleDebugData {
         }
     }
 
+    fn convert_line_program_header<R: Reader<Offset = usize>>(
+        from_program: &read::IncompleteLineProgram<R>,
+        dwarf: &read::Dwarf<R>,
+        line_strings: &mut write::LineStringTable,
+        strings: &mut write::StringTable,
+        dirs: &mut Vec<write::DirectoryId>,
+        files: &mut Vec<write::FileId>,
+    ) -> write::ConvertResult<write::LineProgram> {
+        let from_header = from_program.header();
+        let encoding = from_header.encoding();
+
+        let comp_dir = match from_header.directory(0) {
+            Some(comp_dir) => {
+                ModuleDebugData::convert_line_string(comp_dir, dwarf, line_strings, strings)?
+            }
+            None => write::LineString::new(&[][..], encoding, line_strings),
+        };
+
+        let (comp_name, comp_file_info) = match from_header.file(0) {
+            Some(comp_file) => {
+                if comp_file.directory_index() != 0 {
+                    return Err(write::ConvertError::InvalidDirectoryIndex);
+                }
+                (
+                    ModuleDebugData::convert_line_string(
+                        comp_file.path_name(),
+                        dwarf,
+                        line_strings,
+                        strings,
+                    )?,
+                    Some(write::FileInfo {
+                        timestamp: comp_file.timestamp(),
+                        size: comp_file.size(),
+                        md5: *comp_file.md5(),
+                    }),
+                )
+            }
+            None => (
+                write::LineString::new(&[][..], encoding, line_strings),
+                None,
+            ),
+        };
+
+        if from_header.line_base() > 0 {
+            return Err(write::ConvertError::InvalidLineBase);
+        }
+        let mut program = write::LineProgram::new(
+            encoding,
+            from_header.line_encoding(),
+            comp_dir,
+            comp_name,
+            comp_file_info,
+        );
+
+        let file_skip;
+        if from_header.version() <= 4 {
+            // The first directory is implicit.
+            dirs.push(program.default_directory());
+            // A file index of 0 is invalid for version <= 4, but putting
+            // something there makes the indexing easier.
+            file_skip = 0;
+        } else {
+            // We don't add the first file to `files`, but still allow
+            // it to be referenced from converted instructions.
+            file_skip = 1;
+        }
+
+        for from_dir in from_header.include_directories() {
+            let from_dir = ModuleDebugData::convert_line_string(
+                from_dir.clone(),
+                dwarf,
+                line_strings,
+                strings,
+            )?;
+            dirs.push(program.add_directory(from_dir));
+        }
+
+        for from_file in from_header.file_names().iter().skip(file_skip) {
+            let from_name = ModuleDebugData::convert_line_string(
+                from_file.path_name(),
+                dwarf,
+                line_strings,
+                strings,
+            )?;
+            let from_dir = from_file.directory_index();
+            if from_dir >= dirs.len() as u64 {
+                return Err(write::ConvertError::InvalidDirectoryIndex);
+            }
+            let from_dir = dirs[from_dir as usize];
+            let from_info = Some(write::FileInfo {
+                timestamp: from_file.timestamp(),
+                size: from_file.size(),
+                md5: *from_file.md5(),
+            });
+            files.push(program.add_file(from_name, from_dir, from_info));
+        }
+
+        Ok(program)
+    }
+
     /// hei
-    pub fn convert_line_program<R: Reader<Offset = usize>>(
+    fn convert_line_program<R: Reader<Offset = usize>>(
         mut from_program: read::IncompleteLineProgram<R>,
         dwarf: &read::Dwarf<R>,
         convert_address: &dyn Fn(u64) -> Option<write::Address>,
-        convert_instrument_address: &dyn Fn(u64) -> Option<u64>,
     ) -> write::ConvertResult<write::LineProgram> {
         // Create mappings in case the source has duplicate files or directories.
-        let line_strings = &mut write::LineStringTable::default();
-        let strings = &mut write::StringTable::default();
+        let mut line_strings = write::LineStringTable::default();
+        let mut strings = write::StringTable::default();
         let mut dirs = Vec::new();
         let mut files = Vec::new();
 
-        let mut program = {
-            let from_header = from_program.header();
-            let encoding = from_header.encoding();
-
-            let comp_dir = match from_header.directory(0) {
-                Some(comp_dir) => {
-                    ModuleDebugData::convert_line_string(comp_dir, dwarf, line_strings, strings)?
-                }
-                None => write::LineString::new(&[][..], encoding, line_strings),
-            };
-
-            let (comp_name, comp_file_info) = match from_header.file(0) {
-                Some(comp_file) => {
-                    if comp_file.directory_index() != 0 {
-                        return Err(write::ConvertError::InvalidDirectoryIndex);
-                    }
-                    (
-                        ModuleDebugData::convert_line_string(
-                            comp_file.path_name(),
-                            dwarf,
-                            line_strings,
-                            strings,
-                        )?,
-                        Some(write::FileInfo {
-                            timestamp: comp_file.timestamp(),
-                            size: comp_file.size(),
-                            md5: *comp_file.md5(),
-                        }),
-                    )
-                }
-                None => (
-                    write::LineString::new(&[][..], encoding, line_strings),
-                    None,
-                ),
-            };
-
-            if from_header.line_base() > 0 {
-                return Err(write::ConvertError::InvalidLineBase);
-            }
-            let mut program = write::LineProgram::new(
-                encoding,
-                from_header.line_encoding(),
-                comp_dir,
-                comp_name,
-                comp_file_info,
-            );
-
-            let file_skip;
-            if from_header.version() <= 4 {
-                // The first directory is implicit.
-                dirs.push(program.default_directory());
-                // A file index of 0 is invalid for version <= 4, but putting
-                // something there makes the indexing easier.
-                file_skip = 0;
-            } else {
-                // We don't add the first file to `files`, but still allow
-                // it to be referenced from converted instructions.
-                file_skip = 1;
-            }
-
-            for from_dir in from_header.include_directories() {
-                let from_dir = ModuleDebugData::convert_line_string(
-                    from_dir.clone(),
-                    dwarf,
-                    line_strings,
-                    strings,
-                )?;
-                dirs.push(program.add_directory(from_dir));
-            }
-
-            for from_file in from_header.file_names().iter().skip(file_skip) {
-                let from_name = ModuleDebugData::convert_line_string(
-                    from_file.path_name(),
-                    dwarf,
-                    line_strings,
-                    strings,
-                )?;
-                let from_dir = from_file.directory_index();
-                if from_dir >= dirs.len() as u64 {
-                    return Err(write::ConvertError::InvalidDirectoryIndex);
-                }
-                let from_dir = dirs[from_dir as usize];
-                let from_info = Some(write::FileInfo {
-                    timestamp: from_file.timestamp(),
-                    size: from_file.size(),
-                    md5: *from_file.md5(),
-                });
-                files.push(program.add_file(from_name, from_dir, from_info));
-            }
-
-            program
-        };
+        let mut program = ModuleDebugData::convert_line_program_header(
+            &from_program,
+            dwarf,
+            &mut line_strings,
+            &mut strings,
+            &mut dirs,
+            &mut files,
+        )
+        .expect("");
 
         // We can't use the `from_program.rows()` because that wouldn't let
         // us preserve address relocations.
@@ -184,7 +224,12 @@ impl ModuleDebugData {
                                 address = None;
                             }
                             let row_address = if let Some(address) =
-                                convert_instrument_address(from_row.address() + from_base_address)
+                                convert_address(from_row.address() + from_base_address).map(|x| {
+                                    match x {
+                                        write::Address::Constant(x) => x,
+                                        _ => 0
+                                    }
+                                })
                             {
                                 address - base_address
                             } else {
@@ -255,31 +300,47 @@ impl ModuleDebugData {
             _ => return Err(write::ConvertError::UnsupportedLineStringForm),
         })
     }
+}
 
-    pub(crate) fn emit(&self, cx: &mut EmitContext, customs: &ModuleCustomSections) {
-        let mut address_convert_table = BTreeMap::new();
-        let mut instrument_address_convert_table = BTreeMap::new();
-
-        for (func_id, func_range) in cx.code_transform.function_ranges.iter() {
-            if let FunctionKind::Local(ref func) = cx.module.funcs.get(*func_id).kind {
-                if let Some(original_range) = func.original_range {
-                    address_convert_table.insert(
-                        original_range,
-                        (func_range.start - original_range.start) as isize,
-                    );
-                    for inst in func.instruction_mapping.iter() {
-                        instrument_address_convert_table.insert(inst.0, inst.1);
+impl Emit for ModuleDebugData {
+    fn emit(&self, cx: &mut EmitContext) {
+        let mut address_convert_table = cx
+            .code_transform
+            .function_ranges
+            .iter()
+            .filter_map(
+                |(func_id, func_range)| match cx.module.funcs.get(*func_id).kind {
+                    FunctionKind::Local(ref func) => {
+                        func.original_range.map(|range| (range, func_range))
                     }
-                }
-            }
-        }
-
-        let address_convert_table = address_convert_table.into_iter().collect::<Vec<_>>();
-        let instrument_address_convert_table = instrument_address_convert_table
-            .into_iter()
+                    _ => None,
+                },
+            )
+            .map(|(original_range, new_range)| {
+                (
+                    original_range,
+                    (new_range.start - original_range.start) as isize,
+                )
+            })
             .collect::<Vec<_>>();
+
+        let mut instrument_address_convert_table = cx
+            .code_transform
+            .function_ranges
+            .iter()
+            .filter_map(|(func_id, _)| match cx.module.funcs.get(*func_id).kind {
+                FunctionKind::Local(ref func) => Some(&func.instruction_mapping),
+                _ => None,
+            })
+            .flatten()
+            .map(|x| x.clone())
+            .collect::<Vec<_>>();
+
+        address_convert_table.sort_by_key(|i| i.0.start);
+        instrument_address_convert_table.sort_by_key(|i| i.0);
+
         let code_transform = &cx.code_transform;
-        let convert_address = |address: u64| -> Option<write::Address> {
+        let convert_range_address = |address: u64| -> u64 {
             let address = address as usize;
             let comparor = |range: &(wasmparser::Range, isize)| {
                 if range.0.end < address {
@@ -291,30 +352,11 @@ impl ModuleDebugData {
                 }
             };
             match address_convert_table.binary_search_by(comparor) {
-                Ok(i) => Some(write::Address::Constant(
-                    (address as i64 + address_convert_table[i].1 as i64) as u64,
-                )),
-                Err(_) => Some(write::Address::Constant(address as u64)),
+                Ok(i) => (address as i64 + address_convert_table[i].1 as i64) as u64,
+                Err(_) => 0,
             }
         };
-        let convert_address_or_none = |address: u64| -> Option<write::Address> {
-            let address = address as usize;
-            let comparor = |range: &(wasmparser::Range, isize)| {
-                if range.0.end < address {
-                    Ordering::Less
-                } else if address < range.0.start {
-                    Ordering::Greater
-                } else {
-                    Ordering::Equal
-                }
-            };
-            match address_convert_table.binary_search_by(comparor) {
-                Ok(i) => Some(write::Address::Constant(
-                    (address as i64 + address_convert_table[i].1 as i64) as u64,
-                )),
-                Err(_) => None,
-            }
-        };
+
         let instruction_map = &code_transform.instruction_map;
         let convert_instrument_address = |address: u64| -> Option<u64> {
             let address = address as usize;
@@ -333,18 +375,17 @@ impl ModuleDebugData {
             }
         };
 
-        let load_section = |id: gimli::SectionId| -> Result<Cow<[u8]>> {
-            Ok(
-                match customs.iter().find(|section| section.1.name() == id.name()) {
-                    Some(section) => section.1.data(&cx.indices),
-                    None => Cow::Borrowed(&[]),
-                },
-            )
+        let convert_address = |address| -> Option<write::Address> {
+            convert_instrument_address(address)
+                .or(Some(convert_range_address(address)))
+                .map(|x| write::Address::Constant(x))
         };
 
-        let dwarf_owned = Dwarf::load(load_section).expect("failed to dwarf section");
-        let from_dwarf =
-            dwarf_owned.borrow(|sections| EndianSlice::new(sections.as_ref(), LittleEndian));
+        let from_dwarf = cx
+            .module
+            .debug
+            .dwarf
+            .borrow(|sections| EndianSlice::new(sections.as_ref(), LittleEndian));
 
         let mut dwarf = write::Dwarf::from(&from_dwarf, &convert_address)
             .expect("cannot convert to writable dwarf");
@@ -363,8 +404,7 @@ impl ModuleDebugData {
             if let Some(program) = ModuleDebugData::convert_attributes(
                 from_dwarf.unit(unit_entries[index]).expect(""),
                 &from_dwarf,
-                &convert_address_or_none,
-                &convert_instrument_address,
+                &convert_address
             ) {
                 unit.line_program = program;
             }

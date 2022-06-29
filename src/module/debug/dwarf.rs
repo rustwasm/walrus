@@ -1,6 +1,6 @@
 use gimli::*;
 
-/// d
+/// DWARF convertion context
 pub(crate) struct ConvertContext<'a, R: Reader<Offset = usize>> {
     /// Source DWARF debug data
     pub dwarf: &'a read::Dwarf<R>,

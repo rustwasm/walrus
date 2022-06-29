@@ -89,7 +89,10 @@ pub struct CodeTransform {
     /// propagation.
     pub instruction_map: Vec<(InstrLocId, usize)>,
 
-    ///
+    /// Offset of code section from the front of Wasm binary
+    pub code_section_start: usize,
+
+    /// Emitted binary ranges of functions
     pub function_ranges: Vec<(Id<Function>, wasmparser::Range)>,
 }
 

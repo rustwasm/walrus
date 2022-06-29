@@ -495,11 +495,7 @@ impl Emit for ModuleFunctions {
             cx.encoder.raw(&wasm);
             let code_end_offset = cx.encoder.pos();
             if let Some(map) = map {
-                collect_non_default_code_offsets(
-                    &mut instruction_map,
-                    code_start_offset - code_section_start_offset,
-                    map,
-                );
+                collect_non_default_code_offsets(&mut instruction_map, code_start_offset, map);
             }
             cx.indices.locals.insert(id, local_indices);
             cx.locals.insert(id, used_locals);
@@ -507,11 +503,12 @@ impl Emit for ModuleFunctions {
             cx.code_transform.function_ranges.push((
                 id,
                 Range {
-                    start: code_start_offset - code_section_start_offset,
-                    end: code_end_offset - code_section_start_offset,
+                    start: code_start_offset,
+                    end: code_end_offset,
                 },
             ));
         }
+        cx.code_transform.code_section_start = code_section_start_offset;
         cx.code_transform.instruction_map = instruction_map.into_iter().collect();
     }
 }

@@ -9,3 +9,4 @@ crates/tests/tests/**/*.out.wasm
 crates/tests/tests/**/*.out.wat
 
 .vscode
+.DS_Store

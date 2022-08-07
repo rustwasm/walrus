@@ -10,6 +10,7 @@ use crate::ir::*;
 use crate::map::{IdHashMap, IdHashSet};
 use crate::parse::IndicesToIds;
 use crate::{Data, DataId, FunctionBuilder, FunctionId, MemoryId, Module, Result, TypeId, ValType};
+use id_arena::Id;
 use std::collections::BTreeMap;
 use wasmparser::{FuncValidator, Operator, ValidatorResources};
 
@@ -102,6 +103,16 @@ impl LocalFunction {
     /// Get the block associated with the given id.
     pub fn block(&self, id: InstrSeqId) -> &InstrSeq {
         &self.builder.arena[id]
+    }
+
+    /// Iterate over all the blocks in the function
+    pub fn blocks(&self) -> impl Iterator<Item = (Id<InstrSeq>, &InstrSeq)> {
+        self.builder.arena.iter()
+    }
+
+    /// Mutably iterate over all the blocks in the function
+    pub fn blocks_mut(&mut self) -> impl Iterator<Item = (Id<InstrSeq>, &mut InstrSeq)> {
+        self.builder.arena.iter_mut()
     }
 
     /// Get the block associated with the given id.

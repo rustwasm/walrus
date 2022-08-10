@@ -18,6 +18,7 @@ use crate::emit::{Emit, EmitContext, IdsToIndices, Section};
 use crate::encode::Encoder;
 use crate::error::Result;
 pub use crate::ir::InstrLocId;
+use crate::ir::InstrSeq;
 pub use crate::module::custom::{
     CustomSection, CustomSectionId, ModuleCustomSections, RawCustomSection, TypedCustomSectionId,
     UntypedCustomSectionId,
@@ -424,6 +425,73 @@ impl Module {
             }
         }
         Ok(())
+    }
+
+    /// Indicate if the Module uses any floating point operation
+    pub fn has_floats(&self) -> bool {
+        for func in self.funcs.iter() {
+            use crate::FunctionKind::*;
+
+            match &func.kind {
+                Local(func) => {
+                    for local in &func.args {
+                        if self.locals.get(*local).is_float() {
+                            return true;
+                        }
+                    }
+                    for (_block_id, block) in func.blocks() {
+                        if self.block_has_floats(block) {
+                            return true;
+                        }
+                    }
+                }
+                Import(crate::ImportedFunction { ty, .. }) | Uninitialized(ty) => {
+                    let ty = self.types.get(*ty);
+                    for val_type in ty.params().iter().chain(ty.results()) {
+                        if val_type.is_float() {
+                            return true;
+                        };
+                    }
+                }
+            }
+        }
+
+        false
+    }
+
+    /// Check if the block uses any floating point operations.
+    ///
+    /// The block must be an InstrSeq that is owned by one of the module's
+    /// local functions.
+    #[inline(always)]
+    pub fn block_has_floats(&self, block: &InstrSeq) -> bool {
+        use crate::ir::*;
+        for (instr, _instr_loc_id) in &block.instrs {
+            let is_float = match instr {
+                Instr::LocalGet(LocalGet { local })
+                | Instr::LocalSet(LocalSet { local })
+                | Instr::LocalTee(LocalTee { local }) => self.locals.get(*local).is_float(),
+                Instr::GlobalGet(GlobalGet { global }) | Instr::GlobalSet(GlobalSet { global }) => {
+                    self.globals.get(*global).is_float()
+                }
+                Instr::Const(Const { value }) => value.is_float(),
+                Instr::Binop(Binop { op }) => op.is_float(),
+                Instr::Unop(Unop { op }) => op.is_float(),
+                Instr::Select(Select { ty: Some(ty) }) | Instr::RefNull(RefNull { ty }) => {
+                    ty.is_float()
+                }
+                Instr::Load(Load { kind, .. }) => kind.is_float(),
+                Instr::Store(Store { kind, .. }) => kind.is_float(),
+
+                _ => false,
+            };
+
+            if is_float {
+                return true;
+            }
+        }
+
+        false
     }
 }
 

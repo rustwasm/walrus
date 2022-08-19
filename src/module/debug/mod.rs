@@ -54,7 +54,8 @@ impl Emit for ModuleDebugData {
             .map(|(original_range, new_range)| {
                 (
                     original_range,
-                    (new_range.start - cx.code_transform.code_section_start - original_range.start) as isize,
+                    (new_range.start - cx.code_transform.code_section_start - original_range.start)
+                        as isize,
                 )
             })
             .collect::<Vec<_>>();
@@ -105,7 +106,9 @@ impl Emit for ModuleDebugData {
                 };
 
             match instruction_map.binary_search_by_key(&instr_id, |i| i.0) {
-                Ok(id) => Some((instruction_map[id].1 - cx.code_transform.code_section_start) as u64),
+                Ok(id) => {
+                    Some((instruction_map[id].1 - cx.code_transform.code_section_start) as u64)
+                }
                 Err(_) => None,
             }
         };

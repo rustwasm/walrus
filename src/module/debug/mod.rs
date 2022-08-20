@@ -46,9 +46,7 @@ impl CodeAddressConverter {
             .function_ranges
             .iter()
             .filter_map(|(func_id, _)| match cx.module.funcs.get(*func_id).kind {
-                FunctionKind::Local(ref func) => {
-                    func.original_range.map(|range| (range, func_id.clone()))
-                }
+                FunctionKind::Local(ref func) => func.original_range.map(|range| (range, *func_id)),
                 _ => None,
             })
             .collect::<Vec<_>>();
@@ -62,7 +60,7 @@ impl CodeAddressConverter {
                 _ => None,
             })
             .flatten()
-            .map(|x| x.clone())
+            .copied()
             .collect::<Vec<_>>();
 
         address_convert_table.sort_by_key(|i| i.0.start);
@@ -75,17 +73,14 @@ impl CodeAddressConverter {
     }
 
     fn find_address(&self, address: usize) -> CodeAddress {
-        match self
+        if let Ok(id) = self
             .instrument_address_convert_table
             .binary_search_by_key(&address, |i| i.0)
         {
-            Ok(id) => {
-                return CodeAddress::InstrInFunction {
-                    instr_id: self.instrument_address_convert_table[id].1,
-                }
-            }
-            Err(_) => {}
-        };
+            return CodeAddress::InstrInFunction {
+                instr_id: self.instrument_address_convert_table[id].1,
+            };
+        }
 
         let range_comparor = |range: &(wasmparser::Range, _)| {
             if range.0.end <= address {
@@ -136,7 +131,7 @@ impl Module {
                     .iter_mut()
                     .find(|section| section.name() == id.name())
                 {
-                    Some(section) => std::mem::replace(&mut section.data, Vec::new()),
+                    Some(section) => std::mem::take(&mut section.data),
                     None => Vec::new(),
                 },
             )
@@ -183,7 +178,7 @@ impl Emit for ModuleDebugData {
                     current_id,
                 } => {
                     let id = if *refer_previous_function_at_function_edge.borrow() {
-                        if !previous_id.is_some() {
+                        if previous_id.is_none() {
                             return None;
                         } else {
                             previous_id.unwrap()
@@ -204,7 +199,7 @@ impl Emit for ModuleDebugData {
 
             address
                 .or(Some(0))
-                .map(|address| write::Address::Constant(address))
+                .map(write::Address::Constant)
         };
 
         let from_dwarf = cx
@@ -223,9 +218,7 @@ impl Emit for ModuleDebugData {
             unit_entries.push(from_unit);
         }
 
-        {
-            refer_previous_function_at_function_edge.replace(true);
-        }
+        refer_previous_function_at_function_edge.replace(true);
 
         let mut convert_context = ConvertContext::new(&from_dwarf, &convert_address);
 
@@ -245,7 +238,7 @@ impl Emit for ModuleDebugData {
         sections
             .for_each(
                 |id: SectionId, data: &write::EndianVec<LittleEndian>| -> Result<()> {
-                    cx.custom_section(&id.name()).encoder.raw(data.slice());
+                    cx.custom_section(id.name()).encoder.raw(data.slice());
                     Ok(())
                 },
             )

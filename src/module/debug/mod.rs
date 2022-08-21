@@ -19,14 +19,9 @@ pub struct ModuleDebugData {
 /// Specify roles of origial address.
 enum CodeAddress {
     /// The address is instruction within a function.
-    InstrInFunction {
-        instr_id: InstrLocId,
-    },
+    InstrInFunction { instr_id: InstrLocId },
     /// The address is within a function, but does not match any instruction.
-    OffsetInFunction {
-        id: Id<Function>,
-        offset: usize,
-    },
+    OffsetInFunction { id: Id<Function>, offset: usize },
     /// The address is boundary of functions. Equals to OffsetInFunction with offset 0.
     FunctionEdge {
         previous_id: Option<Id<Function>>,
@@ -202,9 +197,7 @@ impl Emit for ModuleDebugData {
                 CodeAddress::Unknown => None,
             };
 
-            address
-                .or(Some(0))
-                .map(write::Address::Constant)
+            address.or(Some(0)).map(write::Address::Constant)
         };
 
         let from_dwarf = cx

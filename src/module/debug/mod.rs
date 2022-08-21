@@ -1,7 +1,7 @@
 mod dwarf;
 
 use crate::emit::{Emit, EmitContext};
-use crate::{CustomSection, Function, FunctionKind, InstrLocId, Module, RawCustomSection};
+use crate::{CustomSection, Function, InstrLocId, Module, ModuleFunctions, RawCustomSection};
 use gimli::*;
 use id_arena::Id;
 use std::cell::RefCell;
@@ -40,25 +40,15 @@ struct CodeAddressConverter {
 }
 
 impl CodeAddressConverter {
-    fn from_emit_context(cx: &EmitContext) -> Self {
-        let mut address_convert_table = cx
-            .code_transform
-            .function_ranges
-            .iter()
-            .filter_map(|(func_id, _)| match cx.module.funcs.get(*func_id).kind {
-                FunctionKind::Local(ref func) => func.original_range.map(|range| (range, *func_id)),
-                _ => None,
-            })
+    fn from_emit_context(funcs: &ModuleFunctions) -> Self {
+        let mut address_convert_table = funcs
+            .iter_local()
+            .filter_map(|(func_id, func)| func.original_range.map(|range| (range, func_id)))
             .collect::<Vec<_>>();
 
-        let mut instrument_address_convert_table = cx
-            .code_transform
-            .function_ranges
-            .iter()
-            .filter_map(|(func_id, _)| match cx.module.funcs.get(*func_id).kind {
-                FunctionKind::Local(ref func) => Some(&func.instruction_mapping),
-                _ => None,
-            })
+        let mut instrument_address_convert_table = funcs
+            .iter_local()
+            .map(|(_, func)| &func.instruction_mapping)
             .flatten()
             .copied()
             .collect::<Vec<_>>();
@@ -145,7 +135,7 @@ impl Module {
 
 impl Emit for ModuleDebugData {
     fn emit(&self, cx: &mut EmitContext) {
-        let address_converter = CodeAddressConverter::from_emit_context(cx);
+        let address_converter = CodeAddressConverter::from_emit_context(&cx.module.funcs);
 
         let code_transform = &cx.code_transform;
         let instruction_map = &code_transform.instruction_map;

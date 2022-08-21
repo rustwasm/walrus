@@ -9,25 +9,30 @@ use std::cmp::Ordering;
 
 use self::dwarf::ConvertContext;
 
-/// The set of de-duplicated types within a module.
+/// The DWARF debug section in input WebAssembly binary.
 #[derive(Debug, Default)]
 pub struct ModuleDebugData {
     /// DWARF debug data
     pub dwarf: read::Dwarf<Vec<u8>>,
 }
 
+/// Specify roles of origial address.
 enum CodeAddress {
+    /// The address is instruction within a function.
     InstrInFunction {
         instr_id: InstrLocId,
     },
+    /// The address is within a function, but does not match any instruction.
     OffsetInFunction {
         id: Id<Function>,
         offset: usize,
     },
+    /// The address is boundary of functions. Equals to OffsetInFunction with offset 0.
     FunctionEdge {
         previous_id: Option<Id<Function>>,
         current_id: Id<Function>,
     },
+    /// The address is unknown.
     Unknown,
 }
 

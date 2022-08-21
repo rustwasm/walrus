@@ -1,3 +1,8 @@
+//! transform entries in WebAssembly DWARF sections
+
+/// `gimli::write` provides only address-based entry conversions, 
+/// does not provide entry-wise conversions.
+/// We want to convert addresses of instructions, here will re-implement.
 use gimli::*;
 
 /// DWARF convertion context
@@ -48,6 +53,8 @@ where
         }
     }
 
+    /// Perform conversion in DWARF line program header.
+    /// Almostly cloned from https://github.com/gimli-rs/gimli/blob/master/src/write/line.rs#L985
     fn convert_line_program_header(
         &mut self,
         from_program: &read::IncompleteLineProgram<R>,
@@ -127,8 +134,9 @@ where
 
         Ok(program)
     }
-
-    /// hei
+ 
+    /// Perform address conversion in DWARF line program entries.
+    /// Almostly cloned from https://github.com/gimli-rs/gimli/blob/master/src/write/line.rs#L1066
     fn convert_line_program(
         &mut self,
         mut from_program: read::IncompleteLineProgram<R>,
@@ -236,6 +244,7 @@ where
         Ok(program)
     }
 
+    /// Almostly cloned from https://github.com/gimli-rs/gimli/blob/master/src/write/line.rs#L1131
     fn convert_line_string(
         &mut self,
         from_attr: read::AttributeValue<R>,

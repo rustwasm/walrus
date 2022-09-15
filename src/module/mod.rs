@@ -18,6 +18,7 @@ use crate::emit::{Emit, EmitContext, IdsToIndices, Section};
 use crate::encode::Encoder;
 use crate::error::Result;
 pub use crate::ir::InstrLocId;
+use crate::ir::InstrSeq;
 pub use crate::module::custom::{
     CustomSection, CustomSectionId, ModuleCustomSections, RawCustomSection, TypedCustomSectionId,
     UntypedCustomSectionId,
@@ -37,7 +38,7 @@ pub use crate::module::tables::{ModuleTables, Table, TableId};
 pub use crate::module::types::ModuleTypes;
 use crate::parse::IndicesToIds;
 use anyhow::{bail, Context};
-use log::warn;
+//use log::warn;
 use std::fs;
 use std::mem;
 use std::path::Path;
@@ -218,7 +219,7 @@ impl Module {
                             .map_err(anyhow::Error::from)
                             .and_then(|r| ret.parse_name_section(r, &indices)),
                         _ => {
-                            log::debug!("parsing custom section `{}`", name);
+                            //log::debug!("parsing custom section `{}`", name);
                             ret.customs.add(RawCustomSection {
                                 name: name.to_string(),
                                 data: data.to_vec(),
@@ -227,7 +228,7 @@ impl Module {
                         }
                     };
                     if let Err(e) = result {
-                        log::warn!("failed to parse `{}` custom section {}", name, e);
+                        //log::warn!("failed to parse `{}` custom section {}", name, e);
                     }
                 }
                 Payload::UnknownSection { id, range, .. } => {
@@ -284,7 +285,7 @@ impl Module {
             on_parse(&mut ret, &indices)?;
         }
 
-        log::debug!("parse complete");
+        //log::debug!("parse complete");
         Ok(ret)
     }
 
@@ -300,7 +301,7 @@ impl Module {
 
     /// Emit this module into an in-memory wasm buffer.
     pub fn emit_wasm(&mut self) -> Vec<u8> {
-        log::debug!("start emit");
+        //log::debug!("start emit");
 
         let indices = &mut IdsToIndices::default();
         let mut wasm = Vec::new();
@@ -343,11 +344,11 @@ impl Module {
 
         for (_id, section) in customs.iter_mut() {
             if !self.config.generate_dwarf && section.name().starts_with(".debug") {
-                log::debug!("skipping DWARF custom section {}", section.name());
+                //log::debug!("skipping DWARF custom section {}", section.name());
                 continue;
             }
 
-            log::debug!("emitting custom section {}", section.name());
+            //log::debug!("emitting custom section {}", section.name());
 
             if self.config.preserve_code_transform {
                 section.apply_code_transform(&cx.code_transform);
@@ -358,7 +359,7 @@ impl Module {
                 .raw(&section.data(&indices));
         }
 
-        log::debug!("emission finished");
+        //log::debug!("emission finished");
         wasm
     }
 
@@ -372,7 +373,7 @@ impl Module {
         names: wasmparser::NameSectionReader,
         indices: &IndicesToIds,
     ) -> Result<()> {
-        log::debug!("parse name section");
+        //log::debug!("parse name section");
         for name in names {
             match name? {
                 wasmparser::Name::Module(m) => {
@@ -387,7 +388,7 @@ impl Module {
                             // If some tool fails to GC function names properly,
                             // it doesn't really hurt anything to ignore the
                             // broken references and keep going.
-                            Err(e) => warn!("in name section: {}", e),
+                            Err(e) => {} //warn!("in name section: {}", e),
                         }
                     }
                 }
@@ -415,20 +416,87 @@ impl Module {
                                 // It looks like emscripten leaves broken
                                 // function references in the locals subsection
                                 // sometimes.
-                                Err(e) => warn!("in name section: {}", e),
+                                Err(e) => {}//warn!("in name section: {}", e),
                             }
                         }
                     }
                 }
-                wasmparser::Name::Unknown { ty, .. } => warn!("unknown name subsection {}", ty),
+                wasmparser::Name::Unknown { ty, .. } => {},//warn!("unknown name subsection {}", ty),
             }
         }
         Ok(())
     }
+
+    /// Indicate if the Module uses any floating point operation
+    pub fn has_floats(&self) -> bool {
+        for func in self.funcs.iter() {
+            use crate::FunctionKind::*;
+
+            match &func.kind {
+                Local(func) => {
+                    for local in &func.args {
+                        if self.locals.get(*local).is_float() {
+                            return true;
+                        }
+                    }
+                    for (_block_id, block) in func.blocks() {
+                        if self.block_has_floats(block) {
+                            return true;
+                        }
+                    }
+                }
+                Import(crate::ImportedFunction { ty, .. }) | Uninitialized(ty) => {
+                    let ty = self.types.get(*ty);
+                    for val_type in ty.params().iter().chain(ty.results()) {
+                        if val_type.is_float() {
+                            return true;
+                        };
+                    }
+                }
+            }
+        }
+
+        false
+    }
+
+    /// Check if the block uses any floating point operations.
+    ///
+    /// The block must be an InstrSeq that is owned by one of the module's
+    /// local functions.
+    #[inline(always)]
+    pub fn block_has_floats(&self, block: &InstrSeq) -> bool {
+        use crate::ir::*;
+        for (instr, _instr_loc_id) in &block.instrs {
+            let is_float = match instr {
+                Instr::LocalGet(LocalGet { local })
+                | Instr::LocalSet(LocalSet { local })
+                | Instr::LocalTee(LocalTee { local }) => self.locals.get(*local).is_float(),
+                Instr::GlobalGet(GlobalGet { global }) | Instr::GlobalSet(GlobalSet { global }) => {
+                    self.globals.get(*global).is_float()
+                }
+                Instr::Const(Const { value }) => value.is_float(),
+                Instr::Binop(Binop { op }) => op.is_float(),
+                Instr::Unop(Unop { op }) => op.is_float(),
+                Instr::Select(Select { ty: Some(ty) }) | Instr::RefNull(RefNull { ty }) => {
+                    ty.is_float()
+                }
+                Instr::Load(Load { kind, .. }) => kind.is_float(),
+                Instr::Store(Store { kind, .. }) => kind.is_float(),
+
+                _ => false,
+            };
+
+            if is_float {
+                return true;
+            }
+        }
+
+        false
+    }
 }
 
 fn emit_name_section(cx: &mut EmitContext) {
-    log::debug!("emit name section");
+    //log::debug!("emit name section");
     let mut funcs = cx
         .module
         .funcs

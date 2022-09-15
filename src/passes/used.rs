@@ -26,7 +26,7 @@ impl Roots {
     /// Adds a new function to the set of roots
     pub fn push_func(&mut self, func: FunctionId) -> &mut Roots {
         if self.used.funcs.insert(func) {
-            log::trace!("function is used: {:?}", func);
+            //log::trace!("function is used: {:?}", func);
             self.funcs.push(func);
         }
         self
@@ -35,7 +35,7 @@ impl Roots {
     /// Adds a new table to the set of roots
     pub fn push_table(&mut self, table: TableId) -> &mut Roots {
         if self.used.tables.insert(table) {
-            log::trace!("table is used: {:?}", table);
+            //log::trace!("table is used: {:?}", table);
             self.tables.push(table);
         }
         self
@@ -44,7 +44,7 @@ impl Roots {
     /// Adds a new memory to the set of roots
     pub fn push_memory(&mut self, memory: MemoryId) -> &mut Roots {
         if self.used.memories.insert(memory) {
-            log::trace!("memory is used: {:?}", memory);
+            //log::trace!("memory is used: {:?}", memory);
             self.memories.push(memory);
         }
         self
@@ -53,7 +53,7 @@ impl Roots {
     /// Adds a new global to the set of roots
     pub fn push_global(&mut self, global: GlobalId) -> &mut Roots {
         if self.used.globals.insert(global) {
-            log::trace!("global is used: {:?}", global);
+            //log::trace!("global is used: {:?}", global);
             self.globals.push(global);
         }
         self
@@ -61,7 +61,7 @@ impl Roots {
 
     fn push_data(&mut self, data: DataId) -> &mut Roots {
         if self.used.data.insert(data) {
-            log::trace!("data is used: {:?}", data);
+            //log::trace!("data is used: {:?}", data);
             self.datas.push(data);
         }
         self
@@ -69,7 +69,7 @@ impl Roots {
 
     fn push_element(&mut self, element: ElementId) -> &mut Roots {
         if self.used.elements.insert(element) {
-            log::trace!("element is used: {:?}", element);
+            //log::trace!("element is used: {:?}", element);
             self.elements.push(element);
         }
         self
@@ -102,7 +102,7 @@ pub struct Used {
 impl Used {
     /// Construct a new `Used` set for the given module.
     pub fn new(module: &Module) -> Used {
-        log::debug!("starting to calculate used set");
+        //log::debug!("starting to calculate used set");
         let mut stack = Roots::default();
 
         // All exports are roots

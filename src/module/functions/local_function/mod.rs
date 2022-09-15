@@ -104,6 +104,16 @@ impl LocalFunction {
         &self.builder.arena[id]
     }
 
+    /// Iterate over all the blocks in the function
+    pub fn blocks(&self) -> impl Iterator<Item = (InstrSeqId, &InstrSeq)> {
+        self.builder.arena.iter()
+    }
+
+    /// Mutably iterate over all the blocks in the function
+    pub fn blocks_mut(&mut self) -> impl Iterator<Item = (InstrSeqId, &mut InstrSeq)> {
+        self.builder.arena.iter_mut()
+    }
+
     /// Get the block associated with the given id.
     pub fn block_mut(&mut self, id: InstrSeqId) -> &mut InstrSeq {
         &mut self.builder.arena[id]
@@ -288,7 +298,7 @@ fn append_instruction<'context>(
     // should succeed.
     use crate::ir::ExtendedLoad::*;
 
-    log::trace!("validate instruction: {:?}", inst);
+    //log::trace!("validate instruction: {:?}", inst);
 
     let const_ = |ctx: &mut ValidationContext, value| {
         ctx.alloc_instr(Const { value }, loc);

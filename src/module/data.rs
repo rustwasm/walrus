@@ -168,7 +168,7 @@ impl Module {
     /// they're actually passive or not, and that property is checked during
     /// validation.
     pub(crate) fn reserve_data(&mut self, count: u32, ids: &mut IndicesToIds) {
-        log::debug!("reserving space for {} data segments", count);
+        //log::debug!("reserving space for {} data segments", count);
         for _ in 0..count {
             ids.push_data(self.data.arena.alloc_with_id(|id| Data {
                 id,
@@ -186,7 +186,7 @@ impl Module {
         section: wasmparser::DataSectionReader,
         ids: &IndicesToIds,
     ) -> Result<()> {
-        log::debug!("parse data section");
+        //log::debug!("parse data section");
         let preallocated = self.data.arena.len() > 0;
         for (i, segment) in section.into_iter().enumerate() {
             let segment = segment?;
@@ -244,7 +244,7 @@ impl Module {
 
 impl Emit for ModuleData {
     fn emit(&self, cx: &mut EmitContext) {
-        log::debug!("emit data section");
+        //log::debug!("emit data section");
         if self.arena.len() == 0 {
             return;
         }

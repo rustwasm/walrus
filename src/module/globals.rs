@@ -40,6 +40,12 @@ impl Global {
     pub fn id(&self) -> GlobalId {
         self.id
     }
+
+    /// Indicate if the Global is a floating point
+    #[inline(always)]
+    pub fn is_float(&self) -> bool {
+        self.ty.is_float()
+    }
 }
 
 impl Emit for Global {
@@ -109,7 +115,7 @@ impl Module {
         section: wasmparser::GlobalSectionReader,
         ids: &mut IndicesToIds,
     ) -> Result<()> {
-        log::debug!("parse global section");
+        //log::debug!("parse global section");
         for g in section {
             let g = g?;
             let id = self.globals.add_local(
@@ -125,7 +131,7 @@ impl Module {
 
 impl Emit for ModuleGlobals {
     fn emit(&self, cx: &mut EmitContext) {
-        log::debug!("emit global section");
+        //log::debug!("emit global section");
         fn get_local(global: &Global) -> Option<(&Global, &InitExpr)> {
             match &global.kind {
                 GlobalKind::Import(_) => None,

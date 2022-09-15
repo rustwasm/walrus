@@ -80,12 +80,12 @@ pub fn dfs_in_order<'instr>(
 
         'traversing_instrs: for (index, (instr, loc)) in seq.instrs.iter().enumerate().skip(index) {
             // Visit this instruction.
-            log::trace!("dfs_in_order: visit_instr({:?})", instr);
+            //log::trace!("dfs_in_order: visit_instr({:?})", instr);
             visitor.visit_instr(instr, loc);
 
             // Visit every other resource that this instruction references,
             // e.g. `MemoryId`s, `FunctionId`s and all that.
-            log::trace!("dfs_in_order: ({:?}).visit(..)", instr);
+            //log::trace!("dfs_in_order: ({:?}).visit(..)", instr);
             instr.visit(visitor);
 
             match instr {

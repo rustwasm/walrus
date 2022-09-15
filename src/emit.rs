@@ -89,7 +89,7 @@ macro_rules! define_get_push_index {
                 #[inline]
                 pub(crate) fn $push_name(&mut self, id: $id_ty) {
                     let idx = self.$member.len() as u32;
-                    log::trace!(concat!(stringify!($push_name),": assigning index {} to {:?}"), idx, id);
+                    //log::trace!(concat!(stringify!($push_name),": assigning index {} to {:?}"), idx, id);
                     self.$member.insert(id, idx);
                 }
             )*

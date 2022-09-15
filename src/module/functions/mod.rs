@@ -275,7 +275,7 @@ impl ModuleFunctions {
     }
 
     pub(crate) fn emit_func_section(&self, cx: &mut EmitContext) {
-        log::debug!("emit function section");
+        //log::debug!("emit function section");
         let functions = used_local_functions(cx);
         if functions.len() == 0 {
             return;
@@ -304,7 +304,7 @@ impl Module {
         section: wasmparser::FunctionSectionReader,
         ids: &mut IndicesToIds,
     ) -> Result<()> {
-        log::debug!("parse function section");
+        //log::debug!("parse function section");
         for func in section {
             let ty = ids.get_type(func?)?;
             let id = self
@@ -327,7 +327,7 @@ impl Module {
         indices: &mut IndicesToIds,
         on_instr_pos: Option<&(dyn Fn(&usize) -> InstrLocId + Sync + Send + 'static)>,
     ) -> Result<()> {
-        log::debug!("parse code section");
+        //log::debug!("parse code section");
         let num_imports = self.funcs.arena.len() - functions.len();
 
         // First up serially create corresponding `LocalId` instances for all
@@ -455,7 +455,7 @@ fn collect_non_default_code_offsets(
 
 impl Emit for ModuleFunctions {
     fn emit(&self, cx: &mut EmitContext) {
-        log::debug!("emit code section");
+        //log::debug!("emit code section");
         let functions = used_local_functions(cx);
         if functions.len() == 0 {
             return;
@@ -471,7 +471,7 @@ impl Emit for ModuleFunctions {
         // functions together.
         let bytes = maybe_parallel!(functions.(into_iter | into_par_iter))
             .map(|(id, func, _size)| {
-                log::debug!("emit function {:?} {:?}", id, cx.module.funcs.get(id).name);
+                //log::debug!("emit function {:?} {:?}", id, cx.module.funcs.get(id).name);
                 let mut wasm = Vec::new();
                 let mut encoder = Encoder::new(&mut wasm);
                 let mut map = if generate_map { Some(Vec::new()) } else { None };

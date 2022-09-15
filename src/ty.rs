@@ -185,6 +185,12 @@ impl ValType {
             ValType::Externref => encoder.byte(0x6f),
         }
     }
+
+    /// Indicate if the ValType is a floating point
+    #[inline(always)]
+    pub fn is_float(&self) -> bool {
+        matches!(self, Self::F32 | Self::F64)
+    }
 }
 
 impl fmt::Display for ValType {

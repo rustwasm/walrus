@@ -388,7 +388,7 @@ impl Module {
                             // If some tool fails to GC function names properly,
                             // it doesn't really hurt anything to ignore the
                             // broken references and keep going.
-                            Err(e) => warn!("in name section: {}", e),
+                            Err(e) => {} //warn!("in name section: {}", e),
                         }
                     }
                 }
@@ -416,12 +416,12 @@ impl Module {
                                 // It looks like emscripten leaves broken
                                 // function references in the locals subsection
                                 // sometimes.
-                                Err(e) => warn!("in name section: {}", e),
+                                Err(e) => {}//warn!("in name section: {}", e),
                             }
                         }
                     }
                 }
-                wasmparser::Name::Unknown { ty, .. } => warn!("unknown name subsection {}", ty),
+                wasmparser::Name::Unknown { ty, .. } => {},//warn!("unknown name subsection {}", ty),
             }
         }
         Ok(())

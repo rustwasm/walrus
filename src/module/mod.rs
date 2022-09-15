@@ -38,7 +38,7 @@ pub use crate::module::tables::{ModuleTables, Table, TableId};
 pub use crate::module::types::ModuleTypes;
 use crate::parse::IndicesToIds;
 use anyhow::{bail, Context};
-use //log::warn;
+//use log::warn;
 use std::fs;
 use std::mem;
 use std::path::Path;

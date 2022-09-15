@@ -107,7 +107,7 @@ impl Module {
         section: wasmparser::ElementSectionReader,
         ids: &mut IndicesToIds,
     ) -> Result<()> {
-        log::debug!("parse element section");
+        //log::debug!("parse element section");
         for (i, segment) in section.into_iter().enumerate() {
             let segment = segment?;
             let ty = ValType::parse(&segment.ty)?;

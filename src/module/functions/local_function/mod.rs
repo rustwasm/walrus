@@ -298,7 +298,7 @@ fn append_instruction<'context>(
     // should succeed.
     use crate::ir::ExtendedLoad::*;
 
-    log::trace!("validate instruction: {:?}", inst);
+    //log::trace!("validate instruction: {:?}", inst);
 
     let const_ = |ctx: &mut ValidationContext, value| {
         ctx.alloc_instr(Const { value }, loc);

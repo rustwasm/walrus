@@ -112,7 +112,7 @@ impl Module {
         section: wasmparser::ImportSectionReader,
         ids: &mut IndicesToIds,
     ) -> Result<()> {
-        log::debug!("parse import section");
+        //log::debug!("parse import section");
         for entry in section {
             let entry = entry?;
             match entry.ty {
@@ -234,7 +234,7 @@ impl Module {
 
 impl Emit for ModuleImports {
     fn emit(&self, cx: &mut EmitContext) {
-        log::debug!("emit import section");
+        //log::debug!("emit import section");
         let count = self.iter().count();
         if count == 0 {
             return;

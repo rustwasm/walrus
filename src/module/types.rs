@@ -117,7 +117,7 @@ impl Module {
         section: wasmparser::TypeSectionReader,
         ids: &mut IndicesToIds,
     ) -> Result<()> {
-        log::debug!("parsing type section");
+        //log::debug!("parsing type section");
         for ty in section {
             let fun_ty = match ty? {
                 wasmparser::TypeDef::Func(ty) => ty,
@@ -146,7 +146,7 @@ impl Module {
 
 impl Emit for ModuleTypes {
     fn emit(&self, cx: &mut EmitContext) {
-        log::debug!("emitting type section");
+        //log::debug!("emitting type section");
 
         let mut tys = self
             .arena

@@ -78,7 +78,7 @@ impl Module {
         &mut self,
         data: wasmparser::ProducersSectionReader,
     ) -> Result<()> {
-        log::debug!("parse producers section");
+        //log::debug!("parse producers section");
 
         for field in data {
             let field = field?;
@@ -100,7 +100,7 @@ impl Module {
 
 impl Emit for ModuleProducers {
     fn emit(&self, cx: &mut EmitContext) {
-        log::debug!("emit producers section");
+        //log::debug!("emit producers section");
         if self.fields.len() > 0 {
             cx.custom_section("producers").list(&self.fields);
         }

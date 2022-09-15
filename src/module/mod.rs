@@ -38,7 +38,7 @@ pub use crate::module::tables::{ModuleTables, Table, TableId};
 pub use crate::module::types::ModuleTypes;
 use crate::parse::IndicesToIds;
 use anyhow::{bail, Context};
-use log::warn;
+use //log::warn;
 use std::fs;
 use std::mem;
 use std::path::Path;
@@ -219,7 +219,7 @@ impl Module {
                             .map_err(anyhow::Error::from)
                             .and_then(|r| ret.parse_name_section(r, &indices)),
                         _ => {
-                            log::debug!("parsing custom section `{}`", name);
+                            //log::debug!("parsing custom section `{}`", name);
                             ret.customs.add(RawCustomSection {
                                 name: name.to_string(),
                                 data: data.to_vec(),
@@ -228,7 +228,7 @@ impl Module {
                         }
                     };
                     if let Err(e) = result {
-                        log::warn!("failed to parse `{}` custom section {}", name, e);
+                        //log::warn!("failed to parse `{}` custom section {}", name, e);
                     }
                 }
                 Payload::UnknownSection { id, range, .. } => {
@@ -285,7 +285,7 @@ impl Module {
             on_parse(&mut ret, &indices)?;
         }
 
-        log::debug!("parse complete");
+        //log::debug!("parse complete");
         Ok(ret)
     }
 
@@ -301,7 +301,7 @@ impl Module {
 
     /// Emit this module into an in-memory wasm buffer.
     pub fn emit_wasm(&mut self) -> Vec<u8> {
-        log::debug!("start emit");
+        //log::debug!("start emit");
 
         let indices = &mut IdsToIndices::default();
         let mut wasm = Vec::new();
@@ -344,11 +344,11 @@ impl Module {
 
         for (_id, section) in customs.iter_mut() {
             if !self.config.generate_dwarf && section.name().starts_with(".debug") {
-                log::debug!("skipping DWARF custom section {}", section.name());
+                //log::debug!("skipping DWARF custom section {}", section.name());
                 continue;
             }
 
-            log::debug!("emitting custom section {}", section.name());
+            //log::debug!("emitting custom section {}", section.name());
 
             if self.config.preserve_code_transform {
                 section.apply_code_transform(&cx.code_transform);
@@ -359,7 +359,7 @@ impl Module {
                 .raw(&section.data(&indices));
         }
 
-        log::debug!("emission finished");
+        //log::debug!("emission finished");
         wasm
     }
 
@@ -373,7 +373,7 @@ impl Module {
         names: wasmparser::NameSectionReader,
         indices: &IndicesToIds,
     ) -> Result<()> {
-        log::debug!("parse name section");
+        //log::debug!("parse name section");
         for name in names {
             match name? {
                 wasmparser::Name::Module(m) => {
@@ -496,7 +496,7 @@ impl Module {
 }
 
 fn emit_name_section(cx: &mut EmitContext) {
-    log::debug!("emit name section");
+    //log::debug!("emit name section");
     let mut funcs = cx
         .module
         .funcs

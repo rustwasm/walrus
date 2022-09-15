@@ -132,7 +132,7 @@ impl Module {
         section: wasmparser::ExportSectionReader,
         ids: &IndicesToIds,
     ) -> Result<()> {
-        log::debug!("parse export section");
+        //log::debug!("parse export section");
         use wasmparser::ExternalKind::*;
 
         for entry in section {
@@ -161,7 +161,7 @@ impl Module {
 
 impl Emit for ModuleExports {
     fn emit(&self, cx: &mut EmitContext) {
-        log::debug!("emit export section");
+        //log::debug!("emit export section");
         // NB: exports are always considered used. They are the roots that the
         // used analysis searches out from.
 

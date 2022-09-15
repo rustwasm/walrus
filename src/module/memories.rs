@@ -132,7 +132,7 @@ impl Module {
         section: wasmparser::MemorySectionReader,
         ids: &mut IndicesToIds,
     ) -> Result<()> {
-        log::debug!("parse memory section");
+        //log::debug!("parse memory section");
         for m in section {
             let (shared, limits) = match m? {
                 wasmparser::MemoryType::M32 { shared, limits } => (shared, limits),
@@ -149,7 +149,7 @@ impl Module {
 
 impl Emit for ModuleMemories {
     fn emit(&self, cx: &mut EmitContext) {
-        log::debug!("emit memory section");
+        //log::debug!("emit memory section");
         // imported memories are emitted earlier
         let memories = self.iter().filter(|m| m.import.is_none()).count();
         if memories == 0 {

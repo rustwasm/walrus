@@ -26,6 +26,8 @@
         drop
         i64.const 0
         i64.const 0
-      end)
-    (export "multiLoop" (func 0)))
+      end
+    )
+    (export "multiLoop" (func 0))
+  )
 ;)

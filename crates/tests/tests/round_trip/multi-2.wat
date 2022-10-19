@@ -13,6 +13,8 @@
       local.get 0
       loop (param i64 i64) (result i64 i64)  ;; label = @1
         return
-      end)
-    (export "multiLoop" (func 0)))
+      end
+    )
+    (export "multiLoop" (func 0))
+  )
 ;)

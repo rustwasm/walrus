@@ -17,6 +17,8 @@ pub struct ModuleDebugData {
 }
 
 /// Specify roles of origial address.
+
+#[derive(Debug, PartialEq)]
 enum CodeAddress {
     /// The address is instruction within a function.
     InstrInFunction { instr_id: InstrLocId },
@@ -232,4 +234,25 @@ impl Emit for ModuleDebugData {
             )
             .expect("never");
     }
+}
+
+#[test]
+fn dwarf_address_converter() {
+    let mut module = crate::Module::default();
+
+    let mut func = crate::LocalFunction::new(
+        Vec::new(),
+        crate::FunctionBuilder::new(&mut module.types, &[], &[]),
+    );
+
+    func.original_range = Some(wasmparser::Range { start: 20, end: 30 });
+
+    let id = module.funcs.add_local(func);
+
+    let address_converter = CodeAddressConverter::from_emit_context(&module.funcs);
+    
+    assert_eq!(address_converter.find_address(10), CodeAddress::Unknown);
+    assert_eq!(address_converter.find_address(20), CodeAddress::FunctionEdge { previous_id: None, current_id: id });
+    assert_eq!(address_converter.find_address(25), CodeAddress::OffsetInFunction { id, offset: 5 });
+    assert_eq!(address_converter.find_address(30), CodeAddress::Unknown);
 }

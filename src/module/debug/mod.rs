@@ -170,10 +170,10 @@ impl Emit for ModuleDebugData {
                     current_id,
                 } => {
                     let id = if *refer_previous_function_at_function_edge.borrow() {
-                        if previous_id.is_none() {
-                            return None;
+                        if let Some(id) = previous_id {
+                            id
                         } else {
-                            previous_id.unwrap()
+                            return None;
                         }
                     } else {
                         current_id
@@ -250,9 +250,18 @@ fn dwarf_address_converter() {
     let id = module.funcs.add_local(func);
 
     let address_converter = CodeAddressConverter::from_emit_context(&module.funcs);
-    
+
     assert_eq!(address_converter.find_address(10), CodeAddress::Unknown);
-    assert_eq!(address_converter.find_address(20), CodeAddress::FunctionEdge { previous_id: None, current_id: id });
-    assert_eq!(address_converter.find_address(25), CodeAddress::OffsetInFunction { id, offset: 5 });
+    assert_eq!(
+        address_converter.find_address(20),
+        CodeAddress::FunctionEdge {
+            previous_id: None,
+            current_id: id
+        }
+    );
+    assert_eq!(
+        address_converter.find_address(25),
+        CodeAddress::OffsetInFunction { id, offset: 5 }
+    );
     assert_eq!(address_converter.find_address(30), CodeAddress::Unknown);
 }

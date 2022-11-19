@@ -24,10 +24,10 @@ enum CodeAddress {
     InstrInFunction { instr_id: InstrLocId },
     /// The address is within a function, but does not match any instruction.
     OffsetInFunction { id: Id<Function>, offset: usize },
-    /// The address is boundary of functions. Equals to OffsetInFunction with offset 0.
+    /// The address is boundary of functions. Equals to OffsetInFunction with offset(section size).
     FunctionEdge {
-        previous_id: Option<Id<Function>>,
         current_id: Id<Function>,
+        next_id: Option<Id<Function>>,
     },
     /// The address is unknown.
     Unknown,
@@ -75,7 +75,7 @@ impl CodeAddressConverter {
         }
 
         let range_comparor = |range: &(wasmparser::Range, _)| {
-            if range.0.end <= address {
+            if range.0.end < address {
                 Ordering::Less
             } else if address < range.0.start {
                 Ordering::Greater
@@ -89,16 +89,16 @@ impl CodeAddressConverter {
                 let entry = &self.address_convert_table[i];
                 let code_offset_from_function_start = address - entry.0.start;
 
-                if code_offset_from_function_start == 0 {
-                    let previous_id = if i > 0 {
-                        Some(self.address_convert_table[i - 1].1)
+                if code_offset_from_function_start == entry.0.end - entry.0.start {
+                    let next_id = if i + 1 < self.address_convert_table.len() {
+                        Some(self.address_convert_table[i + 1].1)
                     } else {
                         None
                     };
 
                     CodeAddress::FunctionEdge {
-                        previous_id,
                         current_id: entry.1,
+                        next_id,
                     }
                 } else {
                     CodeAddress::OffsetInFunction {
@@ -141,8 +141,6 @@ impl Emit for ModuleDebugData {
 
         let code_transform = &cx.code_transform;
         let instruction_map = &code_transform.instruction_map;
-        let refer_previous_function_at_function_edge = RefCell::from(false);
-
         let convert_address = |address| -> Option<write::Address> {
             let address = address as usize;
             let address = match address_converter.find_address(address) {
@@ -166,23 +164,14 @@ impl Emit for ModuleDebugData {
                     }
                 }
                 CodeAddress::FunctionEdge {
-                    previous_id,
                     current_id,
+                    next_id: _,
                 } => {
-                    let id = if *refer_previous_function_at_function_edge.borrow() {
-                        if let Some(id) = previous_id {
-                            id
-                        } else {
-                            return None;
-                        }
-                    } else {
-                        current_id
-                    };
                     match code_transform
                         .function_ranges
-                        .binary_search_by_key(&id, |i| i.0)
+                        .binary_search_by_key(&current_id, |i| i.0)
                     {
-                        Ok(id) => Some((code_transform.function_ranges[id].1.start) as u64),
+                        Ok(id) => Some((code_transform.function_ranges[id].1.end) as u64),
                         Err(_) => None,
                     }
                 }
@@ -207,8 +196,6 @@ impl Emit for ModuleDebugData {
         while let Some(from_unit) = from_units.next().expect("") {
             unit_entries.push(from_unit);
         }
-
-        refer_previous_function_at_function_edge.replace(true);
 
         let mut convert_context = ConvertContext::new(&from_dwarf, &convert_address);
 
@@ -253,15 +240,15 @@ fn dwarf_address_converter() {
 
     assert_eq!(address_converter.find_address(10), CodeAddress::Unknown);
     assert_eq!(
-        address_converter.find_address(20),
-        CodeAddress::FunctionEdge {
-            previous_id: None,
-            current_id: id
-        }
-    );
-    assert_eq!(
         address_converter.find_address(25),
         CodeAddress::OffsetInFunction { id, offset: 5 }
     );
-    assert_eq!(address_converter.find_address(30), CodeAddress::Unknown);
+    assert_eq!(
+        address_converter.find_address(30),
+        CodeAddress::FunctionEdge {
+            current_id: id,
+            next_id: None,
+        }
+    );
+    assert_eq!(address_converter.find_address(31), CodeAddress::Unknown);
 }

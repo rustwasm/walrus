@@ -269,7 +269,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use gimli::{write::Writer, *};
+    use gimli::*;
     use std::cell::RefCell;
 
     fn make_test_debug_line<'a>(

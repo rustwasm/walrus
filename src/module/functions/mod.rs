@@ -508,6 +508,7 @@ impl Emit for ModuleFunctions {
                 },
             ));
         }
+        cx.code_transform.function_ranges.sort_by_key(|i| i.0);
         cx.code_transform.code_section_start = code_section_start_offset;
         cx.code_transform.instruction_map = instruction_map.into_iter().collect();
     }

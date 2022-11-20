@@ -12,7 +12,7 @@ pub(crate) struct ConvertContext<'a, R: Reader<Offset = usize>> {
     pub debug_line_str: &'a read::DebugLineStr<R>,
 
     /// Address conversion function
-    pub convert_address: &'a dyn Fn(u64) -> Option<write::Address>,
+    pub convert_address: &'a dyn Fn(u64, bool) -> Option<write::Address>,
 
     pub line_strings: write::LineStringTable,
     pub strings: write::StringTable,
@@ -26,7 +26,7 @@ where
 {
     pub(crate) fn new(
         dwarf: &'a read::Dwarf<R>,
-        convert_address: &'a dyn Fn(u64) -> Option<write::Address>,
+        convert_address: &'a dyn Fn(u64, bool) -> Option<write::Address>,
     ) -> Self {
         ConvertContext {
             debug_str: &dwarf.debug_str,
@@ -161,14 +161,10 @@ where
                     if program.in_sequence() {
                         return Err(write::ConvertError::UnsupportedLineInstruction);
                     }
-                    match (self.convert_address)(val) {
+                    match (self.convert_address)(val, false) {
                         Some(converted) => {
                             address = Some(converted);
                             from_base_address = val;
-
-                            if let write::Address::Constant(x) = converted {
-                                base_address = x;
-                            }
                             non_existent_symbol = false;
                         }
                         None => {
@@ -176,7 +172,6 @@ where
                         }
                     }
                     previous_from_raw_address = 0;
-                    previous_raw_address = 0;
                     from_row.execute(read::LineInstruction::SetAddress(0), &mut from_program);
                 }
                 read::LineInstruction::DefineFile(_) => {
@@ -187,28 +182,35 @@ where
                         if !non_existent_symbol {
                             if !program.in_sequence() {
                                 program.begin_sequence(address);
+                                if let Some(write::Address::Constant(raw_address)) = address {
+                                    base_address = raw_address;
+                                }
+
+                                previous_raw_address = 0;
                                 address = None;
                             }
-                            let row_address =
-                                if let Some(address) =
-                                    (self.convert_address)(from_row.address() + from_base_address)
-                                        .map(|x| match x {
-                                            write::Address::Constant(x) => x,
-                                            _ => 0,
-                                        })
-                                {
-                                    address - base_address
-                                } else {
-                                    previous_raw_address + from_row.address()
-                                        - previous_from_raw_address
-                                };
+                            let row_address_offset = if let Some(address) =
+                                (self.convert_address)(from_row.address() + from_base_address, true)
+                                    .map(|x| match x {
+                                        write::Address::Constant(x) => x,
+                                        _ => 0,
+                                    }) {
+                                address - base_address
+                            } else {
+                                previous_raw_address + from_row.address()
+                                    - previous_from_raw_address
+                            };
                             previous_from_raw_address = from_row.address();
-                            previous_raw_address = row_address;
+                            previous_raw_address = row_address_offset;
 
                             if from_row.end_sequence() {
-                                program.end_sequence(row_address);
+                                program.end_sequence(row_address_offset);
+                                address = (self.convert_address)(
+                                    from_row.address() + from_base_address,
+                                    false,
+                                );
                             } else {
-                                program.row().address_offset = row_address;
+                                program.row().address_offset = row_address_offset;
                                 program.row().op_index = from_row.op_index();
                                 program.row().file = {
                                     let file = from_row.file_index();
@@ -328,7 +330,7 @@ mod tests {
 
     #[test]
     fn convert_context() {
-        let called_address_to_be_converted: RefCell<Vec<u64>> = RefCell::new(Vec::new());
+        let called_address_to_be_converted: RefCell<Vec<(u64, bool)>> = RefCell::new(Vec::new());
 
         let mut debug_line = write::DebugLine::from(write::EndianVec::new(LittleEndian));
         let mut converted_debug_line = write::DebugLine::from(write::EndianVec::new(LittleEndian));
@@ -342,8 +344,10 @@ mod tests {
             };
             let incomplete_debug_line = make_test_debug_line(&mut debug_line, &make_line_row);
 
-            let convert_address = |address| -> Option<write::Address> {
-                called_address_to_be_converted.borrow_mut().push(address);
+            let convert_address = |address, edge_is_previous| -> Option<write::Address> {
+                called_address_to_be_converted
+                    .borrow_mut()
+                    .push((address, edge_is_previous));
                 Some(write::Address::Constant(address + 0x10))
             };
 
@@ -374,10 +378,11 @@ mod tests {
 
         {
             let called_address_to_be_converted = called_address_to_be_converted.borrow();
-            assert_eq!(called_address_to_be_converted.len(), 3);
-            assert_eq!(called_address_to_be_converted[0], 0x1000); // begin sequence
-            assert_eq!(called_address_to_be_converted[1], 0x1000); // first line row
-            assert_eq!(called_address_to_be_converted[2], 0x1001); // end sequence
+            assert_eq!(called_address_to_be_converted.len(), 4);
+            assert_eq!(called_address_to_be_converted[0], (0x1000, false)); // begin sequence
+            assert_eq!(called_address_to_be_converted[1], (0x1000, true)); // first line row
+            assert_eq!(called_address_to_be_converted[2], (0x1001, true)); // end sequence
+            assert_eq!(called_address_to_be_converted[3], (0x1001, false)); // calculation of next entry address
         }
 
         {

@@ -55,12 +55,16 @@ impl LocalFunction {
         mut validator: FuncValidator<ValidatorResources>,
     ) -> Result<LocalFunction> {
         let code_address_offset = module.funcs.code_section_offset;
+        let function_body_size = body.range().end - body.range().start;
+        let function_body_size_bit =
+            (std::mem::size_of::<usize>() as u32 * 8 - function_body_size.leading_zeros() - 1) / 7
+                + 1;
         let mut func = LocalFunction {
             builder: FunctionBuilder::without_entry(ty),
             args,
             instruction_mapping: Vec::new(),
             original_range: Some(wasmparser::Range {
-                start: body.range().start - code_address_offset,
+                start: body.range().start - code_address_offset - (function_body_size_bit as usize),
                 end: body.range().end - code_address_offset,
             }),
         };

@@ -4,7 +4,6 @@ use crate::emit::{Emit, EmitContext};
 use crate::{CustomSection, Function, InstrLocId, Module, ModuleFunctions, RawCustomSection};
 use gimli::*;
 use id_arena::Id;
-use std::cell::RefCell;
 use std::cmp::Ordering;
 
 use self::dwarf::ConvertContext;
@@ -25,10 +24,7 @@ enum CodeAddress {
     /// The address is within a function, but does not match any instruction.
     OffsetInFunction { id: Id<Function>, offset: usize },
     /// The address is boundary of functions. Equals to OffsetInFunction with offset(section size).
-    FunctionEdge {
-        current_id: Id<Function>,
-        next_id: Option<Id<Function>>,
-    },
+    FunctionEdge { id: Id<Function> },
     /// The address is unknown.
     Unknown,
 }
@@ -64,7 +60,7 @@ impl CodeAddressConverter {
         }
     }
 
-    fn find_address(&self, address: usize) -> CodeAddress {
+    fn find_address(&self, address: usize, edge_is_previous: bool) -> CodeAddress {
         if let Ok(id) = self
             .instrument_address_convert_table
             .binary_search_by_key(&address, |i| i.0)
@@ -74,14 +70,28 @@ impl CodeAddressConverter {
             };
         }
 
-        let range_comparor = |range: &(wasmparser::Range, _)| {
+        let previous_range_comparor = |range: &(wasmparser::Range, Id<Function>)| {
             if range.0.end < address {
+                Ordering::Less
+            } else if address <= range.0.start {
+                Ordering::Greater
+            } else {
+                Ordering::Equal
+            }
+        };
+        let next_range_comparor = |range: &(wasmparser::Range, Id<Function>)| {
+            if range.0.end <= address {
                 Ordering::Less
             } else if address < range.0.start {
                 Ordering::Greater
             } else {
                 Ordering::Equal
             }
+        };
+        let range_comparor: &dyn Fn(_) -> Ordering = if edge_is_previous {
+            &previous_range_comparor
+        } else {
+            &next_range_comparor
         };
 
         match self.address_convert_table.binary_search_by(range_comparor) {
@@ -90,16 +100,7 @@ impl CodeAddressConverter {
                 let code_offset_from_function_start = address - entry.0.start;
 
                 if code_offset_from_function_start == entry.0.end - entry.0.start {
-                    let next_id = if i + 1 < self.address_convert_table.len() {
-                        Some(self.address_convert_table[i + 1].1)
-                    } else {
-                        None
-                    };
-
-                    CodeAddress::FunctionEdge {
-                        current_id: entry.1,
-                        next_id,
-                    }
+                    CodeAddress::FunctionEdge { id: entry.1 }
                 } else {
                     CodeAddress::OffsetInFunction {
                         id: entry.1,
@@ -141,9 +142,10 @@ impl Emit for ModuleDebugData {
 
         let code_transform = &cx.code_transform;
         let instruction_map = &code_transform.instruction_map;
-        let convert_address = |address| -> Option<write::Address> {
+
+        let convert_address = |address, edge_is_previous| -> Option<write::Address> {
             let address = address as usize;
-            let address = match address_converter.find_address(address) {
+            let address = match address_converter.find_address(address, edge_is_previous) {
                 CodeAddress::InstrInFunction { instr_id } => {
                     match instruction_map.binary_search_by_key(&instr_id, |i| i.0) {
                         Ok(id) => Some(
@@ -157,28 +159,33 @@ impl Emit for ModuleDebugData {
                         .function_ranges
                         .binary_search_by_key(&id, |i| i.0)
                     {
-                        Ok(id) => {
-                            Some((code_transform.function_ranges[id].1.start + offset) as u64)
-                        }
+                        Ok(id) => Some(
+                            (code_transform.function_ranges[id].1.start + offset
+                                - cx.code_transform.code_section_start)
+                                as u64,
+                        ),
                         Err(_) => None,
                     }
                 }
-                CodeAddress::FunctionEdge {
-                    current_id,
-                    next_id: _,
-                } => {
+                CodeAddress::FunctionEdge { id } => {
                     match code_transform
                         .function_ranges
-                        .binary_search_by_key(&current_id, |i| i.0)
+                        .binary_search_by_key(&id, |i| i.0)
                     {
-                        Ok(id) => Some((code_transform.function_ranges[id].1.end) as u64),
+                        Ok(id) => {
+                            if edge_is_previous {
+                                Some((code_transform.function_ranges[id].1.end) as u64)
+                            } else {
+                                Some((code_transform.function_ranges[id].1.start) as u64)
+                            }
+                        }
                         Err(_) => None,
                     }
                 }
                 CodeAddress::Unknown => None,
             };
 
-            address.or(Some(0)).map(write::Address::Constant)
+            address.map(write::Address::Constant)
         };
 
         let from_dwarf = cx
@@ -187,8 +194,10 @@ impl Emit for ModuleDebugData {
             .dwarf
             .borrow(|sections| EndianSlice::new(sections.as_ref(), LittleEndian));
 
-        let mut dwarf = write::Dwarf::from(&from_dwarf, &convert_address)
-            .expect("cannot convert to writable dwarf");
+        let mut dwarf = write::Dwarf::from(&from_dwarf, &|address| {
+            convert_address(address, true).or(Some(write::Address::Constant(0)))
+        })
+        .expect("cannot convert to writable dwarf");
 
         let mut from_units = from_dwarf.units();
         let mut unit_entries = Vec::new();
@@ -238,17 +247,24 @@ fn dwarf_address_converter() {
 
     let address_converter = CodeAddressConverter::from_emit_context(&module.funcs);
 
-    assert_eq!(address_converter.find_address(10), CodeAddress::Unknown);
     assert_eq!(
-        address_converter.find_address(25),
+        address_converter.find_address(10, true),
+        CodeAddress::Unknown
+    );
+    assert_eq!(
+        address_converter.find_address(25, true),
         CodeAddress::OffsetInFunction { id, offset: 5 }
     );
     assert_eq!(
-        address_converter.find_address(30),
-        CodeAddress::FunctionEdge {
-            current_id: id,
-            next_id: None,
-        }
+        address_converter.find_address(30, true),
+        CodeAddress::FunctionEdge { id }
     );
-    assert_eq!(address_converter.find_address(31), CodeAddress::Unknown);
+    assert_eq!(
+        address_converter.find_address(30, false),
+        CodeAddress::Unknown
+    );
+    assert_eq!(
+        address_converter.find_address(31, true),
+        CodeAddress::Unknown
+    );
 }

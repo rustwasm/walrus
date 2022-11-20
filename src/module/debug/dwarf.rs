@@ -14,10 +14,8 @@ pub(crate) struct ConvertContext<'a, R: Reader<Offset = usize>> {
     /// Address conversion function
     pub convert_address: &'a dyn Fn(u64, bool) -> Option<write::Address>,
 
-    pub line_strings: write::LineStringTable,
-    pub strings: write::StringTable,
-    pub dirs: Vec<write::DirectoryId>,
-    pub files: Vec<write::FileId>,
+    pub line_strings: &'a mut write::LineStringTable,
+    pub strings: &'a mut write::StringTable,
 }
 
 impl<'a, R> ConvertContext<'a, R>
@@ -27,15 +25,15 @@ where
     pub(crate) fn new(
         dwarf: &'a read::Dwarf<R>,
         convert_address: &'a dyn Fn(u64, bool) -> Option<write::Address>,
+        line_strings: &'a mut write::LineStringTable,
+        strings: &'a mut write::StringTable,
     ) -> Self {
         ConvertContext {
             debug_str: &dwarf.debug_str,
             debug_line_str: &dwarf.debug_line_str,
             convert_address,
-            line_strings: Default::default(),
-            strings: Default::default(),
-            dirs: Default::default(),
-            files: Default::default(),
+            line_strings,
+            strings,
         }
     }
 
@@ -60,6 +58,8 @@ where
     fn convert_line_program_header(
         &mut self,
         from_program: &read::IncompleteLineProgram<R>,
+        dirs: &mut Vec<write::DirectoryId>,
+        files: &mut Vec<write::FileId>,
     ) -> write::ConvertResult<write::LineProgram> {
         let from_header = from_program.header();
         let encoding = from_header.encoding();
@@ -102,7 +102,7 @@ where
 
         let file_skip = if from_header.version() <= 4 {
             // The first directory is implicit.
-            self.dirs.push(program.default_directory());
+            dirs.push(program.default_directory());
             // A file index of 0 is invalid for version <= 4, but putting
             // something there makes the indexing easier.
             0
@@ -114,23 +114,22 @@ where
 
         for from_dir in from_header.include_directories() {
             let from_dir = self.convert_line_string(from_dir.clone())?;
-            self.dirs.push(program.add_directory(from_dir));
+            dirs.push(program.add_directory(from_dir));
         }
 
         for from_file in from_header.file_names().iter().skip(file_skip) {
             let from_name = self.convert_line_string(from_file.path_name())?;
             let from_dir = from_file.directory_index();
-            if from_dir >= self.dirs.len() as u64 {
+            if from_dir >= dirs.len() as u64 {
                 return Err(write::ConvertError::InvalidDirectoryIndex);
             }
-            let from_dir = self.dirs[from_dir as usize];
+            let from_dir = dirs[from_dir as usize];
             let from_info = Some(write::FileInfo {
                 timestamp: from_file.timestamp(),
                 size: from_file.size(),
                 md5: *from_file.md5(),
             });
-            self.files
-                .push(program.add_file(from_name, from_dir, from_info));
+            files.push(program.add_file(from_name, from_dir, from_info));
         }
 
         Ok(program)
@@ -142,8 +141,12 @@ where
         &mut self,
         mut from_program: read::IncompleteLineProgram<R>,
     ) -> write::ConvertResult<write::LineProgram> {
+        let mut dirs = Vec::new();
+        let mut files = Vec::new();
         // Create mappings in case the source has duplicate files or directories.
-        let mut program = self.convert_line_program_header(&from_program).expect("");
+        let mut program = self
+            .convert_line_program_header(&from_program, &mut dirs, &mut files)
+            .expect("");
 
         // We can't use the `from_program.rows()` because that wouldn't let
         // us preserve address relocations.
@@ -214,13 +217,13 @@ where
                                 program.row().op_index = from_row.op_index();
                                 program.row().file = {
                                     let file = from_row.file_index();
-                                    if file > self.files.len() as u64 {
+                                    if file > files.len() as u64 {
                                         return Err(write::ConvertError::InvalidFileIndex);
                                     }
                                     if file == 0 && program.version() <= 4 {
                                         return Err(write::ConvertError::InvalidFileIndex);
                                     }
-                                    self.files[(file - 1) as usize]
+                                    files[(file - 1) as usize]
                                 };
                                 program.row().line = match from_row.line() {
                                     Some(line) => line.get(),
@@ -356,8 +359,14 @@ mod tests {
             })
             .unwrap();
 
-            let mut convert_context =
-                crate::module::debug::ConvertContext::new(&empty_dwarf, &convert_address);
+            let mut line_strings = write::LineStringTable::default();
+            let mut strings = write::StringTable::default();
+            let mut convert_context = crate::module::debug::ConvertContext::new(
+                &empty_dwarf,
+                &convert_address,
+                &mut line_strings,
+                &mut strings,
+            );
             let converted_program = convert_context
                 .convert_line_program(incomplete_debug_line)
                 .unwrap();

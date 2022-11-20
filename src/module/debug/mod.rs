@@ -148,9 +148,7 @@ impl Emit for ModuleDebugData {
             let address = match address_converter.find_address(address, edge_is_previous) {
                 CodeAddress::InstrInFunction { instr_id } => {
                     match instruction_map.binary_search_by_key(&instr_id, |i| i.0) {
-                        Ok(id) => Some(
-                            (instruction_map[id].1 - cx.code_transform.code_section_start) as u64,
-                        ),
+                        Ok(id) => Some(instruction_map[id].1),
                         Err(_) => None,
                     }
                 }
@@ -159,11 +157,7 @@ impl Emit for ModuleDebugData {
                         .function_ranges
                         .binary_search_by_key(&id, |i| i.0)
                     {
-                        Ok(id) => Some(
-                            (code_transform.function_ranges[id].1.start + offset
-                                - cx.code_transform.code_section_start)
-                                as u64,
-                        ),
+                        Ok(id) => Some(code_transform.function_ranges[id].1.start + offset),
                         Err(_) => None,
                     }
                 }
@@ -174,9 +168,9 @@ impl Emit for ModuleDebugData {
                     {
                         Ok(id) => {
                             if edge_is_previous {
-                                Some((code_transform.function_ranges[id].1.end) as u64)
+                                Some(code_transform.function_ranges[id].1.end)
                             } else {
-                                Some((code_transform.function_ranges[id].1.start) as u64)
+                                Some(code_transform.function_ranges[id].1.start)
                             }
                         }
                         Err(_) => None,
@@ -185,7 +179,9 @@ impl Emit for ModuleDebugData {
                 CodeAddress::Unknown => None,
             };
 
-            address.map(write::Address::Constant)
+            address
+                .map(|x| (x - cx.code_transform.code_section_start) as u64)
+                .map(write::Address::Constant)
         };
 
         let from_dwarf = cx
@@ -206,7 +202,12 @@ impl Emit for ModuleDebugData {
             unit_entries.push(from_unit);
         }
 
-        let mut convert_context = ConvertContext::new(&from_dwarf, &convert_address);
+        let mut convert_context = ConvertContext::new(
+            &from_dwarf,
+            &convert_address,
+            &mut dwarf.line_strings,
+            &mut dwarf.strings,
+        );
 
         for index in 0..dwarf.units.count() {
             let id = dwarf.units.id(index);

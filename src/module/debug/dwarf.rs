@@ -152,10 +152,10 @@ where
         // us preserve address relocations.
         let mut from_row = read::LineRow::new(from_program.header());
         let mut instructions = from_program.header().instructions();
-        let mut address = None;
+        let mut next_sequence_base_address = None;
         let mut from_base_address = 0;
         let mut base_address = 0;
-        let mut previous_from_raw_address = 0;
+        let mut previous_from_raw_address_offset = 0;
         let mut previous_raw_address = 0;
         let mut non_existent_symbol = false;
         while let Some(instruction) = instructions.next_instruction(from_program.header())? {
@@ -166,15 +166,15 @@ where
                     }
                     match (self.convert_address)(val, false) {
                         Some(converted) => {
-                            address = Some(converted);
+                            next_sequence_base_address = Some(converted);
                             from_base_address = val;
+                            previous_from_raw_address_offset = 0;
                             non_existent_symbol = false;
                         }
                         None => {
                             non_existent_symbol = true;
                         }
                     }
-                    previous_from_raw_address = 0;
                     from_row.execute(read::LineInstruction::SetAddress(0), &mut from_program);
                 }
                 read::LineInstruction::DefineFile(_) => {
@@ -184,36 +184,34 @@ where
                     if from_row.execute(instruction, &mut from_program) {
                         if !non_existent_symbol {
                             if !program.in_sequence() {
-                                program.begin_sequence(address);
-                                if let Some(write::Address::Constant(raw_address)) = address {
+                                program.begin_sequence(next_sequence_base_address);
+                                if let Some(write::Address::Constant(raw_address)) =
+                                    next_sequence_base_address
+                                {
                                     base_address = raw_address;
+                                    previous_raw_address = 0;
                                 }
-
-                                previous_raw_address = 0;
-                                address = None;
+                                next_sequence_base_address = None;
                             }
-                            let row_address_offset = if let Some(address) =
-                                (self.convert_address)(from_row.address() + from_base_address, true)
-                                    .map(|x| match x {
-                                        write::Address::Constant(x) => x,
-                                        _ => 0,
-                                    }) {
-                                address - base_address
+                            let from_row_address = from_row.address() + from_base_address;
+                            let row_address = if let Some(write::Address::Constant(address)) =
+                                (self.convert_address)(from_row_address, true)
+                            {
+                                address
                             } else {
-                                previous_raw_address + from_row.address()
-                                    - previous_from_raw_address
+                                let from_row_address_advance =
+                                    from_row.address() - previous_from_raw_address_offset;
+                                previous_raw_address + from_row_address_advance
                             };
-                            previous_from_raw_address = from_row.address();
-                            previous_raw_address = row_address_offset;
+                            previous_from_raw_address_offset = from_row.address();
+                            previous_raw_address = row_address;
 
                             if from_row.end_sequence() {
-                                program.end_sequence(row_address_offset);
-                                address = (self.convert_address)(
-                                    from_row.address() + from_base_address,
-                                    false,
-                                );
+                                program.end_sequence(row_address);
+                                next_sequence_base_address =
+                                    (self.convert_address)(from_row_address, false);
                             } else {
-                                program.row().address_offset = row_address_offset;
+                                program.row().address_offset = row_address - base_address;
                                 program.row().op_index = from_row.op_index();
                                 program.row().file = {
                                     let file = from_row.file_index();

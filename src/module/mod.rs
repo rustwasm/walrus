@@ -261,12 +261,12 @@ impl Module {
                     validator.module_section_start(count, &range)?;
                     bail!("not supported yet");
                 }
-
                 // exception handling is not implemented yet.
-                Payload::EventSection(reader) => {
-                    validator.event_section(&reader)?;
+                Payload::TagSection(s) => {
+                    validator.tag_section(&s)?;
                     bail!("not supported yet");
                 }
+
             }
         }
 
@@ -391,11 +391,71 @@ impl Module {
                         }
                     }
                 }
+                wasmparser::Name::Type(t) => {
+                    let mut map = t.get_map()?;
+                    for _ in 0..map.get_count() {
+                        let naming = map.read()?;
+                        match indices.get_type(naming.index) {
+                            Ok(id) => self.types.get_mut(id).name = Some(naming.name.to_string()),
+                            Err(e) => warn!("in name section: {}", e),
+                        }
+                    }
+                }
+                wasmparser::Name::Memory(m) => {
+                    let mut map = m.get_map()?;
+                    for _ in 0..map.get_count() {
+                        let naming = map.read()?;
+                        match indices.get_memory(naming.index) {
+                            Ok(id) => self.memories.get_mut(id).name = Some(naming.name.to_string()),
+                            Err(e) => warn!("in name section: {}", e),
+                        }
+                    }
+                }
+                wasmparser::Name::Table(t) => {
+                    let mut map = t.get_map()?;
+                    for _ in 0..map.get_count() {
+                        let naming = map.read()?;
+                        match indices.get_table(naming.index) {
+                            Ok(id) => self.tables.get_mut(id).name = Some(naming.name.to_string()),
+                            Err(e) => warn!("in name section: {}", e),
+                        }
+                    }
+                }
+                wasmparser::Name::Data(d) => {
+                    let mut map = d.get_map()?;
+                    for _ in 0..map.get_count() {
+                        let naming = map.read()?;
+                        match indices.get_data(naming.index) {
+                            Ok(id) => self.data.get_mut(id).name = Some(naming.name.to_string()),
+                            Err(e) => warn!("in name section: {}", e),
+                        }
+                    }
+                }
+                wasmparser::Name::Element(e) => {
+                    let mut map = e.get_map()?;
+                    for _ in 0..map.get_count() {
+                        let naming = map.read()?;
+                        match indices.get_element(naming.index) {
+                            Ok(id) => self.elements.get_mut(id).name = Some(naming.name.to_string()),
+                            Err(e) => warn!("in name section: {}", e),
+                        }
+                    }
+                }
+                wasmparser::Name::Global(e) => {
+                    let mut map = e.get_map()?;
+                    for _ in 0..map.get_count() {
+                        let naming = map.read()?;
+                        match indices.get_global(naming.index) {
+                            Ok(id) => self.globals.get_mut(id).name = Some(naming.name.to_string()),
+                            Err(e) => warn!("in name section: {}", e),
+                        }
+                    }
+                }
                 wasmparser::Name::Local(l) => {
-                    let mut reader = l.get_function_local_reader()?;
-                    for _ in 0..reader.get_count() {
+                    let mut reader = l.get_indirect_map()?;
+                    for _ in 0..reader.get_indirect_count() {
                         let name = reader.read()?;
-                        let func_id = indices.get_func(name.func_index)?;
+                        let func_id = indices.get_func(name.indirect_index)?;
                         let mut map = name.get_map()?;
                         for _ in 0..map.get_count() {
                             let naming = map.read()?;
@@ -421,6 +481,7 @@ impl Module {
                     }
                 }
                 wasmparser::Name::Unknown { ty, .. } => warn!("unknown name subsection {}", ty),
+                wasmparser::Name::Label(_) =>  warn!("labels name subsection ignored"),
             }
         }
         Ok(())

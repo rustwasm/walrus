@@ -25,6 +25,9 @@ pub struct Data {
     pub kind: DataKind,
     /// The data payload of this data segment.
     pub value: Vec<u8>,
+    /// The name of this data, used for debugging purposes in the `name`
+    /// custom section.
+    pub name: Option<String>,
 }
 
 /// The kind of data segment: passive or active.
@@ -116,7 +119,7 @@ impl ModuleData {
     /// Add a data segment
     pub fn add(&mut self, kind: DataKind, value: Vec<u8>) -> DataId {
         let id = self.arena.next_id();
-        let id2 = self.arena.alloc(Data { id, kind, value });
+        let id2 = self.arena.alloc(Data { id, kind, value, name: None });
         debug_assert_eq!(id, id2);
         id
     }
@@ -176,6 +179,7 @@ impl Module {
                 // parse the data segments.
                 value: Vec::new(),
                 kind: DataKind::Passive,
+                name: None
             }));
         }
     }
@@ -200,6 +204,7 @@ impl Module {
                     id,
                     value: Vec::new(),
                     kind: DataKind::Passive,
+                    name: None,
                 })
             };
             let data = self.data.get_mut(id);

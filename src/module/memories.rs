@@ -24,6 +24,9 @@ pub struct Memory {
     pub import: Option<ImportId>,
     /// Active data segments that will be used to initialize this memory.
     pub data_segments: IdHashSet<Data>,
+    /// The name of this memory, used for debugging purposes in the `name`
+    /// custom section.
+    pub name: Option<String>,
 }
 
 impl Tombstone for Memory {
@@ -75,6 +78,7 @@ impl ModuleMemories {
             maximum,
             import: Some(import),
             data_segments: Default::default(),
+            name: None,
         });
         debug_assert_eq!(id, id2);
         id
@@ -91,6 +95,7 @@ impl ModuleMemories {
             maximum,
             import: None,
             data_segments: Default::default(),
+            name: None,
         });
         debug_assert_eq!(id, id2);
         id
@@ -134,13 +139,13 @@ impl Module {
     ) -> Result<()> {
         log::debug!("parse memory section");
         for m in section {
-            let (shared, limits) = match m? {
-                wasmparser::MemoryType::M32 { shared, limits } => (shared, limits),
-                wasmparser::MemoryType::M64 { .. } => bail!("64-bit memories not supported"),
+            let m = m?;
+            if m.memory64 {
+                bail!("64-bit memories not supported")
             };
             let id = self
                 .memories
-                .add_local(shared, limits.initial, limits.maximum);
+                .add_local(m.shared, m.initial as u32, m.maximum.map(|m| m as u32));
             ids.push_memory(id);
         }
         Ok(())

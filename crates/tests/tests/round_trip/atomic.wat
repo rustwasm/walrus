@@ -61,7 +61,9 @@
       i32.add
       i32.add
       i32.add
-      drop)
+      drop
+    )
     (memory (;0;) 1 1 shared)
-    (export "atomics" (func 0)))
+    (export "atomics" (func 0))
+  )
 ;)

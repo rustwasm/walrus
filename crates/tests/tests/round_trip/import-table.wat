@@ -3,6 +3,9 @@
   (export "b" (table 0))
   )
 
-;; CHECK: (module
-;; NEXT:    (import "" "" (table (;0;) 1 funcref))
-;; NEXT:    (export "b" (table 0)))
+(; CHECK-ALL:
+  (module
+    (import "" "" (table (;0;) 1 funcref))
+    (export "b" (table 0))
+  )
+;)

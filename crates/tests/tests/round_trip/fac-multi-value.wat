@@ -27,7 +27,7 @@
     (func (;0;) (type 0) (param i64) (result i64)
       i64.const 1
       local.get 0
-      loop (param i64 i64) (result i64)  ;; label = @1
+      loop (type 2) (param i64 i64) (result i64) ;; label = @1
         call $pick1
         call $pick1
         i64.mul
@@ -40,13 +40,17 @@
         br_if 0 (;@1;)
         drop
         return
-      end)
-    (func $pick1 (type 3) (param i64 i64) (result i64 i64 i64)
+      end
+    )
+    (func $pick1 (;1;) (type 3) (param i64 i64) (result i64 i64 i64)
       local.get 0
       local.get 1
-      local.get 0)
-    (func $pick0 (type 1) (param i64) (result i64 i64)
       local.get 0
-      local.get 0)
-    (export "fac-ssa" (func 0)))
+    )
+    (func $pick0 (;2;) (type 1) (param i64) (result i64 i64)
+      local.get 0
+      local.get 0
+    )
+    (export "fac-ssa" (func 0))
+  )
 ;)

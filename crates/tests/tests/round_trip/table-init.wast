@@ -12,5 +12,6 @@
     (func (;0;) (type 0))
     (table (;0;) 1 funcref)
     (export "x" (table 0))
-    (elem (;0;) (global.get 0) func 0))
+    (elem (;0;) (global.get 0) func 0)
+  )
 ;)

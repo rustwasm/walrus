@@ -307,7 +307,7 @@ fn append_instruction<'context>(
                 ctx.indices.get_memory(arg.memory).unwrap(),
                 MemArg {
                     align: 1 << (arg.align as i32),
-                    offset: arg.offset,
+                    offset: arg.offset as u32,
                 },
             )
         };
@@ -1292,7 +1292,6 @@ fn append_instruction<'context>(
         | Operator::Catch { index: _ }
         | Operator::Throw { index: _ }
         | Operator::Rethrow { relative_depth: _ }
-        | Operator::Unwind
         | Operator::Delegate { relative_depth: _ }
         | Operator::CatchAll => {
             unimplemented!("not supported")

@@ -13,15 +13,15 @@ pub type ElementId = Id<Element>;
 #[derive(Debug)]
 pub struct Element {
     id: Id<Element>,
-
     /// Whether this segment is passive or active.
     pub kind: ElementKind,
-
     /// The type of elements in this segment
     pub ty: ValType,
-
     /// The function members of this passive elements segment.
     pub members: Vec<Option<FunctionId>>,
+    /// The name of this element, used for debugging purposes in the `name`
+    /// custom section.
+    pub name: Option<String>,
 }
 
 #[allow(missing_docs)]
@@ -94,6 +94,7 @@ impl ModuleElements {
             kind,
             ty,
             members,
+            name: None,
         });
         debug_assert_eq!(id, id2);
         id
@@ -154,6 +155,7 @@ impl Module {
                 ty,
                 kind,
                 members,
+                name: None,
             });
             ids.push_element(id);
         }

@@ -24,6 +24,9 @@ pub struct Table {
     pub import: Option<ImportId>,
     /// Active data segments that will be used to initialize this memory.
     pub elem_segments: IdHashSet<Element>,
+    /// The name of this table, used for debugging purposes in the `name`
+    /// custom section.
+    pub name: Option<String>,
 }
 
 impl Tombstone for Table {}
@@ -70,6 +73,7 @@ impl ModuleTables {
             element_ty,
             import: Some(import),
             elem_segments: Default::default(),
+            name: None,
         })
     }
 
@@ -84,6 +88,7 @@ impl ModuleTables {
             element_ty,
             import: None,
             elem_segments: Default::default(),
+            name: None,
         });
         debug_assert_eq!(id, id2);
         id
@@ -150,11 +155,9 @@ impl Module {
         log::debug!("parse table section");
         for t in section {
             let t = t?;
-            let id = self.tables.add_local(
-                t.limits.initial,
-                t.limits.maximum,
-                ValType::parse(&t.element_type)?,
-            );
+            let id = self
+                .tables
+                .add_local(t.initial, t.maximum, ValType::parse(&t.element_type)?);
             ids.push_table(id);
         }
         Ok(())

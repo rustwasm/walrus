@@ -266,7 +266,6 @@ impl Module {
                     validator.tag_section(&s)?;
                     bail!("not supported yet");
                 }
-
             }
         }
 
@@ -406,7 +405,9 @@ impl Module {
                     for _ in 0..map.get_count() {
                         let naming = map.read()?;
                         match indices.get_memory(naming.index) {
-                            Ok(id) => self.memories.get_mut(id).name = Some(naming.name.to_string()),
+                            Ok(id) => {
+                                self.memories.get_mut(id).name = Some(naming.name.to_string())
+                            }
                             Err(e) => warn!("in name section: {}", e),
                         }
                     }
@@ -436,7 +437,9 @@ impl Module {
                     for _ in 0..map.get_count() {
                         let naming = map.read()?;
                         match indices.get_element(naming.index) {
-                            Ok(id) => self.elements.get_mut(id).name = Some(naming.name.to_string()),
+                            Ok(id) => {
+                                self.elements.get_mut(id).name = Some(naming.name.to_string())
+                            }
                             Err(e) => warn!("in name section: {}", e),
                         }
                     }
@@ -481,7 +484,7 @@ impl Module {
                     }
                 }
                 wasmparser::Name::Unknown { ty, .. } => warn!("unknown name subsection {}", ty),
-                wasmparser::Name::Label(_) =>  warn!("labels name subsection ignored"),
+                wasmparser::Name::Label(_) => warn!("labels name subsection ignored"),
             }
         }
         Ok(())

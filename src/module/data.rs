@@ -119,7 +119,12 @@ impl ModuleData {
     /// Add a data segment
     pub fn add(&mut self, kind: DataKind, value: Vec<u8>) -> DataId {
         let id = self.arena.next_id();
-        let id2 = self.arena.alloc(Data { id, kind, value, name: None });
+        let id2 = self.arena.alloc(Data {
+            id,
+            kind,
+            value,
+            name: None,
+        });
         debug_assert_eq!(id, id2);
         id
     }
@@ -179,7 +184,7 @@ impl Module {
                 // parse the data segments.
                 value: Vec::new(),
                 kind: DataKind::Passive,
-                name: None
+                name: None,
             }));
         }
     }

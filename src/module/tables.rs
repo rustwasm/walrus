@@ -155,11 +155,9 @@ impl Module {
         log::debug!("parse table section");
         for t in section {
             let t = t?;
-            let id = self.tables.add_local(
-                t.initial,
-                t.maximum,
-                ValType::parse(&t.element_type)?,
-            );
+            let id = self
+                .tables
+                .add_local(t.initial, t.maximum, ValType::parse(&t.element_type)?);
             ids.push_table(id);
         }
         Ok(())

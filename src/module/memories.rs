@@ -143,9 +143,9 @@ impl Module {
             if m.memory64 {
                 bail!("64-bit memories not supported")
             };
-            let id = self
-                .memories
-                .add_local(m.shared, m.initial as u32, m.maximum.map(|m| m as u32));
+            let id =
+                self.memories
+                    .add_local(m.shared, m.initial as u32, m.maximum.map(|m| m as u32));
             ids.push_memory(id);
         }
         Ok(())

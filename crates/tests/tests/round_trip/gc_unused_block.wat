@@ -15,7 +15,7 @@
   (module
     (type (;0;) (func (result i32)))
     (func $f (;0;) (type 0) (result i32)
-      block  ;; label = @1
+      block ;; label = @1
         br 0 (;@1;)
       end
       i32.const 42

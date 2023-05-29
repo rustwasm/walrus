@@ -27,7 +27,7 @@
     (func (;0;) (type 0) (param i64) (result i64)
       i64.const 1
       local.get 0
-      loop (param i64 i64) (result i64)  ;; label = @1
+      loop (type 2) (param i64 i64) (result i64) ;; label = @1
         call $pick1
         call $pick1
         i64.mul

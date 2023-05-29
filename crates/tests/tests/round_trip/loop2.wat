@@ -11,7 +11,7 @@
     (type (;0;) (func))
     (type (;1;) (func (param i32)))
     (func (;0;) (type 1) (param i32)
-      loop  ;; label = @1
+      loop ;; label = @1
         call $dummy
         local.get 0
         br_if 1 (;@0;)

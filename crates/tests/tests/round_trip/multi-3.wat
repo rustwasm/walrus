@@ -19,7 +19,7 @@
       local.get 2
       local.get 1
       local.get 0
-      if (param i64 i64) (result i64 i64)  ;; label = @1
+      if (type 1) (param i64 i64) (result i64 i64) ;; label = @1
         return
       else
         drop

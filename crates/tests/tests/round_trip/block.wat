@@ -21,14 +21,14 @@
     (func $f (;0;) (type 0) (result i32)
       i32.const 0
       drop
-      block  ;; label = @1
+      block ;; label = @1
         i32.const 1
         drop
       end
       i32.const 2
     )
     (func (;1;) (type 0) (result i32)
-      block (result i32)  ;; label = @1
+      block (result i32) ;; label = @1
         i32.const 0
       end
     )

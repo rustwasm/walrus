@@ -16,7 +16,7 @@
       (local i32)
       i32.const 9
       local.set 0
-      loop  ;; label = @1
+      loop ;; label = @1
         local.get 0
         i32.eqz
         br_if 0 (;@1;)

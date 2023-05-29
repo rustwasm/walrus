@@ -130,25 +130,22 @@ impl Module {
                     let id = self.add_import_table(
                         entry.module,
                         entry.field.expect("module linking not supported"),
-                        t.limits.initial,
-                        t.limits.maximum,
+                        t.initial,
+                        t.maximum,
                         ty,
                     );
                     ids.push_table(id.0);
                 }
                 wasmparser::ImportSectionEntryType::Memory(m) => {
-                    let (shared, limits) = match m {
-                        wasmparser::MemoryType::M32 { shared, limits } => (shared, limits),
-                        wasmparser::MemoryType::M64 { .. } => {
-                            bail!("64-bit memories not supported")
-                        }
+                    if m.memory64 {
+                        bail!("64-bit memories not supported")
                     };
                     let id = self.add_import_memory(
                         entry.module,
                         entry.field.expect("module linking not supported"),
-                        shared,
-                        limits.initial,
-                        limits.maximum,
+                        m.shared,
+                        m.initial as u32,
+                        m.maximum.map(|m| m as u32),
                     );
                     ids.push_memory(id.0);
                 }
@@ -165,8 +162,8 @@ impl Module {
                 | wasmparser::ImportSectionEntryType::Instance(_) => {
                     unimplemented!("module linking not implemented");
                 }
-                wasmparser::ImportSectionEntryType::Event(_) => {
-                    unimplemented!("exception handling not implemented")
+                wasmparser::ImportSectionEntryType::Tag(_) => {
+                    unimplemented!("exception handling not implemented");
                 }
             }
         }

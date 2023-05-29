@@ -6,4 +6,4 @@
   (import "" "d" (memory 1))
   )
 
-;; CHECK: (module)
+;; CHECK: (module

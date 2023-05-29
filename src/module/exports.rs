@@ -145,7 +145,7 @@ impl Module {
                 Type | Module | Instance => {
                     unimplemented!("module linking not supported");
                 }
-                Event => {
+                Tag => {
                     unimplemented!("exception handling not supported");
                 }
             };

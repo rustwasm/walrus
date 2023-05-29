@@ -13,15 +13,15 @@ pub struct Global {
     // NB: Not public so that it can't get out of sync with the arena this is
     // contained within.
     id: GlobalId,
-
     /// This global's type.
     pub ty: ValType,
-
     /// Whether this global is mutable or not.
     pub mutable: bool,
-
     /// The kind of global this is
     pub kind: GlobalKind,
+    /// The name of this data, used for debugging purposes in the `name`
+    /// custom section.
+    pub name: Option<String>,
 }
 
 impl Tombstone for Global {}
@@ -64,6 +64,7 @@ impl ModuleGlobals {
             ty,
             mutable,
             kind: GlobalKind::Import(import_id),
+            name: None,
         })
     }
 
@@ -75,6 +76,7 @@ impl ModuleGlobals {
             ty,
             mutable,
             kind: GlobalKind::Local(init),
+            name: None,
         })
     }
 

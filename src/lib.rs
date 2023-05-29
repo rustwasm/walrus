@@ -20,7 +20,6 @@ macro_rules! maybe_parallel {
 mod arena_set;
 pub mod dot;
 mod emit;
-mod encode;
 mod error;
 mod function_builder;
 mod init_expr;

@@ -1,5 +1,5 @@
 //! Globals within a wasm module.
-use crate::emit::{Emit, EmitContext, Section};
+use crate::emit::{Emit, EmitContext};
 use crate::parse::IndicesToIds;
 use crate::tombstone_arena::{Id, Tombstone, TombstoneArena};
 use crate::{ImportId, InitExpr, Module, Result, ValType};
@@ -39,13 +39,6 @@ impl Global {
     /// Get this global's id.
     pub fn id(&self) -> GlobalId {
         self.id
-    }
-}
-
-impl Emit for Global {
-    fn emit(&self, cx: &mut EmitContext) {
-        Emit::emit(&self.ty, cx);
-        cx.encoder.byte(self.mutable as u8);
     }
 }
 
@@ -128,6 +121,8 @@ impl Module {
 impl Emit for ModuleGlobals {
     fn emit(&self, cx: &mut EmitContext) {
         log::debug!("emit global section");
+        let mut wasm_global_section = wasm_encoder::GlobalSection::new();
+
         fn get_local(global: &Global) -> Option<(&Global, &InitExpr)> {
             match &global.kind {
                 GlobalKind::Import(_) => None,
@@ -142,12 +137,18 @@ impl Emit for ModuleGlobals {
             return;
         }
 
-        let mut cx = cx.start_section(Section::Global);
-        cx.encoder.usize(globals);
         for (global, local) in self.iter().filter_map(get_local) {
             cx.indices.push_global(global.id());
-            global.emit(&mut cx);
-            local.emit(&mut cx);
+
+            wasm_global_section.global(
+                wasm_encoder::GlobalType {
+                    val_type: global.ty.to_wasmencoder_type(),
+                    mutable: global.mutable,
+                },
+                &local.to_wasmencoder_type(cx),
+            );
         }
+
+        cx.wasm_module.section(&wasm_global_section);
     }
 }

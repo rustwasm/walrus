@@ -1,7 +1,5 @@
 //! WebAssembly function and value types.
 
-use crate::emit::{Emit, EmitContext};
-use crate::encode::Encoder;
 use crate::error::Result;
 use crate::tombstone_arena::Tombstone;
 use anyhow::bail;
@@ -124,15 +122,6 @@ impl Type {
     }
 }
 
-impl Emit for Type {
-    fn emit(&self, cx: &mut EmitContext) {
-        assert!(!self.is_for_function_entry());
-        cx.encoder.byte(0x60);
-        cx.list(self.params.iter());
-        cx.list(self.results.iter());
-    }
-}
-
 /// A value type.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum ValType {
@@ -161,6 +150,24 @@ impl ValType {
         Ok(v.into_boxed_slice())
     }
 
+    pub(crate) fn to_wasmencoder_type(&self) -> wasm_encoder::ValType {
+        match self {
+            ValType::I32 => wasm_encoder::ValType::I32,
+            ValType::I64 => wasm_encoder::ValType::I64,
+            ValType::F32 => wasm_encoder::ValType::F32,
+            ValType::F64 => wasm_encoder::ValType::F64,
+            ValType::V128 => wasm_encoder::ValType::V128,
+            ValType::Externref => wasm_encoder::ValType::Ref(wasm_encoder::RefType {
+                nullable: false,
+                heap_type: wasm_encoder::HeapType::Any,
+            }),
+            ValType::Funcref => wasm_encoder::ValType::Ref(wasm_encoder::RefType {
+                nullable: false,
+                heap_type: wasm_encoder::HeapType::Func,
+            }),
+        }
+    }
+
     pub(crate) fn parse(input: &wasmparser::Type) -> Result<ValType> {
         match input {
             wasmparser::Type::I32 => Ok(ValType::I32),
@@ -171,18 +178,6 @@ impl ValType {
             wasmparser::Type::ExternRef => Ok(ValType::Externref),
             wasmparser::Type::FuncRef => Ok(ValType::Funcref),
             _ => bail!("not a value type"),
-        }
-    }
-
-    pub(crate) fn emit(&self, encoder: &mut Encoder) {
-        match self {
-            ValType::I32 => encoder.byte(0x7f),
-            ValType::I64 => encoder.byte(0x7e),
-            ValType::F32 => encoder.byte(0x7d),
-            ValType::F64 => encoder.byte(0x7c),
-            ValType::V128 => encoder.byte(0x7b),
-            ValType::Funcref => encoder.byte(0x70),
-            ValType::Externref => encoder.byte(0x6f),
         }
     }
 }
@@ -202,11 +197,5 @@ impl fmt::Display for ValType {
                 ValType::Funcref => "funcref",
             }
         )
-    }
-}
-
-impl Emit for ValType {
-    fn emit(&self, cx: &mut EmitContext) {
-        self.emit(&mut cx.encoder);
     }
 }

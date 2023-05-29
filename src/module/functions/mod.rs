@@ -2,8 +2,7 @@
 
 mod local_function;
 
-use crate::emit::{Emit, EmitContext, Section};
-use crate::encode::Encoder;
+use crate::emit::{Emit, EmitContext};
 use crate::error::Result;
 use crate::ir::InstrLocId;
 use crate::module::imports::ImportId;
@@ -13,6 +12,7 @@ use crate::tombstone_arena::{Id, Tombstone, TombstoneArena};
 use crate::ty::TypeId;
 use crate::ty::ValType;
 use std::cmp;
+use wasm_encoder::Encode;
 use wasmparser::{FuncValidator, FunctionBody, ValidatorResources};
 
 #[cfg(feature = "parallel")]
@@ -280,11 +280,10 @@ impl ModuleFunctions {
         if functions.len() == 0 {
             return;
         }
-        let mut cx = cx.start_section(Section::Function);
-        cx.encoder.usize(functions.len());
+        let mut func_section = wasm_encoder::FunctionSection::new();
         for (id, function, _size) in functions {
             let index = cx.indices.get_type_index(function.ty());
-            cx.encoder.u32(index);
+            func_section.function(index);
 
             // Assign an index to all local defined functions before we start
             // translating them. While translating they may refer to future
@@ -461,8 +460,7 @@ impl Emit for ModuleFunctions {
             return;
         }
 
-        let mut cx = cx.start_section(Section::Code);
-        cx.encoder.usize(functions.len());
+        let mut wasm_code_section = wasm_encoder::CodeSection::new();
 
         let generate_map = cx.module.config.preserve_code_transform;
 
@@ -473,20 +471,25 @@ impl Emit for ModuleFunctions {
             .map(|(id, func, _size)| {
                 log::debug!("emit function {:?} {:?}", id, cx.module.funcs.get(id).name);
                 let mut wasm = Vec::new();
-                let mut encoder = Encoder::new(&mut wasm);
                 let mut map = if generate_map { Some(Vec::new()) } else { None };
 
-                let (used_locals, local_indices) = func.emit_locals(cx.module, &mut encoder);
-                func.emit_instructions(cx.indices, &local_indices, &mut encoder, map.as_mut());
+                let (locals_types, used_locals, local_indices) = func.emit_locals(cx.module);
+                let mut wasm_function = wasm_encoder::Function::new(locals_types);
+                func.emit_instructions(
+                    cx.indices,
+                    &local_indices,
+                    &mut wasm_function,
+                    map.as_mut(),
+                );
+                wasm_function.encode(&mut wasm);
                 (wasm, id, used_locals, local_indices, map)
             })
             .collect::<Vec<_>>();
 
         cx.indices.locals.reserve(bytes.len());
         for (wasm, id, used_locals, local_indices, map) in bytes {
-            cx.encoder.usize(wasm.len());
-            let code_offset = cx.encoder.pos();
-            cx.encoder.raw(&wasm);
+            let code_offset = wasm_code_section.byte_len();
+            wasm_code_section.raw(&wasm);
             if let Some(map) = map {
                 collect_non_default_code_offsets(&mut cx.code_transform, code_offset, map);
             }

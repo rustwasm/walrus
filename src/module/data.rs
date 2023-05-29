@@ -1,6 +1,6 @@
 //! Data segments within a wasm module.
 
-use crate::emit::{Emit, EmitContext, Section};
+use crate::emit::{Emit, EmitContext};
 use crate::ir::Value;
 use crate::parse::IndicesToIds;
 use crate::tombstone_arena::{Id, Tombstone, TombstoneArena};
@@ -162,7 +162,8 @@ impl ModuleData {
             || maybe_parallel!(funcs.(iter_local | par_iter_local))
                 .any(|(_, f)| !f.used_data_segments().is_empty())
         {
-            cx.start_section(Section::DataCount).encoder.usize(count);
+            cx.wasm_module
+                .section(&wasm_encoder::DataCountSection { count });
         }
     }
 }
@@ -255,38 +256,36 @@ impl Module {
 impl Emit for ModuleData {
     fn emit(&self, cx: &mut EmitContext) {
         log::debug!("emit data section");
+
         if self.arena.len() == 0 {
             return;
         }
-
-        let mut cx = cx.start_section(Section::Data);
-        cx.encoder.usize(self.arena.len());
 
         // The encodings here are with respect to the bulk memory proposal, but
         // should be backwards compatible with the current MVP WebAssembly spec
         // so long as the only memory 0 is used.
         for data in self.iter() {
+            let mut wasm_data_section = wasm_encoder::DataSection::new();
             match data.kind {
                 DataKind::Passive => {
-                    cx.encoder.byte(0x01);
-                    cx.encoder.bytes(&data.value);
+                    wasm_data_section.passive(data.value.clone());
                 }
                 DataKind::Active(ref a) => {
-                    let index = cx.indices.get_memory_index(a.memory);
-                    if index == 0 {
-                        cx.encoder.byte(0x00);
-                    } else {
-                        cx.encoder.byte(0x02);
-                        cx.encoder.u32(index);
-                    }
-                    let init_expr = match a.location {
-                        ActiveDataLocation::Absolute(a) => InitExpr::Value(Value::I32(a as i32)),
-                        ActiveDataLocation::Relative(g) => InitExpr::Global(g),
-                    };
-                    init_expr.emit(&mut cx);
-                    cx.encoder.bytes(&data.value);
+                    wasm_data_section.active(
+                        cx.indices.get_memory_index(a.memory),
+                        &match a.location {
+                            ActiveDataLocation::Absolute(a) => {
+                                wasm_encoder::ConstExpr::i32_const(a as i32)
+                            }
+                            ActiveDataLocation::Relative(g) => {
+                                wasm_encoder::ConstExpr::global_get(cx.indices.get_global_index(g))
+                            }
+                        },
+                        data.value.clone(),
+                    );
                 }
             }
+            cx.wasm_module.section(&wasm_data_section);
         }
     }
 }

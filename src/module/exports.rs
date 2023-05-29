@@ -1,6 +1,6 @@
 //! Exported items in a wasm module.
 
-use crate::emit::{Emit, EmitContext, Section};
+use crate::emit::{Emit, EmitContext};
 use crate::parse::IndicesToIds;
 use crate::tombstone_arena::{Id, Tombstone, TombstoneArena};
 use crate::{FunctionId, GlobalId, MemoryId, Module, Result, TableId};
@@ -162,6 +162,8 @@ impl Module {
 impl Emit for ModuleExports {
     fn emit(&self, cx: &mut EmitContext) {
         log::debug!("emit export section");
+        let mut wasm_export_section = wasm_encoder::ExportSection::new();
+
         // NB: exports are always considered used. They are the roots that the
         // used analysis searches out from.
 
@@ -170,34 +172,40 @@ impl Emit for ModuleExports {
             return;
         }
 
-        let mut cx = cx.start_section(Section::Export);
-        cx.encoder.usize(count);
-
         for export in self.iter() {
-            cx.encoder.str(&export.name);
             match export.item {
                 ExportItem::Function(id) => {
                     let index = cx.indices.get_func_index(id);
-                    cx.encoder.byte(0x00);
-                    cx.encoder.u32(index);
+                    wasm_export_section.export(&export.name, wasm_encoder::ExportKind::Func, index);
                 }
                 ExportItem::Table(id) => {
                     let index = cx.indices.get_table_index(id);
-                    cx.encoder.byte(0x01);
-                    cx.encoder.u32(index);
+                    wasm_export_section.export(
+                        &export.name,
+                        wasm_encoder::ExportKind::Table,
+                        index,
+                    );
                 }
                 ExportItem::Memory(id) => {
                     let index = cx.indices.get_memory_index(id);
-                    cx.encoder.byte(0x02);
-                    cx.encoder.u32(index);
+                    wasm_export_section.export(
+                        &export.name,
+                        wasm_encoder::ExportKind::Memory,
+                        index,
+                    );
                 }
                 ExportItem::Global(id) => {
                     let index = cx.indices.get_global_index(id);
-                    cx.encoder.byte(0x03);
-                    cx.encoder.u32(index);
+                    wasm_export_section.export(
+                        &export.name,
+                        wasm_encoder::ExportKind::Global,
+                        index,
+                    );
                 }
             }
         }
+
+        cx.wasm_module.section(&wasm_export_section);
     }
 }
 

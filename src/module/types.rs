@@ -1,7 +1,7 @@
 //! Types in a wasm module.
 
 use crate::arena_set::ArenaSet;
-use crate::emit::{Emit, EmitContext, Section};
+use crate::emit::{Emit, EmitContext};
 use crate::error::Result;
 use crate::module::Module;
 use crate::parse::IndicesToIds;
@@ -148,6 +148,8 @@ impl Emit for ModuleTypes {
     fn emit(&self, cx: &mut EmitContext) {
         log::debug!("emitting type section");
 
+        let mut wasm_type_section = wasm_encoder::TypeSection::new();
+
         let mut tys = self
             .arena
             .iter()
@@ -158,15 +160,16 @@ impl Emit for ModuleTypes {
             return;
         }
 
-        let mut cx = cx.start_section(Section::Type);
-        cx.encoder.usize(tys.len());
-
         // Sort for deterministic ordering.
         tys.sort_by_key(|&(_, ty)| ty);
 
-        for (id, ty) in tys {
-            cx.indices.push_type(id);
-            ty.emit(&mut cx);
+        for (_, ty) in tys {
+            wasm_type_section.function(
+                ty.params().iter().map(ValType::to_wasmencoder_type),
+                ty.results().iter().map(ValType::to_wasmencoder_type),
+            );
         }
+
+        cx.wasm_module.section(&wasm_type_section);
     }
 }

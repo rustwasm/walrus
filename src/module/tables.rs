@@ -1,6 +1,6 @@
 //! Tables within a wasm module.
 
-use crate::emit::{Emit, EmitContext, Section};
+use crate::emit::{Emit, EmitContext};
 use crate::map::IdHashSet;
 use crate::parse::IndicesToIds;
 use crate::tombstone_arena::{Id, Tombstone, TombstoneArena};
@@ -35,17 +35,6 @@ impl Table {
     /// Get this table's id.
     pub fn id(&self) -> TableId {
         self.id
-    }
-}
-
-impl Emit for Table {
-    fn emit(&self, cx: &mut EmitContext) {
-        self.element_ty.emit(&mut cx.encoder);
-        cx.encoder.byte(self.maximum.is_some() as u8);
-        cx.encoder.u32(self.initial);
-        if let Some(m) = self.maximum {
-            cx.encoder.u32(m);
-        }
     }
 }
 
@@ -167,17 +156,29 @@ impl Module {
 impl Emit for ModuleTables {
     fn emit(&self, cx: &mut EmitContext) {
         log::debug!("emit table section");
+
+        let mut wasm_table_section = wasm_encoder::TableSection::new();
+
         // Skip imported tables because those are emitted in the import section.
         let tables = self.iter().filter(|t| t.import.is_none()).count();
         if tables == 0 {
             return;
         }
 
-        let mut cx = cx.start_section(Section::Table);
-        cx.encoder.usize(tables);
         for table in self.iter().filter(|t| t.import.is_none()) {
             cx.indices.push_table(table.id());
-            table.emit(&mut cx);
+
+            wasm_table_section.table(wasm_encoder::TableType {
+                minimum: table.initial,
+                maximum: table.maximum,
+                element_type: match table.element_ty {
+                    ValType::Externref => wasm_encoder::RefType::EXTERNREF,
+                    ValType::Funcref => wasm_encoder::RefType::FUNCREF,
+                    _ => panic!("Unexpected table type"),
+                },
+            });
         }
+
+        cx.wasm_module.section(&wasm_table_section);
     }
 }

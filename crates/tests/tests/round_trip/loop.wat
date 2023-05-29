@@ -13,5 +13,4 @@
       end
     )
     (export "inf_loop" (func $f))
-  )
 ;)

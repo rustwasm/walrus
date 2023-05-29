@@ -8,5 +8,4 @@
     (import "x" "y" (global (;0;) i32))
     (global (;1;) i32 global.get 0)
     (export "x" (global 1))
-  )
 ;)

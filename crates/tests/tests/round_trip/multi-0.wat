@@ -10,5 +10,4 @@
       local.get 0
     )
     (export "i64.dup" (func 0))
-  )
 ;)

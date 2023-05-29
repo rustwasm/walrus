@@ -22,5 +22,4 @@
     )
     (memory (;0;) 0)
     (export "f" (func 0))
-  )
 ;)

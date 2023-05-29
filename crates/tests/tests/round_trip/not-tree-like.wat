@@ -25,5 +25,4 @@
       i32.add
     )
     (export "$f" (func 1))
-  )
 ;)

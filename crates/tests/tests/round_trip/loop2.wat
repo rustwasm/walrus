@@ -19,5 +19,4 @@
     )
     (func $dummy (;1;) (type 0))
     (export "as-loop-last" (func 0))
-  )
 ;)

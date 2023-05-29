@@ -16,5 +16,4 @@
       local.set 1
     )
     (export "foo" (func $foo))
-  )
 ;)

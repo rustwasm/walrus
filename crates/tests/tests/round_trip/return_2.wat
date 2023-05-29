@@ -12,5 +12,4 @@
       return
     )
     (export "f" (func $f))
-  )
 ;)

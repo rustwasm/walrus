@@ -12,5 +12,4 @@
       unreachable
     )
     (export "f" (func $f))
-  )
 ;)

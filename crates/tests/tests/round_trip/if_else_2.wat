@@ -29,5 +29,4 @@
       end
     )
     (export "if_else" (func $if_else))
-  )
 ;)

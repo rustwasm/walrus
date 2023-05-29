@@ -1230,5 +1230,4 @@
     (export "i32x4_trunc_u_f32x4_sat" (func $i32x4_trunc_u_f32x4_sat))
     (export "f32x4.convert_i32x4_s" (func $f32x4.convert_i32x4_s))
     (export "f32x4.convert_i32x4_u" (func $f32x4.convert_i32x4_u))
-  )
 ;)

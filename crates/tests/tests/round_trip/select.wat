@@ -17,5 +17,4 @@
       select
     )
     (export "do_select" (func $do_select))
-  )
 ;)

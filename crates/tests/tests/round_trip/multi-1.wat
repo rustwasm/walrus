@@ -16,5 +16,4 @@
       end
     )
     (export "multiBlock" (func 0))
-  )
 ;)

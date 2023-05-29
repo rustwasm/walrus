@@ -29,5 +29,4 @@
       end
     )
     (export "multiLoop" (func 0))
-  )
 ;)

@@ -14,5 +14,4 @@
       i32.add
     )
     (export "foo" (func 0))
-  )
 ;)

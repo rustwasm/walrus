@@ -50,5 +50,4 @@
     (export "b" (func $b))
     (export "c" (func $c))
     (export "d" (func $d))
-  )
 ;)

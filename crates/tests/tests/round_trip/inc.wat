@@ -15,5 +15,4 @@
       i32.add
     )
     (export "inc" (func $inc))
-  )
 ;)

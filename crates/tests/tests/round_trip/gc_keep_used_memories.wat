@@ -8,5 +8,4 @@
   (module
     (memory (;0;) 2)
     (export "m" (memory 0))
-  )
 ;)

@@ -13,5 +13,4 @@
       call 0
     )
     (export "a" (func 1))
-  )
 ;)

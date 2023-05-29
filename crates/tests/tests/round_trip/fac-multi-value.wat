@@ -52,5 +52,4 @@
       local.get 0
     )
     (export "fac-ssa" (func 0))
-  )
 ;)

@@ -20,5 +20,4 @@
       call $print_i32_f32
     )
     (export "print32" (func 1))
-  )
 ;)

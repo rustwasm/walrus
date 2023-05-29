@@ -17,5 +17,4 @@
       call 0
     )
     (export "g" (func $g))
-  )
 ;)

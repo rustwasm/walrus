@@ -34,5 +34,4 @@
     )
     (export "foo" (func 1))
     (export "f" (func $f))
-  )
 ;)

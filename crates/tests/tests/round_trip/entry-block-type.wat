@@ -14,5 +14,4 @@
       local.get 0
     )
     (export "multiLoop" (func 0))
-  )
 ;)

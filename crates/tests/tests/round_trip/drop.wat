@@ -12,5 +12,4 @@
       drop
     )
     (export "f" (func $f))
-  )
 ;)

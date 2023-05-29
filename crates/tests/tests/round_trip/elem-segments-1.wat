@@ -12,5 +12,4 @@
     (table (;0;) 1 funcref)
     (export "foo" (table 0))
     (elem (;0;) (i32.const 1) func 0)
-  )
 ;)

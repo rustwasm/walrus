@@ -53,5 +53,4 @@
       local.get 1
     )
     (export "fac" (func $fac))
-  )
 ;)

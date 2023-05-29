@@ -13,5 +13,4 @@
     )
     (table (;0;) 1 externref)
     (export "a" (func 0))
-  )
 ;)

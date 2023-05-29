@@ -35,5 +35,4 @@
       i32.const 100
     )
     (export "f" (func $f))
-  )
 ;)

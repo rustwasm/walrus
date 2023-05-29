@@ -20,5 +20,4 @@
       call $f
     )
     (export "g" (func $g))
-  )
 ;)

@@ -14,5 +14,4 @@
     (memory (;0;) 1)
     (export "" (func $b))
     (data (;0;) (i32.const 0) "")
-  )
 ;)

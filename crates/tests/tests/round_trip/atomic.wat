@@ -65,5 +65,4 @@
     )
     (memory (;0;) 1 1 shared)
     (export "atomics" (func 0))
-  )
 ;)

@@ -28,5 +28,4 @@
       i32.const 10
     )
     (export "count_to_ten" (func $f))
-  )
 ;)

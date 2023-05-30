@@ -170,12 +170,6 @@ impl Emit for ModuleElements {
         }
 
         let mut wasm_element_section = wasm_encoder::ElementSection::new();
-        // element_section.active(
-        //     None,
-        //     &ConstExpr::i32_const(1),
-        //     RefType::FUNCREF,
-        //     Elements::Functions(&element_section_tablefns[0..]),
-        // );
 
         for (id, element) in self.arena.iter() {
             cx.indices.push_element(id);
@@ -235,5 +229,7 @@ impl Emit for ModuleElements {
                 }
             }
         }
+
+        cx.wasm_module.section(&wasm_element_section);
     }
 }

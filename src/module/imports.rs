@@ -160,7 +160,7 @@ impl Module {
                 }
                 wasmparser::ImportSectionEntryType::Module(_)
                 | wasmparser::ImportSectionEntryType::Instance(_) => {
-                    unimplemented!("module linking not implemented");
+                    unimplemented!("component model not implemented");
                 }
                 wasmparser::ImportSectionEntryType::Tag(_) => {
                     unimplemented!("exception handling not implemented");

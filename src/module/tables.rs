@@ -174,7 +174,7 @@ impl Emit for ModuleTables {
                 element_type: match table.element_ty {
                     ValType::Externref => wasm_encoder::RefType::EXTERNREF,
                     ValType::Funcref => wasm_encoder::RefType::FUNCREF,
-                    _ => panic!("Unexpected table type"),
+                    _ => unreachable!(),
                 },
             });
         }

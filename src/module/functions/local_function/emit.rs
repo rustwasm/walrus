@@ -856,10 +856,15 @@ impl Emit<'_> {
 
     fn memarg(&self, id: MemoryId, arg: &MemArg) -> wasm_encoder::MemArg {
         let memory_index = self.indices.get_memory_index(id);
-        let MemArg { align, offset } = *arg;
+        let MemArg { mut align, offset } = *arg;
+        let mut align_exponent: u32 = 0;
+        while align > 1 {
+            align_exponent += 1;
+            align >>= 1;
+        }
         wasm_encoder::MemArg {
             offset: offset as u64,
-            align,
+            align: align_exponent,
             memory_index,
         }
     }

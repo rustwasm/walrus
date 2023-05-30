@@ -360,6 +360,12 @@ impl Module {
         let out = cx.wasm_module.finish();
         log::debug!("emission finished");
 
+        // let mut validator = Validator::new();
+        // if let Err(err) = validator.validate_all(&out) {
+        //     eprintln!("{:?}", err);
+        //     panic!("Unable to validate serialized output");
+        // }
+
         out
     }
 

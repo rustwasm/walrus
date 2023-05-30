@@ -264,8 +264,8 @@ impl Emit for ModuleData {
         // The encodings here are with respect to the bulk memory proposal, but
         // should be backwards compatible with the current MVP WebAssembly spec
         // so long as the only memory 0 is used.
+        let mut wasm_data_section = wasm_encoder::DataSection::new();
         for data in self.iter() {
-            let mut wasm_data_section = wasm_encoder::DataSection::new();
             match data.kind {
                 DataKind::Passive => {
                     wasm_data_section.passive(data.value.clone());
@@ -285,7 +285,7 @@ impl Emit for ModuleData {
                     );
                 }
             }
-            cx.wasm_module.section(&wasm_data_section);
         }
+        cx.wasm_module.section(&wasm_data_section);
     }
 }

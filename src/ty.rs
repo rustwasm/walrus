@@ -157,14 +157,8 @@ impl ValType {
             ValType::F32 => wasm_encoder::ValType::F32,
             ValType::F64 => wasm_encoder::ValType::F64,
             ValType::V128 => wasm_encoder::ValType::V128,
-            ValType::Externref => wasm_encoder::ValType::Ref(wasm_encoder::RefType {
-                nullable: false,
-                heap_type: wasm_encoder::HeapType::Any,
-            }),
-            ValType::Funcref => wasm_encoder::ValType::Ref(wasm_encoder::RefType {
-                nullable: false,
-                heap_type: wasm_encoder::HeapType::Func,
-            }),
+            ValType::Externref => wasm_encoder::ValType::Ref(wasm_encoder::RefType::EXTERNREF),
+            ValType::Funcref => wasm_encoder::ValType::Ref(wasm_encoder::RefType::FUNCREF),
         }
     }
 

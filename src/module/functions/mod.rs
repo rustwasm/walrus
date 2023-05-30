@@ -292,6 +292,7 @@ impl ModuleFunctions {
             // section so we should be covered here.
             cx.indices.push_func(id);
         }
+        cx.wasm_module.section(&func_section);
     }
 }
 
@@ -482,19 +483,41 @@ impl Emit for ModuleFunctions {
                     map.as_mut(),
                 );
                 wasm_function.encode(&mut wasm);
-                (wasm, id, used_locals, local_indices, map)
+                (
+                    wasm,
+                    wasm_function.byte_len(),
+                    id,
+                    used_locals,
+                    local_indices,
+                    map,
+                )
             })
             .collect::<Vec<_>>();
 
         cx.indices.locals.reserve(bytes.len());
-        for (wasm, id, used_locals, local_indices, map) in bytes {
-            let code_offset = wasm_code_section.byte_len();
-            wasm_code_section.raw(&wasm);
+
+        let mut offset_data = Vec::new();
+        for (wasm, byte_len, id, used_locals, local_indices, map) in bytes {
+            let wasm_len = wasm.len();
+            let start = wasm_len - byte_len;
+            wasm_code_section.raw(&wasm[start..]);
+            cx.indices.locals.insert(id, local_indices);
+            cx.locals.insert(id, used_locals);
+            offset_data.push((wasm_len, byte_len, map));
+        }
+        cx.wasm_module.section(&wasm_code_section);
+
+        let mut start_offset = cx.wasm_module.as_slice().len() - wasm_code_section.byte_len();
+
+        // update the map afterwards based on final offset differences
+        for (wasm_len, byte_len, map) in offset_data {
+            // (this assumes the leb encodes the same)
+            let start = wasm_len - byte_len;
+            let code_offset = start_offset + start;
             if let Some(map) = map {
                 collect_non_default_code_offsets(&mut cx.code_transform, code_offset, map);
             }
-            cx.indices.locals.insert(id, local_indices);
-            cx.locals.insert(id, used_locals);
+            start_offset += wasm_len;
         }
     }
 }

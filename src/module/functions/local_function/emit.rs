@@ -792,7 +792,7 @@ impl<'instr> Visitor<'instr> for Emit<'_> {
                     LoadSimdKind::V128Load32Zero => Instruction::V128Load32Zero(memarg),
                     LoadSimdKind::V128Load64Zero => Instruction::V128Load64Zero(memarg),
                     LoadSimdKind::V128Load8Lane(lane) => {
-                        Instruction::V128Load16Lane { memarg, lane }
+                        Instruction::V128Load8Lane { memarg, lane }
                     }
                     LoadSimdKind::V128Load16Lane(lane) => {
                         Instruction::V128Load16Lane { memarg, lane }

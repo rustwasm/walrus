@@ -163,7 +163,8 @@ impl Emit for ModuleTypes {
         // Sort for deterministic ordering.
         tys.sort_by_key(|&(_, ty)| ty);
 
-        for (_, ty) in tys {
+        for (id, ty) in tys {
+            cx.indices.push_type(id);
             wasm_type_section.function(
                 ty.params().iter().map(ValType::to_wasmencoder_type),
                 ty.results().iter().map(ValType::to_wasmencoder_type),

@@ -154,15 +154,16 @@ fn walrus_attrs(attrs: &mut Vec<syn::Attribute>) -> TokenStream {
     let mut ret = proc_macro2::TokenStream::new();
     let ident = syn::Path::from(syn::Ident::new("walrus", Span::call_site()));
     for i in (0..attrs.len()).rev() {
-        if attrs[i].path != ident {
+        if attrs[i].path() != &ident {
             continue;
         }
         let attr = attrs.remove(i);
-        let group = match attr.tokens.into_iter().next().unwrap() {
-            proc_macro2::TokenTree::Group(g) => g,
-            _ => panic!("#[walrus(...)] expected"),
+        let group = if let syn::Meta::List(syn::MetaList { tokens, .. }) = attr.meta {
+            tokens
+        } else {
+            panic!("#[walrus(...)] expected")
         };
-        ret.extend(group.stream());
+        ret.extend(group);
         ret.extend(quote! { , });
     }
     return ret.into();

@@ -14,8 +14,7 @@ mod producers;
 mod tables;
 mod types;
 
-use crate::emit::{Emit, EmitContext, IdsToIndices, Section};
-use crate::encode::Encoder;
+use crate::emit::{Emit, EmitContext, IdsToIndices};
 use crate::error::Result;
 pub use crate::ir::InstrLocId;
 pub use crate::module::custom::{
@@ -302,16 +301,13 @@ impl Module {
         log::debug!("start emit");
 
         let indices = &mut IdsToIndices::default();
-        let mut wasm = Vec::new();
-        wasm.extend(&[0x00, 0x61, 0x73, 0x6d]); // magic
-        wasm.extend(&[0x01, 0x00, 0x00, 0x00]); // version
 
         let mut customs = mem::replace(&mut self.customs, ModuleCustomSections::default());
 
         let mut cx = EmitContext {
             module: self,
             indices,
-            encoder: Encoder::new(&mut wasm),
+            wasm_module: wasm_encoder::Module::new(),
             locals: Default::default(),
             code_transform: Vec::new(),
         };
@@ -320,11 +316,14 @@ impl Module {
         self.funcs.emit_func_section(&mut cx);
         self.tables.emit(&mut cx);
         self.memories.emit(&mut cx);
+        // TODO: tag section
         self.globals.emit(&mut cx);
         self.exports.emit(&mut cx);
         if let Some(start) = self.start {
             let idx = cx.indices.get_func_index(start);
-            cx.start_section(Section::Start).encoder.u32(idx);
+            cx.wasm_module.section(&wasm_encoder::StartSection {
+                function_index: idx,
+            });
         }
         self.elements.emit(&mut cx);
         self.data.emit_data_count(&mut cx);
@@ -352,13 +351,22 @@ impl Module {
                 section.apply_code_transform(&cx.code_transform);
             }
 
-            cx.custom_section(&section.name())
-                .encoder
-                .raw(&section.data(&indices));
+            cx.wasm_module.section(&wasm_encoder::CustomSection {
+                name: section.name().into(),
+                data: section.data(&indices).into(),
+            });
         }
 
+        let out = cx.wasm_module.finish();
         log::debug!("emission finished");
-        wasm
+
+        // let mut validator = Validator::new();
+        // if let Err(err) = validator.validate_all(&out) {
+        //     eprintln!("{:?}", err);
+        //     panic!("Unable to validate serialized output");
+        // }
+
+        out
     }
 
     /// Returns an iterator over all functions in this module
@@ -493,6 +501,9 @@ impl Module {
 
 fn emit_name_section(cx: &mut EmitContext) {
     log::debug!("emit name section");
+
+    let mut wasm_name_section = wasm_encoder::NameSection::new();
+
     let mut funcs = cx
         .module
         .funcs
@@ -529,31 +540,30 @@ fn emit_name_section(cx: &mut EmitContext) {
         return;
     }
 
-    let mut cx = cx.custom_section("name");
     if let Some(name) = &cx.module.name {
-        cx.subsection(0).encoder.str(name);
+        wasm_name_section.module(name);
     }
 
     if funcs.len() > 0 {
-        let mut cx = cx.subsection(1);
-        cx.encoder.usize(funcs.len());
+        let mut name_map = wasm_encoder::NameMap::new();
         for (index, name) in funcs {
-            cx.encoder.u32(index);
-            cx.encoder.str(name);
+            name_map.append(index, name);
         }
+        wasm_name_section.functions(&name_map);
     }
 
     if locals.len() > 0 {
-        let mut cx = cx.subsection(2);
-        cx.encoder.usize(locals.len());
+        let mut indirect_name_map = wasm_encoder::IndirectNameMap::new();
         for (index, mut map) in locals {
-            cx.encoder.u32(index);
-            cx.encoder.usize(map.len());
+            let mut name_map = wasm_encoder::NameMap::new();
             map.sort_by_key(|p| p.0); // sort by index
             for (index, name) in map {
-                cx.encoder.u32(index);
-                cx.encoder.str(name);
+                name_map.append(index, name);
             }
+            indirect_name_map.append(index, &name_map);
         }
+        wasm_name_section.locals(&indirect_name_map);
     }
+
+    cx.wasm_module.section(&wasm_name_section);
 }

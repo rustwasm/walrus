@@ -1,6 +1,6 @@
 //! Memories used in a wasm module.
 
-use crate::emit::{Emit, EmitContext, Section};
+use crate::emit::{Emit, EmitContext};
 use crate::map::IdHashSet;
 use crate::parse::IndicesToIds;
 use crate::tombstone_arena::{Id, Tombstone, TombstoneArena};
@@ -39,19 +39,6 @@ impl Memory {
     /// Return the id of this memory
     pub fn id(&self) -> MemoryId {
         self.id
-    }
-}
-
-impl Emit for Memory {
-    fn emit(&self, cx: &mut EmitContext) {
-        if let Some(max) = self.maximum {
-            cx.encoder.byte(if self.shared { 0x03 } else { 0x01 });
-            cx.encoder.u32(self.initial);
-            cx.encoder.u32(max);
-        } else {
-            cx.encoder.byte(0x00);
-            cx.encoder.u32(self.initial);
-        }
     }
 }
 
@@ -155,17 +142,26 @@ impl Module {
 impl Emit for ModuleMemories {
     fn emit(&self, cx: &mut EmitContext) {
         log::debug!("emit memory section");
+
+        let mut wasm_memory_section = wasm_encoder::MemorySection::new();
+
         // imported memories are emitted earlier
         let memories = self.iter().filter(|m| m.import.is_none()).count();
         if memories == 0 {
             return;
         }
 
-        let mut cx = cx.start_section(Section::Memory);
-        cx.encoder.usize(memories);
         for memory in self.iter().filter(|m| m.import.is_none()) {
             cx.indices.push_memory(memory.id());
-            memory.emit(&mut cx);
+
+            wasm_memory_section.memory(wasm_encoder::MemoryType {
+                minimum: memory.initial as u64,
+                maximum: memory.maximum.map(|v| v as u64),
+                memory64: false,
+                shared: memory.shared,
+            });
         }
+
+        cx.wasm_module.section(&wasm_memory_section);
     }
 }

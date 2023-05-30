@@ -5,7 +5,6 @@ mod emit;
 
 use self::context::ValidationContext;
 use crate::emit::IdsToIndices;
-use crate::encode::Encoder;
 use crate::ir::*;
 use crate::map::{IdHashMap, IdHashSet};
 use crate::parse::IndicesToIds;
@@ -188,8 +187,11 @@ impl LocalFunction {
     pub(crate) fn emit_locals(
         &self,
         module: &Module,
-        encoder: &mut Encoder,
-    ) -> (IdHashSet<Local>, IdHashMap<Local, u32>) {
+    ) -> (
+        Vec<(u32, wasm_encoder::ValType)>,
+        IdHashSet<Local>,
+        IdHashMap<Local, u32>,
+    ) {
         let used_set = self.used_locals();
         let mut used_locals = used_set.iter().cloned().collect::<Vec<_>>();
         // Sort to ensure we assign local indexes deterministically, and
@@ -231,13 +233,14 @@ impl LocalFunction {
         }
 
         // Use our type map to emit a compact representation of all locals now
-        encoder.usize(ty_to_locals.len());
-        for (ty, locals) in ty_to_locals.iter() {
-            encoder.usize(locals.len());
-            ty.emit(encoder);
-        }
-
-        (used_set, local_map)
+        (
+            ty_to_locals
+                .iter()
+                .map(|(ty, locals)| (locals.len() as u32, ty.to_wasmencoder_type()))
+                .collect(),
+            used_set,
+            local_map,
+        )
     }
 
     /// Emit this function's instruction sequence.
@@ -245,7 +248,7 @@ impl LocalFunction {
         &self,
         indices: &IdsToIndices,
         local_indices: &IdHashMap<Local, u32>,
-        dst: &mut Encoder,
+        dst: &mut wasm_encoder::Function,
         map: Option<&mut Vec<(InstrLocId, usize)>>,
     ) {
         emit::run(self, indices, local_indices, dst, map)

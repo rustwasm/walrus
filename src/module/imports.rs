@@ -1,6 +1,6 @@
 //! A wasm module's imports.
 
-use crate::emit::{Emit, EmitContext, Section};
+use crate::emit::{Emit, EmitContext};
 use crate::parse::IndicesToIds;
 use crate::tombstone_arena::{Id, Tombstone, TombstoneArena};
 use crate::{FunctionId, GlobalId, MemoryId, Result, TableId};
@@ -160,7 +160,7 @@ impl Module {
                 }
                 wasmparser::ImportSectionEntryType::Module(_)
                 | wasmparser::ImportSectionEntryType::Instance(_) => {
-                    unimplemented!("module linking not implemented");
+                    unimplemented!("component model not implemented");
                 }
                 wasmparser::ImportSectionEntryType::Tag(_) => {
                     unimplemented!("exception handling not implemented");
@@ -232,42 +232,61 @@ impl Module {
 impl Emit for ModuleImports {
     fn emit(&self, cx: &mut EmitContext) {
         log::debug!("emit import section");
+
+        let mut wasm_import_section = wasm_encoder::ImportSection::new();
+
         let count = self.iter().count();
         if count == 0 {
             return;
         }
 
-        let mut cx = cx.start_section(Section::Import);
-        cx.encoder.usize(count);
-
         for import in self.iter() {
-            cx.encoder.str(&import.module);
-            cx.encoder.str(&import.name);
-            match import.kind {
-                ImportKind::Function(id) => {
-                    cx.encoder.byte(0x00);
-                    cx.indices.push_func(id);
-                    let ty = cx.module.funcs.get(id).ty();
-                    let idx = cx.indices.get_type_index(ty);
-                    cx.encoder.u32(idx);
-                }
-                ImportKind::Table(id) => {
-                    cx.encoder.byte(0x01);
-                    cx.indices.push_table(id);
-                    cx.module.tables.get(id).emit(&mut cx);
-                }
-                ImportKind::Memory(id) => {
-                    cx.encoder.byte(0x02);
-                    cx.indices.push_memory(id);
-                    cx.module.memories.get(id).emit(&mut cx);
-                }
-                ImportKind::Global(id) => {
-                    cx.encoder.byte(0x03);
-                    cx.indices.push_global(id);
-                    cx.module.globals.get(id).emit(&mut cx);
-                }
-            }
+            wasm_import_section.import(
+                &import.module,
+                &import.name,
+                match import.kind {
+                    ImportKind::Function(id) => {
+                        cx.indices.push_func(id);
+                        let ty = cx.module.funcs.get(id).ty();
+                        let idx = cx.indices.get_type_index(ty);
+                        wasm_encoder::EntityType::Function(idx)
+                    }
+                    ImportKind::Table(id) => {
+                        cx.indices.push_table(id);
+                        let table = cx.module.tables.get(id);
+                        wasm_encoder::EntityType::Table(wasm_encoder::TableType {
+                            element_type: match table.element_ty {
+                                ValType::Externref => wasm_encoder::RefType::EXTERNREF,
+                                ValType::Funcref => wasm_encoder::RefType::FUNCREF,
+                                _ => panic!("Unexpected table type"),
+                            },
+                            minimum: table.initial,
+                            maximum: table.maximum,
+                        })
+                    }
+                    ImportKind::Memory(id) => {
+                        cx.indices.push_memory(id);
+                        let mem = cx.module.memories.get(id);
+                        wasm_encoder::EntityType::Memory(wasm_encoder::MemoryType {
+                            minimum: mem.initial as u64,
+                            maximum: mem.maximum.map(|v| v as u64),
+                            memory64: false,
+                            shared: mem.shared,
+                        })
+                    }
+                    ImportKind::Global(id) => {
+                        cx.indices.push_global(id);
+                        let g = cx.module.globals.get(id);
+                        wasm_encoder::EntityType::Global(wasm_encoder::GlobalType {
+                            val_type: g.ty.to_wasmencoder_type(),
+                            mutable: g.mutable,
+                        })
+                    }
+                },
+            );
         }
+
+        cx.wasm_module.section(&wasm_import_section);
     }
 }
 

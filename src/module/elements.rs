@@ -1,6 +1,6 @@
 //! Table elements within a wasm module.
 
-use crate::emit::{Emit, EmitContext, Section};
+use crate::emit::{Emit, EmitContext};
 use crate::parse::IndicesToIds;
 use crate::tombstone_arena::{Id, Tombstone, TombstoneArena};
 use crate::{ir::Value, FunctionId, InitExpr, Module, Result, TableId, ValType};
@@ -168,63 +168,68 @@ impl Emit for ModuleElements {
         if self.arena.len() == 0 {
             return;
         }
-        let mut cx = cx.start_section(Section::Element);
-        cx.encoder.usize(self.arena.len());
+
+        let mut wasm_element_section = wasm_encoder::ElementSection::new();
 
         for (id, element) in self.arena.iter() {
             cx.indices.push_element(id);
-            let exprs = element.members.iter().any(|i| i.is_none());
-            let exprs_bit = if exprs { 0x04 } else { 0x00 };
-            let mut encode_ty = true;
-            match &element.kind {
-                ElementKind::Active { table, offset } => {
-                    let table_index = cx.indices.get_table_index(*table);
-                    if table_index == 0 {
-                        cx.encoder.byte(0x00 | exprs_bit);
-                        offset.emit(&mut cx);
-                        encode_ty = false;
-                    } else {
-                        cx.encoder.byte(0x02 | exprs_bit);
-                        cx.encoder.u32(table_index);
-                        offset.emit(&mut cx);
-                    }
-                }
-                ElementKind::Passive => {
-                    cx.encoder.byte(0x01 | exprs_bit);
-                }
-                ElementKind::Declared => {
-                    cx.encoder.byte(0x03 | exprs_bit);
-                }
-            };
-            if encode_ty {
-                if exprs {
-                    element.ty.emit(&mut cx.encoder);
-                } else {
-                    cx.encoder.byte(0x00);
-                }
-            }
 
-            cx.encoder.usize(element.members.len());
-            for func in element.members.iter() {
-                match func {
-                    Some(id) => {
-                        let index = cx.indices.get_func_index(*id);
-                        if exprs {
-                            cx.encoder.byte(0xd2);
-                            cx.encoder.u32(index);
-                            cx.encoder.byte(0x0b);
-                        } else {
-                            cx.encoder.u32(index);
+            if element.members.iter().any(|i| i.is_none()) {
+                let els_vec: Vec<wasm_encoder::ConstExpr> = element
+                    .members
+                    .iter()
+                    .map(|func| match func {
+                        Some(func) => {
+                            wasm_encoder::ConstExpr::ref_func(cx.indices.get_func_index(*func))
                         }
+                        None => wasm_encoder::ConstExpr::ref_null(wasm_encoder::HeapType::Func),
+                    })
+                    .collect();
+                let els = wasm_encoder::Elements::Expressions(els_vec.as_slice());
+
+                match &element.kind {
+                    ElementKind::Active { table, offset } => {
+                        wasm_element_section.active(
+                            Some(cx.indices.get_table_index(*table)),
+                            &offset.to_wasmencoder_type(&cx),
+                            wasm_encoder::RefType::FUNCREF,
+                            els,
+                        );
                     }
-                    None => {
-                        assert!(exprs);
-                        cx.encoder.byte(0xd0);
-                        element.ty.emit(&mut cx.encoder);
-                        cx.encoder.byte(0x0b);
+                    ElementKind::Passive => {
+                        wasm_element_section.passive(wasm_encoder::RefType::FUNCREF, els);
+                    }
+                    ElementKind::Declared => {
+                        wasm_element_section.declared(wasm_encoder::RefType::FUNCREF, els);
+                    }
+                }
+            } else {
+                let els_vec: Vec<u32> = element
+                    .members
+                    .iter()
+                    .map(|func| cx.indices.get_func_index(func.unwrap()))
+                    .collect();
+                let els = wasm_encoder::Elements::Functions(els_vec.as_slice());
+
+                match &element.kind {
+                    ElementKind::Active { table, offset } => {
+                        wasm_element_section.active(
+                            Some(cx.indices.get_table_index(*table)),
+                            &offset.to_wasmencoder_type(&cx),
+                            wasm_encoder::RefType::FUNCREF,
+                            els,
+                        );
+                    }
+                    ElementKind::Passive => {
+                        wasm_element_section.passive(wasm_encoder::RefType::FUNCREF, els);
+                    }
+                    ElementKind::Declared => {
+                        wasm_element_section.declared(wasm_encoder::RefType::FUNCREF, els);
                     }
                 }
             }
         }
+
+        cx.wasm_module.section(&wasm_element_section);
     }
 }

@@ -1,6 +1,6 @@
 //! Handling wasm constant values
 
-use crate::emit::{Emit, EmitContext};
+use crate::emit::EmitContext;
 use crate::ir::Value;
 use crate::parse::IndicesToIds;
 use crate::ValType;
@@ -43,27 +43,28 @@ impl InitExpr {
         reader.ensure_end()?;
         Ok(val)
     }
-}
 
-impl Emit for InitExpr {
-    fn emit(&self, cx: &mut EmitContext) {
-        match *self {
-            InitExpr::Value(val) => val.emit(&mut cx.encoder),
-            InitExpr::Global(id) => {
-                let idx = cx.indices.get_global_index(id);
-                cx.encoder.byte(0x23); // global.get
-                cx.encoder.u32(idx);
+    pub(crate) fn to_wasmencoder_type(&self, cx: &EmitContext) -> wasm_encoder::ConstExpr {
+        match self {
+            InitExpr::Value(v) => match v {
+                Value::I32(v) => wasm_encoder::ConstExpr::i32_const(*v),
+                Value::I64(v) => wasm_encoder::ConstExpr::i64_const(*v),
+                Value::F32(v) => wasm_encoder::ConstExpr::f32_const(*v),
+                Value::F64(v) => wasm_encoder::ConstExpr::f64_const(*v),
+                Value::V128(v) => wasm_encoder::ConstExpr::v128_const(*v as i128),
+            },
+            InitExpr::Global(g) => {
+                wasm_encoder::ConstExpr::global_get(cx.indices.get_global_index(*g))
             }
-            InitExpr::RefNull(ty) => {
-                cx.encoder.byte(0xd0); // ref.null
-                ty.emit(&mut cx.encoder);
-            }
-            InitExpr::RefFunc(id) => {
-                cx.encoder.byte(0xd2); // ref.func
-                cx.encoder.u32(cx.indices.get_func_index(id));
+            InitExpr::RefNull(ty) => wasm_encoder::ConstExpr::ref_null(match ty {
+                ValType::Externref => wasm_encoder::HeapType::Extern,
+                ValType::Funcref => wasm_encoder::HeapType::Func,
+                _ => unreachable!(),
+            }),
+            InitExpr::RefFunc(f) => {
+                wasm_encoder::ConstExpr::ref_func(cx.indices.get_func_index(*f))
             }
         }
-        cx.encoder.byte(0x0b); // end
     }
 }
 

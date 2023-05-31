@@ -366,6 +366,7 @@ impl Module {
 
             // Next up comes all the locals of the function.
             let mut reader = body.get_binary_reader();
+            let mut locals = Vec::new();
             for _ in 0..reader.read_var_u32()? {
                 let pos = reader.original_position();
                 let count = reader.read_var_u32()?;
@@ -375,6 +376,7 @@ impl Module {
                 for _ in 0..count {
                     let local_id = self.locals.add(ty);
                     let idx = indices.push_local(id, local_id);
+                    locals.push(local_id);
                     if self.config.generate_synthetic_names_for_anonymous_items {
                         let name = format!("l{}", idx);
                         self.locals.get_mut(local_id).name = Some(name);
@@ -382,13 +384,13 @@ impl Module {
                 }
             }
 
-            bodies.push((id, reader, args, ty, validator));
+            bodies.push((id, reader, args, locals, ty, validator));
         }
 
         // Wasm modules can often have a lot of functions and this operation can
         // take some time, so parse all function bodies in parallel.
         let results = maybe_parallel!(bodies.(into_iter | into_par_iter))
-            .map(|(id, body, args, ty, validator)| {
+            .map(|(id, body, args, locals, ty, validator)| {
                 (
                     id,
                     LocalFunction::parse(
@@ -397,6 +399,7 @@ impl Module {
                         id,
                         ty,
                         args,
+                        locals,
                         body,
                         on_instr_pos,
                         validator,

@@ -147,17 +147,22 @@ impl FunctionBuilder {
     ///     .i32_const(1234)
     ///     .drop();
     ///
-    /// let function_id = builder.finish(vec![], &mut module.funcs);
+    /// let function_id = builder.finish(vec![], vec![], &mut module.funcs);
     /// # let _ = function_id;
     /// ```
-    pub fn finish(self, args: Vec<LocalId>, funcs: &mut ModuleFunctions) -> FunctionId {
-        let func = LocalFunction::new(args, self);
+    pub fn finish(
+        self,
+        args: Vec<LocalId>,
+        locals: Vec<LocalId>,
+        funcs: &mut ModuleFunctions,
+    ) -> FunctionId {
+        let func = LocalFunction::new(args, locals, self);
         funcs.add_local(func)
     }
 
     /// Returns the [crate::LocalFunction] built by this builder.
-    pub fn local_func(self, args: Vec<LocalId>) -> LocalFunction {
-        LocalFunction::new(args, self)
+    pub fn local_func(self, args: Vec<LocalId>, locals: Vec<LocalId>) -> LocalFunction {
+        LocalFunction::new(args, locals, self)
     }
 }
 

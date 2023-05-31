@@ -31,7 +31,7 @@ pub struct Data {
 }
 
 /// The kind of data segment: passive or active.
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 pub enum DataKind {
     /// An active data segment that is automatically initialized at some address
     /// in a static memory.
@@ -44,7 +44,7 @@ pub enum DataKind {
 }
 
 /// The parts of a data segment that are only present in active data segments.
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct ActiveData {
     /// The memory that this active data segment will be automatically
     /// initialized in.

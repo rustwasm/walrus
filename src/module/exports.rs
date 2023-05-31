@@ -250,7 +250,7 @@ mod tests {
         let mut module = Module::default();
         let mut builder = FunctionBuilder::new(&mut module.types, &[], &[]);
         builder.func_body().i32_const(1234).drop();
-        let id: FunctionId = builder.finish(vec![], &mut module.funcs);
+        let id: FunctionId = builder.finish(vec![], vec![], &mut module.funcs);
         module.exports.add("dummy", id);
 
         let actual: Option<&Export> = module.exports.get_exported_func(id);
@@ -360,11 +360,11 @@ mod tests {
 
         let mut builder = FunctionBuilder::new(&mut module.types, &[], &[]);
         builder.func_body().i32_const(1234).drop();
-        let fn_id0: FunctionId = builder.finish(vec![], &mut module.funcs);
+        let fn_id0: FunctionId = builder.finish(vec![], vec![], &mut module.funcs);
 
         let mut builder = FunctionBuilder::new(&mut module.types, &[], &[]);
         builder.func_body().i32_const(1234).drop();
-        let fn_id1: FunctionId = builder.finish(vec![], &mut module.funcs);
+        let fn_id1: FunctionId = builder.finish(vec![], vec![], &mut module.funcs);
 
         assert_ne!(fn_id0, fn_id1);
 

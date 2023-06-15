@@ -3,6 +3,7 @@
 mod config;
 mod custom;
 mod data;
+mod debug;
 mod elements;
 mod exports;
 mod functions;
@@ -22,6 +23,7 @@ pub use crate::module::custom::{
     UntypedCustomSectionId,
 };
 pub use crate::module::data::{ActiveData, ActiveDataLocation, Data, DataId, DataKind, ModuleData};
+pub use crate::module::debug::ModuleDebugData;
 pub use crate::module::elements::ElementKind;
 pub use crate::module::elements::{Element, ElementId, ModuleElements};
 pub use crate::module::exports::{Export, ExportId, ExportItem, ModuleExports};
@@ -36,6 +38,7 @@ pub use crate::module::tables::{ModuleTables, Table, TableId};
 pub use crate::module::types::ModuleTypes;
 use crate::parse::IndicesToIds;
 use anyhow::{bail, Context};
+use id_arena::Id;
 use log::warn;
 use std::fs;
 use std::mem;
@@ -66,19 +69,31 @@ pub struct Module {
     pub producers: ModuleProducers,
     /// Custom sections found in this module.
     pub customs: ModuleCustomSections,
+    /// Dwarf debug data.
+    pub debug: ModuleDebugData,
     /// The name of this module, used for debugging purposes in the `name`
     /// custom section.
     pub name: Option<String>,
     pub(crate) config: ModuleConfig,
 }
 
-/// Maps from an offset of an instruction in the input Wasm to its offset in the
-/// output Wasm.
-///
-/// Note that an input offset may be mapped to multiple output offsets, and vice
-/// versa, due to transformations like function inlinining or constant
-/// propagation.
-pub type CodeTransform = Vec<(InstrLocId, usize)>;
+/// Code transformation records, which is used to transform DWARF debug entries.
+#[derive(Debug, Default)]
+pub struct CodeTransform {
+    /// Maps from an offset of an instruction in the input Wasm to its offset in the
+    /// output Wasm.
+    ///
+    /// Note that an input offset may be mapped to multiple output offsets, and vice
+    /// versa, due to transformations like function inlinining or constant
+    /// propagation.
+    pub instruction_map: Vec<(InstrLocId, usize)>,
+
+    /// Offset of code section from the front of Wasm binary
+    pub code_section_start: usize,
+
+    /// Emitted binary ranges of functions
+    pub function_ranges: Vec<(Id<Function>, wasmparser::Range)>,
+}
 
 impl Module {
     /// Create a default, empty module that uses the given configuration.
@@ -128,6 +143,7 @@ impl Module {
         });
 
         let mut local_functions = Vec::new();
+        let mut debug_sections = Vec::new();
 
         for payload in Parser::new(0).parse_all(wasm) {
             match payload? {
@@ -198,6 +214,7 @@ impl Module {
                 }
                 Payload::CodeSectionStart { count, range, .. } => {
                     validator.code_section_start(count, &range)?;
+                    ret.funcs.code_section_offset = range.start;
                 }
                 Payload::CodeSectionEntry(body) => {
                     let validator = validator.code_section_entry()?;
@@ -218,10 +235,17 @@ impl Module {
                             .and_then(|r| ret.parse_name_section(r, &indices)),
                         _ => {
                             log::debug!("parsing custom section `{}`", name);
-                            ret.customs.add(RawCustomSection {
-                                name: name.to_string(),
-                                data: data.to_vec(),
-                            });
+                            if name.starts_with(".debug") {
+                                debug_sections.push(RawCustomSection {
+                                    name: name.to_string(),
+                                    data: data.to_vec(),
+                                });
+                            } else {
+                                ret.customs.add(RawCustomSection {
+                                    name: name.to_string(),
+                                    data: data.to_vec(),
+                                });
+                            }
                             continue;
                         }
                     };
@@ -275,6 +299,9 @@ impl Module {
         )
         .context("failed to parse code section")?;
 
+        ret.parse_debug_sections(debug_sections)
+            .context("failed to parse debug data section")?;
+
         ret.producers
             .add_processed_by("walrus", env!("CARGO_PKG_VERSION"));
 
@@ -309,7 +336,7 @@ impl Module {
             indices,
             wasm_module: wasm_encoder::Module::new(),
             locals: Default::default(),
-            code_transform: Vec::new(),
+            code_transform: Default::default(),
         };
         self.types.emit(&mut cx);
         self.imports.emit(&mut cx);
@@ -337,11 +364,16 @@ impl Module {
             self.producers.emit(&mut cx);
         }
 
+        if self.config.generate_dwarf {
+            self.debug.emit(&mut cx);
+        } else {
+            log::debug!("skipping DWARF custom section");
+        }
+
         let indices = mem::replace(cx.indices, Default::default());
 
         for (_id, section) in customs.iter_mut() {
-            if !self.config.generate_dwarf && section.name().starts_with(".debug") {
-                log::debug!("skipping DWARF custom section {}", section.name());
+            if section.name().starts_with(".debug") {
                 continue;
             }
 

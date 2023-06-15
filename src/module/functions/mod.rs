@@ -12,8 +12,9 @@ use crate::tombstone_arena::{Id, Tombstone, TombstoneArena};
 use crate::ty::TypeId;
 use crate::ty::ValType;
 use std::cmp;
+use std::collections::BTreeMap;
 use wasm_encoder::Encode;
-use wasmparser::{FuncValidator, FunctionBody, ValidatorResources};
+use wasmparser::{FuncValidator, FunctionBody, Range, ValidatorResources};
 
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
@@ -139,6 +140,9 @@ pub struct ImportedFunction {
 pub struct ModuleFunctions {
     /// The arena containing this module's functions.
     arena: TombstoneArena<Function>,
+
+    /// Original code section offset.
+    pub(crate) code_section_offset: usize,
 }
 
 impl ModuleFunctions {
@@ -441,14 +445,14 @@ fn used_local_functions<'a>(cx: &mut EmitContext<'a>) -> Vec<(FunctionId, &'a Lo
 }
 
 fn collect_non_default_code_offsets(
-    code_transform: &mut Vec<(InstrLocId, usize)>,
+    code_transform: &mut BTreeMap<InstrLocId, usize>,
     code_offset: usize,
     map: Vec<(InstrLocId, usize)>,
 ) {
     for (src, dst) in map {
         let dst = dst + code_offset;
         if !src.is_default() {
-            code_transform.push((src, dst));
+            code_transform.insert(src, dst);
         }
     }
 }
@@ -462,6 +466,7 @@ impl Emit for ModuleFunctions {
         }
 
         let mut wasm_code_section = wasm_encoder::CodeSection::new();
+        let code_section_start_offset = cx.wasm_module.as_slice().len() + 1;
 
         let generate_map = cx.module.config.preserve_code_transform;
 
@@ -494,30 +499,39 @@ impl Emit for ModuleFunctions {
             })
             .collect::<Vec<_>>();
 
+        let mut instruction_map = BTreeMap::new();
         cx.indices.locals.reserve(bytes.len());
 
         let mut offset_data = Vec::new();
         for (wasm, byte_len, id, used_locals, local_indices, map) in bytes {
-            let wasm_len = wasm.len();
-            let start = wasm_len - byte_len;
-            wasm_code_section.raw(&wasm[start..]);
+            let leb_len = wasm.len() - byte_len;
+            wasm_code_section.raw(&wasm[leb_len..]);
             cx.indices.locals.insert(id, local_indices);
             cx.locals.insert(id, used_locals);
-            offset_data.push((wasm_len, byte_len, map));
+            offset_data.push((byte_len, id, map, leb_len));
         }
         cx.wasm_module.section(&wasm_code_section);
 
-        let mut start_offset = cx.wasm_module.as_slice().len() - wasm_code_section.byte_len();
+        let mut cur_offset = cx.wasm_module.as_slice().len() - wasm_code_section.byte_len();
 
         // update the map afterwards based on final offset differences
-        for (wasm_len, byte_len, map) in offset_data {
+        for (byte_len, id, map, leb_len) in offset_data {
             // (this assumes the leb encodes the same)
-            let start = wasm_len - byte_len;
-            let code_offset = start_offset + start;
+            let code_start_offset = cur_offset + leb_len;
+            cur_offset += leb_len + byte_len;
             if let Some(map) = map {
-                collect_non_default_code_offsets(&mut cx.code_transform, code_offset, map);
+                collect_non_default_code_offsets(&mut instruction_map, code_start_offset, map);
             }
-            start_offset += wasm_len;
+            cx.code_transform.function_ranges.push((
+                id,
+                Range {
+                    start: code_start_offset,
+                    end: cur_offset,
+                },
+            ));
         }
+        cx.code_transform.function_ranges.sort_by_key(|i| i.0);
+        cx.code_transform.code_section_start = code_section_start_offset;
+        cx.code_transform.instruction_map = instruction_map.into_iter().collect();
     }
 }

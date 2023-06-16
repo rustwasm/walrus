@@ -186,23 +186,7 @@ impl Emit for ModuleElements {
                     })
                     .collect();
                 let els = wasm_encoder::Elements::Expressions(els_vec.as_slice());
-
-                match &element.kind {
-                    ElementKind::Active { table, offset } => {
-                        wasm_element_section.active(
-                            Some(cx.indices.get_table_index(*table)),
-                            &offset.to_wasmencoder_type(&cx),
-                            wasm_encoder::RefType::FUNCREF,
-                            els,
-                        );
-                    }
-                    ElementKind::Passive => {
-                        wasm_element_section.passive(wasm_encoder::RefType::FUNCREF, els);
-                    }
-                    ElementKind::Declared => {
-                        wasm_element_section.declared(wasm_encoder::RefType::FUNCREF, els);
-                    }
-                }
+                emit_elem(cx, &mut wasm_element_section, &element.kind, els);
             } else {
                 let els_vec: Vec<u32> = element
                     .members
@@ -210,11 +194,23 @@ impl Emit for ModuleElements {
                     .map(|func| cx.indices.get_func_index(func.unwrap()))
                     .collect();
                 let els = wasm_encoder::Elements::Functions(els_vec.as_slice());
+                emit_elem(cx, &mut wasm_element_section, &element.kind, els);
+            }
 
-                match &element.kind {
+            fn emit_elem(
+                cx: &mut EmitContext,
+                wasm_element_section: &mut wasm_encoder::ElementSection,
+                kind: &ElementKind,
+                els: wasm_encoder::Elements,
+            ) {
+                match kind {
                     ElementKind::Active { table, offset } => {
+                        // When the table index is 0, set this to `None` to tell `wasm-encoder` to use
+                        // the backwards-compatible MVP encoding.
+                        let table_index =
+                            Some(cx.indices.get_table_index(*table)).filter(|&index| index != 0);
                         wasm_element_section.active(
-                            Some(cx.indices.get_table_index(*table)),
+                            table_index,
                             &offset.to_wasmencoder_type(&cx),
                             wasm_encoder::RefType::FUNCREF,
                             els,

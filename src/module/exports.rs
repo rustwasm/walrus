@@ -1,5 +1,7 @@
 //! Exported items in a wasm module.
 
+use anyhow::Context;
+
 use crate::emit::{Emit, EmitContext};
 use crate::parse::IndicesToIds;
 use crate::tombstone_arena::{Id, Tombstone, TombstoneArena};
@@ -98,6 +100,16 @@ impl ModuleExports {
             ExportItem::Function(f0) => f0 == f,
             _ => false,
         })
+    }
+
+    /// Retrieve an exported function by name
+    pub fn get_func_by_name(&self, name: impl AsRef<str>) -> Result<FunctionId> {
+        self.iter()
+            .find_map(|expt| match expt.item {
+                ExportItem::Function(fid) if expt.name == name.as_ref() => Some(fid),
+                _ => None,
+            })
+            .with_context(|| format!("unable to find function export '{}'", name.as_ref()))
     }
 
     /// Get a reference to a table export given its table id.
@@ -352,6 +364,16 @@ mod tests {
         module.exports.delete(export_id);
 
         assert!(module.exports.get_exported_func(fn_id).is_none());
+    }
+
+    #[test]
+    fn get_func_by_name() {
+        let mut module = Module::default();
+        let fn_id: FunctionId = always_the_same_id();
+        let export_id: ExportId = module.exports.add("dummy", fn_id);
+        assert!(module.exports.get_func_by_name("dummy").is_ok());
+        module.exports.delete(export_id);
+        assert!(module.exports.get_func_by_name("dummy").is_err());
     }
 
     #[test]

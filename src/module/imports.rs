@@ -1,11 +1,12 @@
 //! A wasm module's imports.
 
+use anyhow::{bail, Context};
+
 use crate::emit::{Emit, EmitContext};
 use crate::parse::IndicesToIds;
 use crate::tombstone_arena::{Id, Tombstone, TombstoneArena};
 use crate::{FunctionId, GlobalId, MemoryId, Result, TableId};
 use crate::{Module, TypeId, ValType};
-use anyhow::bail;
 
 /// The id of an import.
 pub type ImportId = Id<Import>;
@@ -102,6 +103,32 @@ impl ModuleImports {
             .find(|(_, import)| import.name == name && import.module == module);
 
         Some(import?.0)
+    }
+
+    /// Retrieve an imported function by name, including the module in which it resides
+    pub fn get_func_by_name(
+        &self,
+        module: impl AsRef<str>,
+        name: impl AsRef<str>,
+    ) -> Result<FunctionId> {
+        self.iter()
+            .find_map(|impt| match impt.kind {
+                ImportKind::Function(fid)
+                    if impt.module == module.as_ref() && impt.name == name.as_ref() =>
+                {
+                    Some(fid)
+                }
+                _ => None,
+            })
+            .with_context(|| format!("unable to find function export '{}'", name.as_ref()))
+    }
+
+    /// Retrieve an imported function by ID
+    pub fn get_imported_func(&self, fid: FunctionId) -> Option<&Import> {
+        self.arena.iter().find_map(|(_, import)| match import.kind {
+            ImportKind::Function(id) if fid == id => Some(import),
+            _ => None,
+        })
     }
 }
 
@@ -311,5 +338,38 @@ impl From<GlobalId> for ImportKind {
 impl From<TableId> for ImportKind {
     fn from(id: TableId) -> ImportKind {
         ImportKind::Table(id)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{FunctionBuilder, Module};
+
+    #[test]
+    fn get_imported_func() {
+        let mut module = Module::default();
+
+        let mut builder = FunctionBuilder::new(&mut module.types, &[], &[]);
+        builder.func_body().i32_const(1234).drop();
+        let new_fn_id: FunctionId = builder.finish(vec![], &mut module.funcs);
+        module.imports.add("mod", "dummy", new_fn_id);
+
+        assert!(module.imports.get_imported_func(new_fn_id).is_some());
+    }
+
+    #[test]
+    fn get_func_by_name() {
+        let mut module = Module::default();
+
+        let mut builder = FunctionBuilder::new(&mut module.types, &[], &[]);
+        builder.func_body().i32_const(1234).drop();
+        let new_fn_id: FunctionId = builder.finish(vec![], &mut module.funcs);
+        module.imports.add("mod", "dummy", new_fn_id);
+
+        assert!(module
+            .imports
+            .get_func_by_name("mod", "dummy")
+            .is_ok_and(|fid| fid == new_fn_id));
     }
 }

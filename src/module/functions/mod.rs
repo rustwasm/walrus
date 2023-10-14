@@ -662,7 +662,7 @@ impl Emit for ModuleFunctions {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Export, Module, FunctionBuilder};
+    use crate::{Export, FunctionBuilder, Module};
 
     #[test]
     fn get_memory_id() {

@@ -115,6 +115,11 @@ impl ModuleMemories {
     pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut Memory> {
         self.arena.iter_mut().map(|(_, f)| f)
     }
+
+    /// Get the number of memories in this module
+    pub fn len(&self) -> usize {
+        self.arena.len()
+    }
 }
 
 impl Module {
@@ -163,5 +168,22 @@ impl Emit for ModuleMemories {
         }
 
         cx.wasm_module.section(&wasm_memory_section);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::Module;
+
+    #[test]
+    fn memories_len() {
+        let mut module = Module::default();
+        assert_eq!(module.memories.len(), 0);
+
+        module.memories.add_local(false, 0, Some(1024));
+        assert_eq!(module.memories.len(), 1);
+
+        module.memories.add_local(true, 1024, Some(2048));
+        assert_eq!(module.memories.len(), 2);
     }
 }

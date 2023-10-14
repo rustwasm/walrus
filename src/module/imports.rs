@@ -130,6 +130,25 @@ impl ModuleImports {
             _ => None,
         })
     }
+
+    /// Delete an imported function by name from this module.
+    pub fn delete_func_by_name(
+        &mut self,
+        module: impl AsRef<str>,
+        name: impl AsRef<str>,
+    ) -> Result<()> {
+        let fid = self
+            .get_func_by_name(module, name.as_ref())
+            .with_context(|| {
+                format!("failed to find imported func with name [{}]", name.as_ref())
+            })?;
+        self.delete(
+            self.get_imported_func(fid)
+                .with_context(|| format!("failed to find imported func with ID [{fid:?}]"))?
+                .id(),
+        );
+        Ok(())
+    }
 }
 
 impl Module {

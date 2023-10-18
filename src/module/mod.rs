@@ -27,6 +27,7 @@ pub use crate::module::debug::ModuleDebugData;
 pub use crate::module::elements::ElementKind;
 pub use crate::module::elements::{Element, ElementId, ModuleElements};
 pub use crate::module::exports::{Export, ExportId, ExportItem, ModuleExports};
+pub use crate::module::functions::{FuncParams, FuncResults};
 pub use crate::module::functions::{Function, FunctionId, ModuleFunctions};
 pub use crate::module::functions::{FunctionKind, ImportedFunction, LocalFunction};
 pub use crate::module::globals::{Global, GlobalId, GlobalKind, ModuleGlobals};

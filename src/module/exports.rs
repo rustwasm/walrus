@@ -135,6 +135,20 @@ impl ModuleExports {
             _ => false,
         })
     }
+
+    /// Delete an exported function by name from this module.
+    pub fn delete_func_by_name(&mut self, name: impl AsRef<str>) -> Result<()> {
+        let fid = self.get_func_by_name(name.as_ref()).context(format!(
+            "failed to find exported func with name [{}]",
+            name.as_ref()
+        ))?;
+        self.delete(
+            self.get_exported_func(fid)
+                .with_context(|| format!("failed to find exported func with ID [{fid:?}]"))?
+                .id(),
+        );
+        Ok(())
+    }
 }
 
 impl Module {

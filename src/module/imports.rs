@@ -137,16 +137,23 @@ impl ModuleImports {
         module: impl AsRef<str>,
         name: impl AsRef<str>,
     ) -> Result<()> {
-        let fid = self
-            .get_func_by_name(module, name.as_ref())
+        let import = self
+            .iter()
+            .find(|e| e.module == module.as_ref() && e.name == name.as_ref())
             .with_context(|| {
                 format!("failed to find imported func with name [{}]", name.as_ref())
             })?;
-        self.delete(
-            self.get_imported_func(fid)
-                .with_context(|| format!("failed to find imported func with ID [{fid:?}]"))?
-                .id(),
-        );
+
+        if let ImportKind::Function(_) = import.kind {
+            self.delete(import.id());
+        } else {
+            bail!(
+                "import [{}] in module [{}] is not an imported function",
+                name.as_ref(),
+                module.as_ref()
+            );
+        }
+
         Ok(())
     }
 }

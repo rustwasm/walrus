@@ -105,12 +105,8 @@ impl ModuleImports {
         Some(import?.0)
     }
 
-    /// Retrieve an imported function by name, including the module in which it resides
-    pub fn get_func_by_name(
-        &self,
-        module: impl AsRef<str>,
-        name: impl AsRef<str>,
-    ) -> Result<FunctionId> {
+    /// Retrieve an imported function by import name, including the module in which it resides
+    pub fn get_func(&self, module: impl AsRef<str>, name: impl AsRef<str>) -> Result<FunctionId> {
         self.iter()
             .find_map(|impt| match impt.kind {
                 ImportKind::Function(fid)
@@ -132,11 +128,7 @@ impl ModuleImports {
     }
 
     /// Delete an imported function by name from this module.
-    pub fn delete_func_by_name(
-        &mut self,
-        module: impl AsRef<str>,
-        name: impl AsRef<str>,
-    ) -> Result<()> {
+    pub fn remove(&mut self, module: impl AsRef<str>, name: impl AsRef<str>) -> Result<()> {
         let import = self
             .iter()
             .find(|e| e.module == module.as_ref() && e.name == name.as_ref())
@@ -144,15 +136,7 @@ impl ModuleImports {
                 format!("failed to find imported func with name [{}]", name.as_ref())
             })?;
 
-        if let ImportKind::Function(_) = import.kind {
-            self.delete(import.id());
-        } else {
-            bail!(
-                "import [{}] in module [{}] is not an imported function",
-                name.as_ref(),
-                module.as_ref()
-            );
-        }
+        self.delete(import.id());
 
         Ok(())
     }
@@ -395,7 +379,7 @@ mod tests {
 
         assert!(module
             .imports
-            .get_func_by_name("mod", "dummy")
+            .get_func("mod", "dummy")
             .is_ok_and(|fid| fid == new_fn_id));
     }
 }

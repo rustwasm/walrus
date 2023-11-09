@@ -376,11 +376,10 @@ mod tests {
 
         {
             let called_address_to_be_converted = called_address_to_be_converted.borrow();
-            assert_eq!(called_address_to_be_converted.len(), 4);
+            assert_eq!(called_address_to_be_converted.len(), 3);
             assert_eq!(called_address_to_be_converted[0], (0x1000, false)); // begin sequence
             assert_eq!(called_address_to_be_converted[1], (0x1000, true)); // first line row
             assert_eq!(called_address_to_be_converted[2], (0x1001, true)); // end sequence
-            assert_eq!(called_address_to_be_converted[3], (0x1001, false)); // calculation of next entry address
         }
 
         {

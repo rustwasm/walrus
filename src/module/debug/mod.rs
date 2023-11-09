@@ -60,6 +60,9 @@ impl CodeAddressConverter {
         }
     }
 
+    /// Beginning of a function is also the end of the previous function,
+    /// When edge_is_previous is true, we treat a beginning point as the ending point of the previous function.
+    /// This is useful when checking if an address is the end of a function.
     fn find_address(&self, address: usize, edge_is_previous: bool) -> CodeAddress {
         if let Ok(id) = self
             .instrument_address_convert_table
@@ -70,7 +73,9 @@ impl CodeAddressConverter {
             };
         }
 
+        // If the address is not mapped to any instruction, falling back to function-range-based comparison.
         let previous_range_comparor = |range: &(wasmparser::Range, Id<Function>)| {
+            // range.start < address <= range.end
             if range.0.end < address {
                 Ordering::Less
             } else if address <= range.0.start {
@@ -80,6 +85,7 @@ impl CodeAddressConverter {
             }
         };
         let next_range_comparor = |range: &(wasmparser::Range, Id<Function>)| {
+            // normal comparison: range.start <= address < range.end
             if range.0.end <= address {
                 Ordering::Less
             } else if address < range.0.start {

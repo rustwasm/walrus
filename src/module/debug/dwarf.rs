@@ -11,7 +11,10 @@ pub(crate) struct ConvertContext<'a, R: Reader<Offset = usize>> {
     pub debug_str: &'a read::DebugStr<R>,
     pub debug_line_str: &'a read::DebugLineStr<R>,
 
-    /// Address conversion function
+    /// Address conversion function.
+    /// First argument is an address in original wasm binary.
+    /// If the address is mapped in transformed wasm binary, the address should be wrapped in Option::Some.
+    /// If the address is not mapped, None should be returned.
     pub convert_address: &'a dyn Fn(u64, bool) -> Option<write::Address>,
 
     pub line_strings: &'a mut write::LineStringTable,
@@ -171,10 +174,10 @@ where
                 _ => {
                     if from_row.execute(instruction, &mut from_program) {
                         if !program.in_sequence() {
+                            // begin new sequence if exists
                             current_sequence_base_address =
                                 (self.convert_address)(from_base_address, false);
 
-                            // begin new sequence if exists
                             if let Some(_) = current_sequence_base_address {
                                 program.begin_sequence(current_sequence_base_address);
                             }
@@ -183,9 +186,13 @@ where
                         if let Some(write::Address::Constant(base_address)) =
                             current_sequence_base_address
                         {
+                            // New offset from sequence base address in the transformed wasm binary
+                            // can be different from one in the original wasm binary.
+                            // Therefore, reculculating the new offset here.
                             let from_row_address = from_row.address() + from_base_address;
                             let row_address = (self.convert_address)(from_row_address, true);
 
+                            // either sequence_base_address or row_address is not resolved, ignore this entry.
                             if let Some(write::Address::Constant(address)) = row_address {
                                 let address_offset = address.saturating_sub(base_address);
 

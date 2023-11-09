@@ -166,13 +166,7 @@ impl Emit for ModuleDebugData {
                         .function_ranges
                         .binary_search_by_key(&id, |i| i.0)
                     {
-                        Ok(id) => {
-                            if edge_is_previous {
-                                Some(code_transform.function_ranges[id].1.end)
-                            } else {
-                                Some(code_transform.function_ranges[id].1.start)
-                            }
-                        }
+                        Ok(id) => Some(code_transform.function_ranges[id].1.end),
                         Err(_) => None,
                     }
                 }

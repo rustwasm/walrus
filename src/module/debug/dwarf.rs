@@ -11,7 +11,10 @@ pub(crate) struct ConvertContext<'a, R: Reader<Offset = usize>> {
     pub debug_str: &'a read::DebugStr<R>,
     pub debug_line_str: &'a read::DebugLineStr<R>,
 
-    /// Address conversion function
+    /// Address conversion function.
+    /// First argument is an address in original wasm binary.
+    /// If the address is mapped in transformed wasm binary, the address should be wrapped in Option::Some.
+    /// If the address is not mapped, None should be returned.
     pub convert_address: &'a dyn Fn(u64, bool) -> Option<write::Address>,
 
     pub line_strings: &'a mut write::LineStringTable,
@@ -146,35 +149,23 @@ where
         // Create mappings in case the source has duplicate files or directories.
         let mut program = self
             .convert_line_program_header(&from_program, &mut dirs, &mut files)
-            .expect("");
+            .expect("line program header cannot be converted");
 
         // We can't use the `from_program.rows()` because that wouldn't let
         // us preserve address relocations.
         let mut from_row = read::LineRow::new(from_program.header());
         let mut instructions = from_program.header().instructions();
-        let mut next_sequence_base_address = None;
+        let mut current_sequence_base_address = None;
         let mut from_base_address = 0;
-        let mut base_address = 0;
-        let mut previous_from_raw_address_offset = 0;
-        let mut previous_raw_address = 0;
-        let mut non_existent_symbol = false;
+
         while let Some(instruction) = instructions.next_instruction(from_program.header())? {
             match instruction {
                 read::LineInstruction::SetAddress(val) => {
                     if program.in_sequence() {
                         return Err(write::ConvertError::UnsupportedLineInstruction);
                     }
-                    match (self.convert_address)(val, false) {
-                        Some(converted) => {
-                            next_sequence_base_address = Some(converted);
-                            from_base_address = val;
-                            previous_from_raw_address_offset = 0;
-                            non_existent_symbol = false;
-                        }
-                        None => {
-                            non_existent_symbol = true;
-                        }
-                    }
+                    from_base_address = val;
+
                     from_row.execute(read::LineInstruction::SetAddress(0), &mut from_program);
                 }
                 read::LineInstruction::DefineFile(_) => {
@@ -182,64 +173,64 @@ where
                 }
                 _ => {
                     if from_row.execute(instruction, &mut from_program) {
-                        if !non_existent_symbol {
-                            if !program.in_sequence() {
-                                program.begin_sequence(next_sequence_base_address);
-                                if let Some(write::Address::Constant(raw_address)) =
-                                    next_sequence_base_address
-                                {
-                                    base_address = raw_address;
-                                    previous_raw_address = 0;
-                                }
-                                next_sequence_base_address = None;
-                            }
-                            let from_row_address = from_row.address() + from_base_address;
-                            let row_address = if let Some(write::Address::Constant(address)) =
-                                (self.convert_address)(from_row_address, true)
-                            {
-                                address
-                            } else {
-                                let from_row_address_advance =
-                                    from_row.address() - previous_from_raw_address_offset;
-                                previous_raw_address + from_row_address_advance
-                            };
-                            previous_from_raw_address_offset = from_row.address();
-                            previous_raw_address = row_address;
+                        if !program.in_sequence() {
+                            // begin new sequence if exists
+                            current_sequence_base_address =
+                                (self.convert_address)(from_base_address, false);
 
-                            if from_row.end_sequence() {
-                                program.end_sequence(row_address);
-                                next_sequence_base_address =
-                                    (self.convert_address)(from_row_address, false);
-                            } else {
-                                program.row().address_offset = row_address - base_address;
-                                program.row().op_index = from_row.op_index();
-                                program.row().file = {
-                                    let file = from_row.file_index();
-                                    if file > files.len() as u64 {
-                                        return Err(write::ConvertError::InvalidFileIndex);
-                                    }
-                                    if file == 0 && program.version() <= 4 {
-                                        return Err(write::ConvertError::InvalidFileIndex);
-                                    }
-                                    files[(file - 1) as usize]
-                                };
-                                program.row().line = match from_row.line() {
-                                    Some(line) => line.get(),
-                                    None => 0,
-                                };
-                                program.row().column = match from_row.column() {
-                                    read::ColumnType::LeftEdge => 0,
-                                    read::ColumnType::Column(val) => val.get(),
-                                };
-                                program.row().discriminator = from_row.discriminator();
-                                program.row().is_statement = from_row.is_stmt();
-                                program.row().basic_block = from_row.basic_block();
-                                program.row().prologue_end = from_row.prologue_end();
-                                program.row().epilogue_begin = from_row.epilogue_begin();
-                                program.row().isa = from_row.isa();
-                                program.generate_row();
+                            if let Some(_) = current_sequence_base_address {
+                                program.begin_sequence(current_sequence_base_address);
                             }
                         }
+
+                        if let Some(write::Address::Constant(base_address)) =
+                            current_sequence_base_address
+                        {
+                            // New offset from sequence base address in the transformed wasm binary
+                            // can be different from one in the original wasm binary.
+                            // Therefore, reculculating the new offset here.
+                            let from_row_address = from_row.address() + from_base_address;
+                            let row_address = (self.convert_address)(from_row_address, true);
+
+                            // either sequence_base_address or row_address is not resolved, ignore this entry.
+                            if let Some(write::Address::Constant(address)) = row_address {
+                                let address_offset = address.saturating_sub(base_address);
+
+                                if from_row.end_sequence() {
+                                    program.end_sequence(address_offset);
+                                    from_base_address = from_row_address;
+                                } else {
+                                    program.row().address_offset = address_offset;
+                                    program.row().op_index = from_row.op_index();
+                                    program.row().file = {
+                                        let file = from_row.file_index();
+                                        if file > files.len() as u64 {
+                                            return Err(write::ConvertError::InvalidFileIndex);
+                                        }
+                                        if file == 0 && program.version() <= 4 {
+                                            return Err(write::ConvertError::InvalidFileIndex);
+                                        }
+                                        files[(file - 1) as usize]
+                                    };
+                                    program.row().line = match from_row.line() {
+                                        Some(line) => line.get(),
+                                        None => 0,
+                                    };
+                                    program.row().column = match from_row.column() {
+                                        read::ColumnType::LeftEdge => 0,
+                                        read::ColumnType::Column(val) => val.get(),
+                                    };
+                                    program.row().discriminator = from_row.discriminator();
+                                    program.row().is_statement = from_row.is_stmt();
+                                    program.row().basic_block = from_row.basic_block();
+                                    program.row().prologue_end = from_row.prologue_end();
+                                    program.row().epilogue_begin = from_row.epilogue_begin();
+                                    program.row().isa = from_row.isa();
+                                    program.generate_row();
+                                }
+                            }
+                        }
+
                         from_row.reset(from_program.header());
                     }
                 }
@@ -385,11 +376,10 @@ mod tests {
 
         {
             let called_address_to_be_converted = called_address_to_be_converted.borrow();
-            assert_eq!(called_address_to_be_converted.len(), 4);
+            assert_eq!(called_address_to_be_converted.len(), 3);
             assert_eq!(called_address_to_be_converted[0], (0x1000, false)); // begin sequence
             assert_eq!(called_address_to_be_converted[1], (0x1000, true)); // first line row
             assert_eq!(called_address_to_be_converted[2], (0x1001, true)); // end sequence
-            assert_eq!(called_address_to_be_converted[3], (0x1001, false)); // calculation of next entry address
         }
 
         {

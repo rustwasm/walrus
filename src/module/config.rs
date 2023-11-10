@@ -87,6 +87,8 @@ impl ModuleConfig {
     /// itself!
     pub fn generate_dwarf(&mut self, generate: bool) -> &mut ModuleConfig {
         self.generate_dwarf = generate;
+        // generate_dwarf implies preserve_code_transform
+        self.preserve_code_transform = generate || self.preserve_code_transform;
         self
     }
 

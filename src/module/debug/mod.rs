@@ -60,6 +60,9 @@ impl CodeAddressConverter {
         }
     }
 
+    /// Beginning of a function is also the end of the previous function,
+    /// When edge_is_previous is true, we treat a beginning point as the ending point of the previous function.
+    /// This is useful when checking if an address is the end of a function.
     fn find_address(&self, address: usize, edge_is_previous: bool) -> CodeAddress {
         if let Ok(id) = self
             .instrument_address_convert_table
@@ -70,7 +73,9 @@ impl CodeAddressConverter {
             };
         }
 
+        // If the address is not mapped to any instruction, falling back to function-range-based comparison.
         let previous_range_comparor = |range: &(wasmparser::Range, Id<Function>)| {
+            // range.start < address <= range.end
             if range.0.end < address {
                 Ordering::Less
             } else if address <= range.0.start {
@@ -80,6 +85,7 @@ impl CodeAddressConverter {
             }
         };
         let next_range_comparor = |range: &(wasmparser::Range, Id<Function>)| {
+            // normal comparison: range.start <= address < range.end
             if range.0.end <= address {
                 Ordering::Less
             } else if address < range.0.start {
@@ -166,13 +172,7 @@ impl Emit for ModuleDebugData {
                         .function_ranges
                         .binary_search_by_key(&id, |i| i.0)
                     {
-                        Ok(id) => {
-                            if edge_is_previous {
-                                Some(code_transform.function_ranges[id].1.end)
-                            } else {
-                                Some(code_transform.function_ranges[id].1.start)
-                            }
-                        }
+                        Ok(id) => Some(code_transform.function_ranges[id].1.end),
                         Err(_) => None,
                     }
                 }
@@ -240,14 +240,23 @@ impl Emit for ModuleDebugData {
 fn dwarf_address_converter() {
     let mut module = crate::Module::default();
 
-    let mut func = crate::LocalFunction::new(
+    let mut func1 = crate::LocalFunction::new(
         Vec::new(),
         crate::FunctionBuilder::new(&mut module.types, &[], &[]),
     );
 
-    func.original_range = Some(wasmparser::Range { start: 20, end: 30 });
+    func1.original_range = Some(wasmparser::Range { start: 20, end: 30 });
 
-    let id = module.funcs.add_local(func);
+    let id1 = module.funcs.add_local(func1);
+
+    let mut func2 = crate::LocalFunction::new(
+        Vec::new(),
+        crate::FunctionBuilder::new(&mut module.types, &[], &[]),
+    );
+
+    func2.original_range = Some(wasmparser::Range { start: 30, end: 50 });
+
+    let id2 = module.funcs.add_local(func2);
 
     let address_converter = CodeAddressConverter::from_emit_context(&module.funcs);
 
@@ -256,19 +265,39 @@ fn dwarf_address_converter() {
         CodeAddress::Unknown
     );
     assert_eq!(
-        address_converter.find_address(25, true),
-        CodeAddress::OffsetInFunction { id, offset: 5 }
+        address_converter.find_address(20, false),
+        CodeAddress::OffsetInFunction { id: id1, offset: 0 }
     );
     assert_eq!(
-        address_converter.find_address(30, true),
-        CodeAddress::FunctionEdge { id }
-    );
-    assert_eq!(
-        address_converter.find_address(30, false),
+        address_converter.find_address(20, true),
         CodeAddress::Unknown
     );
     assert_eq!(
-        address_converter.find_address(31, true),
+        address_converter.find_address(25, false),
+        CodeAddress::OffsetInFunction { id: id1, offset: 5 }
+    );
+    assert_eq!(
+        address_converter.find_address(29, false),
+        CodeAddress::OffsetInFunction { id: id1, offset: 9 }
+    );
+    assert_eq!(
+        address_converter.find_address(29, true),
+        CodeAddress::OffsetInFunction { id: id1, offset: 9 }
+    );
+    assert_eq!(
+        address_converter.find_address(30, true),
+        CodeAddress::FunctionEdge { id: id1 }
+    );
+    assert_eq!(
+        address_converter.find_address(30, false),
+        CodeAddress::OffsetInFunction { id: id2, offset: 0 }
+    );
+    assert_eq!(
+        address_converter.find_address(50, true),
+        CodeAddress::FunctionEdge { id: id2 }
+    );
+    assert_eq!(
+        address_converter.find_address(50, false),
         CodeAddress::Unknown
     );
 }

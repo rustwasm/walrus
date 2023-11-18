@@ -21,6 +21,8 @@ pub struct ModuleDebugData {
 enum CodeAddress {
     /// The address is instruction within a function.
     InstrInFunction { instr_id: InstrLocId },
+    /// The address is one byte before the instruction.
+    InstrEdge { instr_id: InstrLocId },
     /// The address is within a function, but does not match any instruction.
     OffsetInFunction { id: Id<Function>, offset: usize },
     /// The address is boundary of functions. Equals to OffsetInFunction with offset(section size).
@@ -69,10 +71,21 @@ impl CodeAddressConverter {
             .instrument_address_convert_table
             .binary_search_by_key(&address, |i| i.0)
         {
+            Ok(id) => {
             return CodeAddress::InstrInFunction {
+                    instr_id: self.instrument_address_convert_table[id].1,
+                }
+            }
+            Err(id) => {
+                if id < self.instrument_address_convert_table.len()
+                    && self.instrument_address_convert_table[id].0 - 1 == address
+                {
+                    return CodeAddress::InstrEdge {
                 instr_id: self.instrument_address_convert_table[id].1,
             };
         }
+            }
+        };
 
         // If the address is not mapped to any instruction, falling back to function-range-based comparison.
         let inclusive_range_comparor = |range: &(wasmparser::Range, Id<Function>)| {
@@ -155,6 +168,12 @@ impl Emit for ModuleDebugData {
                 CodeAddress::InstrInFunction { instr_id } => {
                     match instruction_map.binary_search_by_key(&instr_id, |i| i.0) {
                         Ok(id) => Some(instruction_map[id].1),
+                        Err(_) => None,
+                    }
+                }
+                CodeAddress::InstrEdge { instr_id } => {
+                    match instruction_map.binary_search_by_key(&instr_id, |i| i.0) {
+                        Ok(id) => Some(instruction_map[id].1 - 1),
                         Err(_) => None,
                     }
                 }

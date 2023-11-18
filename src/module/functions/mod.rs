@@ -609,8 +609,6 @@ impl Emit for ModuleFunctions {
         }
 
         let mut wasm_code_section = wasm_encoder::CodeSection::new();
-        let code_section_start_offset = cx.wasm_module.as_slice().len() + 1;
-
         let generate_map = cx.module.config.preserve_code_transform;
 
         // Functions can typically take awhile to serialize, so serialize
@@ -655,7 +653,9 @@ impl Emit for ModuleFunctions {
         }
         cx.wasm_module.section(&wasm_code_section);
 
-        let mut cur_offset = cx.wasm_module.as_slice().len() - wasm_code_section.byte_len();
+        let code_section_start_offset =
+            cx.wasm_module.as_slice().len() - wasm_code_section.byte_len();
+        let mut cur_offset = code_section_start_offset;
 
         // update the map afterwards based on final offset differences
         for (byte_len, id, map, leb_len) in offset_data {
@@ -668,13 +668,15 @@ impl Emit for ModuleFunctions {
             cx.code_transform.function_ranges.push((
                 id,
                 Range {
-                    start: code_start_offset,
+                    // inclusive leb part
+                    start: code_start_offset - leb_len,
                     end: cur_offset,
                 },
             ));
         }
         cx.code_transform.function_ranges.sort_by_key(|i| i.0);
-        cx.code_transform.code_section_start = code_section_start_offset;
+        // FIXME: code section start in DWARF debug information expects 2 bytes before actual code section start.
+        cx.code_transform.code_section_start = code_section_start_offset - 2;
         cx.code_transform.instruction_map = instruction_map.into_iter().collect();
     }
 }

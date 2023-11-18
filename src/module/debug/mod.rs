@@ -6,7 +6,7 @@ use gimli::*;
 use id_arena::Id;
 use std::cmp::Ordering;
 
-use self::dwarf::ConvertContext;
+use self::dwarf::{AddressSearchPreference, ConvertContext};
 
 /// The DWARF debug section in input WebAssembly binary.
 #[derive(Debug, Default)]
@@ -60,11 +60,12 @@ impl CodeAddressConverter {
         }
     }
 
-    /// Beginning of a function is also the end of the previous function,
-    /// When edge_is_previous is true, we treat a beginning point as the ending point of the previous function.
-    /// This is useful when checking if an address is the end of a function.
-    fn find_address(&self, address: usize, edge_is_previous: bool) -> CodeAddress {
-        if let Ok(id) = self
+    fn find_address(
+        &self,
+        address: usize,
+        search_preference: AddressSearchPreference,
+    ) -> CodeAddress {
+        match self
             .instrument_address_convert_table
             .binary_search_by_key(&address, |i| i.0)
         {
@@ -74,7 +75,7 @@ impl CodeAddressConverter {
         }
 
         // If the address is not mapped to any instruction, falling back to function-range-based comparison.
-        let previous_range_comparor = |range: &(wasmparser::Range, Id<Function>)| {
+        let inclusive_range_comparor = |range: &(wasmparser::Range, Id<Function>)| {
             // range.start < address <= range.end
             if range.0.end < address {
                 Ordering::Less
@@ -84,7 +85,7 @@ impl CodeAddressConverter {
                 Ordering::Equal
             }
         };
-        let next_range_comparor = |range: &(wasmparser::Range, Id<Function>)| {
+        let exclusive_range_comparor = |range: &(wasmparser::Range, Id<Function>)| {
             // normal comparison: range.start <= address < range.end
             if range.0.end <= address {
                 Ordering::Less
@@ -94,10 +95,9 @@ impl CodeAddressConverter {
                 Ordering::Equal
             }
         };
-        let range_comparor: &dyn Fn(_) -> Ordering = if edge_is_previous {
-            &previous_range_comparor
-        } else {
-            &next_range_comparor
+        let range_comparor: &dyn Fn(_) -> Ordering = match search_preference {
+            AddressSearchPreference::InclusiveFunctionEnd => &inclusive_range_comparor,
+            AddressSearchPreference::ExclusiveFunctionEnd => &exclusive_range_comparor,
         };
 
         match self.address_convert_table.binary_search_by(range_comparor) {
@@ -105,7 +105,7 @@ impl CodeAddressConverter {
                 let entry = &self.address_convert_table[i];
                 let code_offset_from_function_start = address - entry.0.start;
 
-                if code_offset_from_function_start == entry.0.end - entry.0.start {
+                if address == entry.0.end {
                     CodeAddress::FunctionEdge { id: entry.1 }
                 } else {
                     CodeAddress::OffsetInFunction {
@@ -149,9 +149,9 @@ impl Emit for ModuleDebugData {
         let code_transform = &cx.code_transform;
         let instruction_map = &code_transform.instruction_map;
 
-        let convert_address = |address, edge_is_previous| -> Option<write::Address> {
+        let convert_address = |address, search_preference| -> Option<write::Address> {
             let address = address as usize;
-            let address = match address_converter.find_address(address, edge_is_previous) {
+            let address = match address_converter.find_address(address, search_preference) {
                 CodeAddress::InstrInFunction { instr_id } => {
                     match instruction_map.binary_search_by_key(&instr_id, |i| i.0) {
                         Ok(id) => Some(instruction_map[id].1),
@@ -191,7 +191,8 @@ impl Emit for ModuleDebugData {
             .borrow(|sections| EndianSlice::new(sections.as_ref(), LittleEndian));
 
         let mut dwarf = write::Dwarf::from(&from_dwarf, &|address| {
-            convert_address(address, true).or(Some(write::Address::Constant(0)))
+            convert_address(address, AddressSearchPreference::InclusiveFunctionEnd)
+                .or(Some(write::Address::Constant(0)))
         })
         .expect("cannot convert to writable dwarf");
 
@@ -261,43 +262,43 @@ fn dwarf_address_converter() {
     let address_converter = CodeAddressConverter::from_emit_context(&module.funcs);
 
     assert_eq!(
-        address_converter.find_address(10, true),
+        address_converter.find_address(10, AddressSearchPreference::InclusiveFunctionEnd),
         CodeAddress::Unknown
     );
     assert_eq!(
-        address_converter.find_address(20, false),
+        address_converter.find_address(20, AddressSearchPreference::ExclusiveFunctionEnd),
         CodeAddress::OffsetInFunction { id: id1, offset: 0 }
     );
     assert_eq!(
-        address_converter.find_address(20, true),
+        address_converter.find_address(20, AddressSearchPreference::InclusiveFunctionEnd),
         CodeAddress::Unknown
     );
     assert_eq!(
-        address_converter.find_address(25, false),
+        address_converter.find_address(25, AddressSearchPreference::ExclusiveFunctionEnd),
         CodeAddress::OffsetInFunction { id: id1, offset: 5 }
     );
     assert_eq!(
-        address_converter.find_address(29, false),
+        address_converter.find_address(29, AddressSearchPreference::ExclusiveFunctionEnd),
         CodeAddress::OffsetInFunction { id: id1, offset: 9 }
     );
     assert_eq!(
-        address_converter.find_address(29, true),
+        address_converter.find_address(29, AddressSearchPreference::InclusiveFunctionEnd),
         CodeAddress::OffsetInFunction { id: id1, offset: 9 }
     );
     assert_eq!(
-        address_converter.find_address(30, true),
+        address_converter.find_address(30, AddressSearchPreference::InclusiveFunctionEnd),
         CodeAddress::FunctionEdge { id: id1 }
     );
     assert_eq!(
-        address_converter.find_address(30, false),
+        address_converter.find_address(30, AddressSearchPreference::ExclusiveFunctionEnd),
         CodeAddress::OffsetInFunction { id: id2, offset: 0 }
     );
     assert_eq!(
-        address_converter.find_address(50, true),
+        address_converter.find_address(50, AddressSearchPreference::InclusiveFunctionEnd),
         CodeAddress::FunctionEdge { id: id2 }
     );
     assert_eq!(
-        address_converter.find_address(50, false),
+        address_converter.find_address(50, AddressSearchPreference::ExclusiveFunctionEnd),
         CodeAddress::Unknown
     );
 }

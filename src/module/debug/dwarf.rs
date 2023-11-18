@@ -5,6 +5,14 @@
 /// We want to convert addresses of instructions, here will re-implement.
 use gimli::*;
 
+#[derive(Debug, PartialEq)]
+pub enum AddressSearchPreference {
+    /// Normal range comparison (inclusive start, exclusive end)
+    ExclusiveFunctionEnd,
+    /// Prefer treating a beginning point as the ending point of the previous function.
+    InclusiveFunctionEnd,
+}
+
 /// DWARF convertion context
 pub(crate) struct ConvertContext<'a, R: Reader<Offset = usize>> {
     /// Source DWARF debug data
@@ -15,7 +23,7 @@ pub(crate) struct ConvertContext<'a, R: Reader<Offset = usize>> {
     /// First argument is an address in original wasm binary.
     /// If the address is mapped in transformed wasm binary, the address should be wrapped in Option::Some.
     /// If the address is not mapped, None should be returned.
-    pub convert_address: &'a dyn Fn(u64, bool) -> Option<write::Address>,
+    pub convert_address: &'a dyn Fn(u64, AddressSearchPreference) -> Option<write::Address>,
 
     pub line_strings: &'a mut write::LineStringTable,
     pub strings: &'a mut write::StringTable,
@@ -27,7 +35,7 @@ where
 {
     pub(crate) fn new(
         dwarf: &'a read::Dwarf<R>,
-        convert_address: &'a dyn Fn(u64, bool) -> Option<write::Address>,
+        convert_address: &'a dyn Fn(u64, AddressSearchPreference) -> Option<write::Address>,
         line_strings: &'a mut write::LineStringTable,
         strings: &'a mut write::StringTable,
     ) -> Self {
@@ -175,8 +183,10 @@ where
                     if from_row.execute(instruction, &mut from_program) {
                         if !program.in_sequence() {
                             // begin new sequence if exists
-                            current_sequence_base_address =
-                                (self.convert_address)(from_base_address, false);
+                            current_sequence_base_address = (self.convert_address)(
+                                from_base_address,
+                                AddressSearchPreference::ExclusiveFunctionEnd,
+                            );
 
                             if let Some(_) = current_sequence_base_address {
                                 program.begin_sequence(current_sequence_base_address);
@@ -190,7 +200,10 @@ where
                             // can be different from one in the original wasm binary.
                             // Therefore, reculculating the new offset here.
                             let from_row_address = from_row.address() + from_base_address;
-                            let row_address = (self.convert_address)(from_row_address, true);
+                            let row_address = (self.convert_address)(
+                                from_row_address,
+                                AddressSearchPreference::InclusiveFunctionEnd,
+                            );
 
                             // either sequence_base_address or row_address is not resolved, ignore this entry.
                             if let Some(write::Address::Constant(address)) = row_address {
@@ -263,6 +276,7 @@ where
 
 #[cfg(test)]
 mod tests {
+    use super::AddressSearchPreference;
     use gimli::*;
     use std::cell::RefCell;
 
@@ -322,7 +336,8 @@ mod tests {
 
     #[test]
     fn convert_context() {
-        let called_address_to_be_converted: RefCell<Vec<(u64, bool)>> = RefCell::new(Vec::new());
+        let called_address_to_be_converted: RefCell<Vec<(u64, AddressSearchPreference)>> =
+            RefCell::new(Vec::new());
 
         let mut debug_line = write::DebugLine::from(write::EndianVec::new(LittleEndian));
         let mut converted_debug_line = write::DebugLine::from(write::EndianVec::new(LittleEndian));
@@ -377,9 +392,18 @@ mod tests {
         {
             let called_address_to_be_converted = called_address_to_be_converted.borrow();
             assert_eq!(called_address_to_be_converted.len(), 3);
-            assert_eq!(called_address_to_be_converted[0], (0x1000, false)); // begin sequence
-            assert_eq!(called_address_to_be_converted[1], (0x1000, true)); // first line row
-            assert_eq!(called_address_to_be_converted[2], (0x1001, true)); // end sequence
+            assert_eq!(
+                called_address_to_be_converted[0],
+                (0x1000, AddressSearchPreference::ExclusiveFunctionEnd)
+            ); // begin sequence
+            assert_eq!(
+                called_address_to_be_converted[1],
+                (0x1000, AddressSearchPreference::InclusiveFunctionEnd)
+            ); // first line row
+            assert_eq!(
+                called_address_to_be_converted[2],
+                (0x1001, AddressSearchPreference::InclusiveFunctionEnd)
+            ); // end sequence
         }
 
         {

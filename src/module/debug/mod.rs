@@ -1,4 +1,5 @@
 mod dwarf;
+mod units;
 
 use crate::emit::{Emit, EmitContext};
 use crate::{CustomSection, Function, InstrLocId, Module, ModuleFunctions, RawCustomSection};
@@ -6,7 +7,8 @@ use gimli::*;
 use id_arena::Id;
 use std::cmp::Ordering;
 
-use self::dwarf::{AddressSearchPreference, ConvertContext};
+use self::dwarf::{AddressSearchPreference, ConvertContext, DEAD_CODE};
+use self::units::DebuggingInformationCursor;
 
 /// The DWARF debug section in input WebAssembly binary.
 #[derive(Debug, Default)]
@@ -72,7 +74,7 @@ impl CodeAddressConverter {
             .binary_search_by_key(&address, |i| i.0)
         {
             Ok(id) => {
-            return CodeAddress::InstrInFunction {
+                return CodeAddress::InstrInFunction {
                     instr_id: self.instrument_address_convert_table[id].1,
                 }
             }
@@ -81,9 +83,9 @@ impl CodeAddressConverter {
                     && self.instrument_address_convert_table[id].0 - 1 == address
                 {
                     return CodeAddress::InstrEdge {
-                instr_id: self.instrument_address_convert_table[id].1,
-            };
-        }
+                        instr_id: self.instrument_address_convert_table[id].1,
+                    };
+                }
             }
         };
 
@@ -234,11 +236,21 @@ impl Emit for ModuleDebugData {
 
         for index in 0..dwarf.units.count() {
             let id = dwarf.units.id(index);
-            let unit = dwarf.units.get_mut(id);
 
-            if let Some(program) =
-                convert_context.convert_attributes(from_dwarf.unit(unit_entries[index]).expect(""))
+            let unit = dwarf.units.get_mut(id);
+            let from_unit: Unit<EndianSlice<'_, LittleEndian>, usize> =
+                from_dwarf.unit(unit_entries[index]).expect("readable unit");
+
+            // perform high pc transformation of DWARF .debug_info
             {
+                let mut from_entries = from_unit.entries();
+                let mut entries = DebuggingInformationCursor::new(unit);
+
+                convert_context.convert_high_pc(&mut from_entries, &mut entries);
+            }
+
+            // perform line program transformation
+            if let Some(program) = convert_context.convert_unit_line_program(from_unit) {
                 unit.line_program = program;
             }
         }

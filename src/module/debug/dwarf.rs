@@ -5,6 +5,8 @@
 /// We want to convert addresses of instructions, here will re-implement.
 use gimli::*;
 
+use super::units::DebuggingInformationCursor;
+
 #[derive(Debug, PartialEq)]
 pub enum AddressSearchPreference {
     /// Normal range comparison (inclusive start, exclusive end)
@@ -50,7 +52,46 @@ where
         }
     }
 
-    pub(crate) fn convert_attributes(
+    pub(crate) fn convert_high_pc(
+        &self,
+        from_unit: &mut gimli::read::EntriesCursor<R>,
+        unit: &mut DebuggingInformationCursor,
+    ) {
+        while let Ok(Some((_, from_debug_entry))) = from_unit.next_dfs() {
+            if let Some(debug_entry) = unit.next_dfs() {
+                let low_pc = from_debug_entry
+                    .attr_value(constants::DW_AT_low_pc)
+                    .expect("low_pc");
+                let high_pc = from_debug_entry
+                    .attr_value(constants::DW_AT_high_pc)
+                    .expect("high_pc");
+
+                if let Some(AttributeValue::Addr(low_addr)) = low_pc {
+                    if let Some(AttributeValue::Udata(offset)) = high_pc {
+                        if let Some(write::Address::Constant(new_low_pc)) = (self.convert_address)(
+                            low_addr,
+                            AddressSearchPreference::InclusiveFunctionEnd,
+                        ) {
+                            if let Some(write::Address::Constant(new_high_pc)) = (self
+                                .convert_address)(
+                                low_addr + offset,
+                                AddressSearchPreference::InclusiveFunctionEnd,
+                            ) {
+                                debug_entry.set(
+                                    constants::DW_AT_high_pc,
+                                    write::AttributeValue::Udata(
+                                        new_high_pc.saturating_sub(new_low_pc),
+                                    ),
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    pub(crate) fn convert_unit_line_program(
         &mut self,
         from_unit: read::Unit<R>,
     ) -> Option<write::LineProgram> {

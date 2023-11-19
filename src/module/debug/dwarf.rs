@@ -13,6 +13,8 @@ pub enum AddressSearchPreference {
     InclusiveFunctionEnd,
 }
 
+pub(crate) static DEAD_CODE: u64 = 0xFFFFFFFF;
+
 /// DWARF convertion context
 pub(crate) struct ConvertContext<'a, R: Reader<Offset = usize>> {
     /// Source DWARF debug data

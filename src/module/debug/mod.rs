@@ -210,8 +210,11 @@ impl Emit for ModuleDebugData {
             .borrow(|sections| EndianSlice::new(sections.as_ref(), LittleEndian));
 
         let mut dwarf = write::Dwarf::from(&from_dwarf, &|address| {
+            if address == 0 || address == DEAD_CODE {
+                return Some(write::Address::Constant(address));
+            }
             convert_address(address, AddressSearchPreference::InclusiveFunctionEnd)
-                .or(Some(write::Address::Constant(0)))
+                .or(Some(write::Address::Constant(DEAD_CODE)))
         })
         .expect("cannot convert to writable dwarf");
 

@@ -57,8 +57,9 @@ where
         from_unit: &mut gimli::read::EntriesCursor<R>,
         unit: &mut DebuggingInformationCursor,
     ) {
-        while let Ok(Some((_, from_debug_entry))) = from_unit.next_dfs() {
-            if let Some(debug_entry) = unit.next_dfs() {
+        while let (Ok(Some((_, from_debug_entry))), Some(debug_entry)) =
+            (from_unit.next_dfs(), unit.next_dfs())
+        {
                 let low_pc = from_debug_entry
                     .attr_value(constants::DW_AT_low_pc)
                     .expect("low_pc");
@@ -66,26 +67,24 @@ where
                     .attr_value(constants::DW_AT_high_pc)
                     .expect("high_pc");
 
-                if let Some(AttributeValue::Addr(low_addr)) = low_pc {
-                    if let Some(AttributeValue::Udata(offset)) = high_pc {
-                        if let Some(write::Address::Constant(new_low_pc)) = (self.convert_address)(
-                            low_addr,
-                            AddressSearchPreference::InclusiveFunctionEnd,
-                        ) {
-                            if let Some(write::Address::Constant(new_high_pc)) = (self
-                                .convert_address)(
+            if let (Some(AttributeValue::Addr(low_addr)), Some(AttributeValue::Udata(offset))) =
+                (low_pc, high_pc)
+            {
+                let new_low_pc =
+                    (self.convert_address)(low_addr, AddressSearchPreference::InclusiveFunctionEnd);
+                let new_high_pc = (self.convert_address)(
                                 low_addr + offset,
                                 AddressSearchPreference::InclusiveFunctionEnd,
-                            ) {
+                );
+                if let (
+                    Some(write::Address::Constant(new_low_pc)),
+                    Some(write::Address::Constant(new_high_pc)),
+                ) = (new_low_pc, new_high_pc)
+                {
                                 debug_entry.set(
                                     constants::DW_AT_high_pc,
-                                    write::AttributeValue::Udata(
-                                        new_high_pc.saturating_sub(new_low_pc),
-                                    ),
+                        write::AttributeValue::Udata(new_high_pc.saturating_sub(new_low_pc)),
                                 );
-                            }
-                        }
-                    }
                 }
             }
         }
@@ -112,7 +111,6 @@ where
     fn convert_line_program_header(
         &mut self,
         from_program: &read::IncompleteLineProgram<R>,
-        dirs: &mut Vec<write::DirectoryId>,
         files: &mut Vec<write::FileId>,
     ) -> write::ConvertResult<write::LineProgram> {
         let from_header = from_program.header();
@@ -120,7 +118,7 @@ where
 
         let comp_dir = match from_header.directory(0) {
             Some(comp_dir) => self.convert_line_string(comp_dir)?,
-            None => write::LineString::new(&[][..], encoding, &mut self.line_strings),
+            None => write::LineString::new(&[][..], encoding, self.line_strings),
         };
 
         let (comp_name, comp_file_info) = match from_header.file(0) {
@@ -138,7 +136,7 @@ where
                 )
             }
             None => (
-                write::LineString::new(&[][..], encoding, &mut self.line_strings),
+                write::LineString::new(&[][..], encoding, self.line_strings),
                 None,
             ),
         };
@@ -154,6 +152,7 @@ where
             comp_file_info,
         );
 
+        let mut dirs = Vec::new();
         let file_skip = if from_header.version() <= 4 {
             // The first directory is implicit.
             dirs.push(program.default_directory());
@@ -195,11 +194,10 @@ where
         &mut self,
         mut from_program: read::IncompleteLineProgram<R>,
     ) -> write::ConvertResult<write::LineProgram> {
-        let mut dirs = Vec::new();
         let mut files = Vec::new();
         // Create mappings in case the source has duplicate files or directories.
         let mut program = self
-            .convert_line_program_header(&from_program, &mut dirs, &mut files)
+            .convert_line_program_header(&from_program, &mut files)
             .expect("line program header cannot be converted");
 
         // We can't use the `from_program.rows()` because that wouldn't let
@@ -231,7 +229,7 @@ where
                                 AddressSearchPreference::ExclusiveFunctionEnd,
                             );
 
-                            if let Some(_) = current_sequence_base_address {
+                            if current_sequence_base_address.is_some() {
                                 program.begin_sequence(current_sequence_base_address);
                             }
                         }

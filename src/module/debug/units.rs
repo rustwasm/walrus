@@ -18,7 +18,7 @@ impl<'a> DebuggingInformationCursor<'a> {
     }
 
     pub fn current(&mut self) -> Option<&mut DebuggingInformationEntry> {
-        if self.entry_id_stack.len() > 0 {
+        if !self.entry_id_stack.is_empty() {
             Some(self.unit.get_mut(*self.entry_id_stack.last().unwrap()))
         } else {
             None
@@ -30,10 +30,10 @@ impl<'a> DebuggingInformationCursor<'a> {
             let root = self.unit.root();
             self.entry_id_stack.push(root);
             self.called_next_dfs = true;
-            return None;
+            return self.current();
         }
 
-        if self.entry_id_stack.len() == 0 {
+        if self.entry_id_stack.is_empty() {
             return None;
         }
 

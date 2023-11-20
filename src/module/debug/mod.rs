@@ -50,8 +50,7 @@ impl CodeAddressConverter {
 
         let mut instrument_address_convert_table = funcs
             .iter_local()
-            .map(|(_, func)| &func.instruction_mapping)
-            .flatten()
+            .flat_map(|(_, func)| &func.instruction_mapping)
             .copied()
             .collect::<Vec<_>>();
 

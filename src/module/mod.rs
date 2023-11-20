@@ -330,7 +330,7 @@ impl Module {
 
         let indices = &mut IdsToIndices::default();
 
-        let mut customs = mem::replace(&mut self.customs, ModuleCustomSections::default());
+        let mut customs = mem::take(&mut self.customs);
 
         let mut cx = EmitContext {
             module: self,
@@ -386,7 +386,7 @@ impl Module {
 
             cx.wasm_module.section(&wasm_encoder::CustomSection {
                 name: section.name().into(),
-                data: section.data(&indices).into(),
+                data: section.data(&indices),
             });
         }
 

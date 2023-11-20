@@ -60,12 +60,12 @@ where
         while let (Ok(Some((_, from_debug_entry))), Some(debug_entry)) =
             (from_unit.next_dfs(), unit.next_dfs())
         {
-                let low_pc = from_debug_entry
-                    .attr_value(constants::DW_AT_low_pc)
-                    .expect("low_pc");
-                let high_pc = from_debug_entry
-                    .attr_value(constants::DW_AT_high_pc)
-                    .expect("high_pc");
+            let low_pc = from_debug_entry
+                .attr_value(constants::DW_AT_low_pc)
+                .expect("low_pc");
+            let high_pc = from_debug_entry
+                .attr_value(constants::DW_AT_high_pc)
+                .expect("high_pc");
 
             if let (Some(AttributeValue::Addr(low_addr)), Some(AttributeValue::Udata(offset))) =
                 (low_pc, high_pc)
@@ -73,18 +73,18 @@ where
                 let new_low_pc =
                     (self.convert_address)(low_addr, AddressSearchPreference::InclusiveFunctionEnd);
                 let new_high_pc = (self.convert_address)(
-                                low_addr + offset,
-                                AddressSearchPreference::InclusiveFunctionEnd,
+                    low_addr + offset,
+                    AddressSearchPreference::InclusiveFunctionEnd,
                 );
                 if let (
                     Some(write::Address::Constant(new_low_pc)),
                     Some(write::Address::Constant(new_high_pc)),
                 ) = (new_low_pc, new_high_pc)
                 {
-                                debug_entry.set(
-                                    constants::DW_AT_high_pc,
+                    debug_entry.set(
+                        constants::DW_AT_high_pc,
                         write::AttributeValue::Udata(new_high_pc.saturating_sub(new_low_pc)),
-                                );
+                    );
                 }
             }
         }
@@ -317,6 +317,8 @@ where
 
 #[cfg(test)]
 mod tests {
+    use crate::module::debug::units::DebuggingInformationCursor;
+
     use super::AddressSearchPreference;
     use gimli::*;
     use std::cell::RefCell;
@@ -332,7 +334,6 @@ mod tests {
         };
         let dir1 = &b"dir1"[..];
         let file1 = &b"file1"[..];
-        let comp_dir = write::LineString::String(dir1.to_vec());
         let comp_file = write::LineString::String(file1.to_vec());
 
         let mut program = write::LineProgram::new(
@@ -344,7 +345,7 @@ mod tests {
                 line_range: 10,
                 default_is_stmt: true,
             },
-            comp_dir.clone(),
+            write::LineString::String(dir1.to_vec()),
             comp_file.clone(),
             None,
         );
@@ -354,18 +355,14 @@ mod tests {
             make_line_row(&mut program);
         }
 
-        {
-            let debug_line_str_offsets = write::DebugLineStrOffsets::none();
-            let debug_str_offsets = write::DebugStrOffsets::none();
-            program
-                .write(
-                    debug_line,
-                    encoding,
-                    &debug_line_str_offsets,
-                    &debug_str_offsets,
-                )
-                .unwrap();
-        }
+        program
+            .write(
+                debug_line,
+                encoding,
+                &write::DebugLineStrOffsets::none(),
+                &write::DebugStrOffsets::none(),
+            )
+            .unwrap();
 
         let debug_line = read::DebugLine::new(debug_line.slice(), LittleEndian);
         let incomplete_debug_line = debug_line
@@ -376,14 +373,11 @@ mod tests {
     }
 
     #[test]
-    fn convert_context() {
+    fn convert_callback_invoke() {
         let called_address_to_be_converted: RefCell<Vec<(u64, AddressSearchPreference)>> =
             RefCell::new(Vec::new());
-
-        let mut debug_line = write::DebugLine::from(write::EndianVec::new(LittleEndian));
-        let mut converted_debug_line = write::DebugLine::from(write::EndianVec::new(LittleEndian));
-
         {
+            let mut debug_line = write::DebugLine::from(write::EndianVec::new(LittleEndian));
             let make_line_row = |program: &mut write::LineProgram| {
                 program.begin_sequence(Some(write::Address::Constant(0x1000)));
                 program.generate_row();
@@ -392,17 +386,14 @@ mod tests {
             };
             let incomplete_debug_line = make_test_debug_line(&mut debug_line, &make_line_row);
 
-            let convert_address = |address, edge_is_previous| -> Option<write::Address> {
+            let convert_address = |address, preference| -> Option<write::Address> {
                 called_address_to_be_converted
                     .borrow_mut()
-                    .push((address, edge_is_previous));
+                    .push((address, preference));
                 Some(write::Address::Constant(address + 0x10))
             };
 
-            let empty_dwarf = Dwarf::load(|_| -> Result<EndianSlice<LittleEndian>> {
-                Ok(EndianSlice::new(&[], LittleEndian))
-            })
-            .unwrap();
+            let empty_dwarf = Dwarf::default();
 
             let mut line_strings = write::LineStringTable::default();
             let mut strings = write::StringTable::default();
@@ -412,21 +403,8 @@ mod tests {
                 &mut line_strings,
                 &mut strings,
             );
-            let converted_program = convert_context
+            convert_context
                 .convert_line_program(incomplete_debug_line)
-                .unwrap();
-
-            converted_program
-                .write(
-                    &mut converted_debug_line,
-                    Encoding {
-                        format: Format::Dwarf32,
-                        version: 4,
-                        address_size: 4,
-                    },
-                    &write::DebugLineStrOffsets::none(),
-                    &write::DebugStrOffsets::none(),
-                )
                 .unwrap();
         }
 
@@ -446,6 +424,48 @@ mod tests {
                 (0x1001, AddressSearchPreference::InclusiveFunctionEnd)
             ); // end sequence
         }
+    }
+
+    #[test]
+    fn test_converted_address() {
+        let mut converted_debug_line = write::DebugLine::from(write::EndianVec::new(LittleEndian));
+        {
+            let mut debug_line = write::DebugLine::from(write::EndianVec::new(LittleEndian));
+            let make_line_row = |program: &mut write::LineProgram| {
+                program.begin_sequence(Some(write::Address::Constant(0x1000)));
+                program.generate_row();
+                let address_offset = program.row().address_offset + 1u64;
+                program.end_sequence(address_offset);
+            };
+            let incomplete_debug_line = make_test_debug_line(&mut debug_line, &make_line_row);
+
+            let convert_address = |address, _| -> Option<write::Address> {
+                Some(write::Address::Constant(address + 0x10))
+            };
+
+            let empty_dwarf = Dwarf::default();
+            let mut line_strings = write::LineStringTable::default();
+            let mut strings = write::StringTable::default();
+
+            let mut convert_context = crate::module::debug::ConvertContext::new(
+                &empty_dwarf,
+                &convert_address,
+                &mut line_strings,
+                &mut strings,
+            );
+            let converted_program = convert_context
+                .convert_line_program(incomplete_debug_line)
+                .unwrap();
+
+            converted_program
+                .write(
+                    &mut converted_debug_line,
+                    converted_program.encoding(),
+                    &write::DebugLineStrOffsets::none(),
+                    &write::DebugStrOffsets::none(),
+                )
+                .unwrap();
+        }
 
         {
             let read_debug_line = read::DebugLine::new(converted_debug_line.slice(), LittleEndian);
@@ -457,5 +477,97 @@ mod tests {
             let row = rows.next_row().unwrap().unwrap().1;
             assert_eq!(row.address(), 0x1010);
         }
+    }
+
+    #[test]
+    fn test_convert_high_pc() {
+        let mut unit_table = write::UnitTable::default();
+
+        {
+            let mut unit1 = write::Unit::new(
+                Encoding {
+                    version: 4,
+                    address_size: 4,
+                    format: Format::Dwarf32,
+                },
+                write::LineProgram::none(),
+            );
+
+            let root_id = unit1.root();
+            let child1_id = unit1.add(root_id, constants::DW_TAG_subprogram);
+            unit1.get_mut(child1_id).set(
+                constants::DW_AT_low_pc,
+                write::AttributeValue::Address(write::Address::Constant(0x1000)),
+            );
+            unit1.get_mut(child1_id).set(
+                constants::DW_AT_high_pc,
+                write::AttributeValue::Udata(0x100),
+            );
+
+            unit_table.add(unit1);
+        }
+
+        let mut sections = write::Sections::new(write::EndianVec::new(LittleEndian));
+        unit_table
+            .write(
+                &mut sections,
+                &write::DebugLineStrOffsets::none(),
+                &write::DebugStrOffsets::none(),
+            )
+            .unwrap();
+
+        let mut read_dwarf = Dwarf::default();
+
+        read_dwarf.debug_info = read::DebugInfo::new(sections.debug_info.slice(), LittleEndian);
+        read_dwarf.debug_abbrev =
+            read::DebugAbbrev::new(sections.debug_abbrev.slice(), LittleEndian);
+
+        let read_first_unit_header = read_dwarf.units().next().unwrap().unwrap();
+        let read_first_unit = read_dwarf.unit(read_first_unit_header).unwrap();
+        let mut read_first_unit_entries = read_first_unit.entries();
+
+        let convert_address = |address, _| -> Option<write::Address> {
+            if address < 0x1050 {
+                Some(write::Address::Constant(address + 0x10))
+            } else {
+                Some(write::Address::Constant(address - 0x10))
+            }
+        };
+
+        let mut line_strings = write::LineStringTable::default();
+        let mut strings = write::StringTable::default();
+
+        let convert_context = crate::module::debug::ConvertContext::new(
+            &read_dwarf,
+            &convert_address,
+            &mut line_strings,
+            &mut strings,
+        );
+
+        let mut converted_dwarf = write::Dwarf::from(&read_dwarf, &|address| {
+            convert_address(address, AddressSearchPreference::InclusiveFunctionEnd)
+        })
+        .unwrap();
+
+        let id = converted_dwarf.units.id(0);
+
+        {
+            let unit = converted_dwarf.units.get_mut(id);
+            let mut write_unit_first_entries = DebuggingInformationCursor::new(unit);
+
+            convert_context
+                .convert_high_pc(&mut read_first_unit_entries, &mut write_unit_first_entries);
+        }
+
+        {
+            let unit = converted_dwarf.units.get_mut(id);
+            let mut write_unit_first_entries = DebuggingInformationCursor::new(unit);
+
+            let _root = write_unit_first_entries.next_dfs();
+            let subprogram_entry = write_unit_first_entries.next_dfs().unwrap();
+
+            assert_eq!(*subprogram_entry.get(DW_AT_high_pc).unwrap(), write::AttributeValue::Udata(0xE0));
+        }
+        
     }
 }

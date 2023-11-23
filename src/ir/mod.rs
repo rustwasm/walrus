@@ -163,6 +163,9 @@ pub struct InstrSeq {
 
     /// The instructions that make up the body of this block.
     pub instrs: Vec<(Instr, InstrLocId)>,
+
+    /// For code address mapping
+    pub end: InstrLocId,
 }
 
 impl Deref for InstrSeq {
@@ -185,7 +188,13 @@ impl InstrSeq {
     /// Construct a new instruction sequence.
     pub(crate) fn new(id: InstrSeqId, ty: InstrSeqType) -> InstrSeq {
         let instrs = vec![];
-        InstrSeq { id, ty, instrs }
+        let end = Default::default();
+        InstrSeq {
+            id,
+            ty,
+            instrs,
+            end,
+        }
     }
 
     /// Get the id of this instruction sequence.

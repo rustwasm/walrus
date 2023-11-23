@@ -84,6 +84,12 @@ impl<'instr> Visitor<'instr> for Emit<'_> {
 
         debug_assert_eq!(self.blocks.len(), self.block_kinds.len());
 
+        if let Some(map) = self.map.as_mut() {
+            let pos = self.encoder.byte_len();
+            // Save the encoded_at position for the specified ExprId.
+            map.push((seq.end.clone(), pos));
+        }
+
         if let BlockKind::If = popped_kind.unwrap() {
             // We're about to visit the `else` block, so push its kind.
             //

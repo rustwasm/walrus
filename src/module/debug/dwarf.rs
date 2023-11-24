@@ -23,14 +23,14 @@ pub(crate) struct ConvertContext<'a, R: Reader<Offset = usize>> {
     pub debug_str: &'a read::DebugStr<R>,
     pub debug_line_str: &'a read::DebugLineStr<R>,
 
+    pub strings: &'a mut write::StringTable,
+    pub line_strings: &'a mut write::LineStringTable,
+
     /// Address conversion function.
     /// First argument is an address in original wasm binary.
     /// If the address is mapped in transformed wasm binary, the address should be wrapped in Option::Some.
     /// If the address is not mapped, None should be returned.
     pub convert_address: &'a dyn Fn(u64, AddressSearchPreference) -> Option<write::Address>,
-
-    pub line_strings: &'a mut write::LineStringTable,
-    pub strings: &'a mut write::StringTable,
 }
 
 impl<'a, R> ConvertContext<'a, R>
@@ -38,17 +38,18 @@ where
     R: Reader<Offset = usize>,
 {
     pub(crate) fn new(
-        dwarf: &'a read::Dwarf<R>,
-        convert_address: &'a dyn Fn(u64, AddressSearchPreference) -> Option<write::Address>,
-        line_strings: &'a mut write::LineStringTable,
+        debug_str: &'a read::DebugStr<R>,
+        debug_line_str: &'a read::DebugLineStr<R>,
         strings: &'a mut write::StringTable,
+        line_strings: &'a mut write::LineStringTable,
+        convert_address: &'a dyn Fn(u64, AddressSearchPreference) -> Option<write::Address>,
     ) -> Self {
         ConvertContext {
-            debug_str: &dwarf.debug_str,
-            debug_line_str: &dwarf.debug_line_str,
-            convert_address,
-            line_strings,
+            debug_str,
+            debug_line_str,
             strings,
+            line_strings,
+            convert_address,
         }
     }
 
@@ -389,15 +390,17 @@ mod tests {
                 Some(write::Address::Constant(address + 0x10))
             };
 
-            let empty_dwarf = Dwarf::default();
+            let empty_debug_str = Default::default();
+            let empty_debug_line_str = Default::default();
 
             let mut line_strings = write::LineStringTable::default();
             let mut strings = write::StringTable::default();
             let mut convert_context = crate::module::debug::ConvertContext::new(
-                &empty_dwarf,
-                &convert_address,
-                &mut line_strings,
+                &empty_debug_str,
+                &empty_debug_line_str,
                 &mut strings,
+                &mut line_strings,
+                &convert_address,
             );
             convert_context
                 .convert_line_program(incomplete_debug_line)
@@ -438,10 +441,11 @@ mod tests {
             let mut strings = write::StringTable::default();
 
             let mut convert_context = crate::module::debug::ConvertContext::new(
-                &empty_dwarf,
-                &convert_address,
-                &mut line_strings,
+                &empty_dwarf.debug_str,
+                &empty_dwarf.debug_line_str,
                 &mut strings,
+                &mut line_strings,
+                &convert_address,
             );
             let converted_program = convert_context
                 .convert_line_program(incomplete_debug_line)
@@ -483,10 +487,11 @@ mod tests {
             let mut strings = write::StringTable::default();
 
             let mut convert_context = crate::module::debug::ConvertContext::new(
-                &empty_dwarf,
-                &convert_address,
-                &mut line_strings,
+                &empty_dwarf.debug_str,
+                &empty_dwarf.debug_line_str,
                 &mut strings,
+                &mut line_strings,
+                &convert_address,
             );
             let converted_program = convert_context
                 .convert_line_program(incomplete_debug_line)
@@ -572,14 +577,15 @@ mod tests {
             }
         };
 
-        let mut line_strings = write::LineStringTable::default();
         let mut strings = write::StringTable::default();
+        let mut line_strings = write::LineStringTable::default();
 
         let convert_context = crate::module::debug::ConvertContext::new(
-            &read_dwarf,
-            &convert_address,
-            &mut line_strings,
+            &read_dwarf.debug_str,
+            &read_dwarf.debug_line_str,
             &mut strings,
+            &mut line_strings,
+            &convert_address,
         );
 
         let mut converted_dwarf = write::Dwarf::from(&read_dwarf, &|address| {

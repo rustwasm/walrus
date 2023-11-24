@@ -71,26 +71,30 @@ impl Emit for ModuleDebugData {
         })
         .expect("cannot convert to writable dwarf");
 
-        let mut from_units = from_dwarf.units();
-        let mut unit_entries = Vec::new();
+        let units = {
+            let mut from_unit_headers = from_dwarf.units();
+            let mut units = Vec::new();
 
-        while let Some(from_unit) = from_units.next().expect("") {
-            unit_entries.push(from_unit);
-        }
+            while let Some(from_unit) = from_unit_headers.next().expect("") {
+                let index = units.len();
+                units.push((from_unit, dwarf.units.id(index)));
+            }
+
+            units
+        };
 
         let mut convert_context = ConvertContext::new(
-            &from_dwarf,
-            &convert_address,
-            &mut dwarf.line_strings,
+            &from_dwarf.debug_str,
+            &from_dwarf.debug_line_str,
             &mut dwarf.strings,
+            &mut dwarf.line_strings,
+            &convert_address,
         );
 
-        for index in 0..dwarf.units.count() {
-            let id = dwarf.units.id(index);
-
-            let unit = dwarf.units.get_mut(id);
+        for (from_id, id) in units {
             let from_unit: Unit<EndianSlice<'_, LittleEndian>, usize> =
-                from_dwarf.unit(unit_entries[index]).expect("readable unit");
+                from_dwarf.unit(from_id).expect("readable unit");
+            let unit = dwarf.units.get_mut(id);
 
             // perform high pc transformation of DWARF .debug_info
             {

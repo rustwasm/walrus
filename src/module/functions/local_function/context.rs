@@ -54,6 +54,7 @@ pub(crate) struct ValidationContext<'a> {
 
 #[derive(Debug)]
 pub struct IfElseState {
+    pub start: InstrLocId,
     pub consequent: InstrSeqId,
     pub alternative: Option<InstrSeqId>,
 }

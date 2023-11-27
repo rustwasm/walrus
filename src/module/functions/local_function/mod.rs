@@ -586,12 +586,15 @@ fn append_instruction<'context>(
                 .push_control(BlockKind::If, param_tys, result_tys)
                 .unwrap();
             ctx.if_else.push(context::IfElseState {
+                start: loc,
                 consequent,
                 alternative: None,
             });
         }
         Operator::End => {
-            let (frame, _block) = ctx.pop_control().unwrap();
+            let (frame, block) = ctx.pop_control().unwrap();
+
+            ctx.func.block_mut(block).end = loc;
 
             // If we just finished an if/else block then the actual
             // instruction which produces the value will be an `IfElse` node,
@@ -600,6 +603,7 @@ fn append_instruction<'context>(
             match frame.kind {
                 BlockKind::If | BlockKind::Else => {
                     let context::IfElseState {
+                        start,
                         consequent,
                         alternative,
                     } = ctx.if_else.pop().unwrap();
@@ -628,20 +632,22 @@ fn append_instruction<'context>(
                             consequent,
                             alternative,
                         },
-                        loc,
+                        start,
                     );
                 }
                 _ => {}
             }
         }
         Operator::Else => {
-            let (frame, _consequent) = ctx.pop_control().unwrap();
+            let (frame, consequent) = ctx.pop_control().unwrap();
             // An `else` instruction is only valid immediately inside an if/else
             // block which is denoted by the `IfElse` block kind.
             match frame.kind {
                 BlockKind::If => {}
                 _ => panic!("`else` without a leading `if`"),
             }
+
+            ctx.func.block_mut(consequent).end = loc;
 
             // But we still need to parse the alternative block, so allocate the
             // block here to parse.

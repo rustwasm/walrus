@@ -84,7 +84,7 @@ impl ModuleConfig {
     }
 
     /// Sets a flag to whether DWARF debug sections are read for this module.
-    pub fn read_dwarf(&mut self, dw: bool) -> &mut ModuleConfig{
+    pub fn read_dwarf(&mut self, dw: bool) -> &mut ModuleConfig {
         self.no_read_dwarf = !dw;
         return self;
     }

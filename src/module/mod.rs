@@ -15,6 +15,7 @@ mod producers;
 mod tables;
 mod types;
 
+use crate::FunctionBuilder;
 use crate::emit::{Emit, EmitContext, IdsToIndices};
 use crate::error::Result;
 pub use crate::ir::InstrLocId;
@@ -142,6 +143,7 @@ impl Module {
     fn parse_in(wasm: &[u8], config: &ModuleConfig, ret: &mut Module) -> Result<()> {
         // let mut ret = Module::default();
         // ret.config = config.clone();
+        let old_start = ret.start.take();
         let mut indices = IndicesToIds::default();
         let mut validator = Validator::new();
         validator.wasm_features(WasmFeatures {
@@ -317,6 +319,16 @@ impl Module {
         ret.producers
             .add_processed_by("walrus", env!("CARGO_PKG_VERSION"));
 
+        match ret.start{
+            Some(a) => if let Some(r) = old_start{
+                let mut new_builder = FunctionBuilder::new(&mut ret.types, &[], &[]);
+                new_builder.func_body().call(r).call(a).return_();
+                let new = new_builder.local_func(vec![]);
+                let new = ret.funcs.add_local(new);
+                ret.start = Some(new);
+            },
+            None => ret.start = old_start,
+        }
         if let Some(on_parse) = &config.on_parse {
             on_parse(ret, &indices)?;
         }

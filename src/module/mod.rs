@@ -15,7 +15,6 @@ mod producers;
 mod tables;
 mod types;
 
-use crate::FunctionBuilder;
 use crate::emit::{Emit, EmitContext, IdsToIndices};
 use crate::error::Result;
 pub use crate::ir::InstrLocId;
@@ -39,6 +38,7 @@ pub use crate::module::producers::ModuleProducers;
 pub use crate::module::tables::{ModuleTables, Table, TableId};
 pub use crate::module::types::ModuleTypes;
 use crate::parse::IndicesToIds;
+use crate::FunctionBuilder;
 use anyhow::{bail, Context};
 use id_arena::Id;
 use log::warn;
@@ -312,21 +312,23 @@ impl Module {
             config.on_instr_loc.as_ref().map(|f| f.as_ref()),
         )
         .context("failed to parse code section")?;
-
-        ret.parse_debug_sections(debug_sections)
-            .context("failed to parse debug data section")?;
-
+        if !config.no_read_dwarf {
+            ret.parse_debug_sections(debug_sections)
+                .context("failed to parse debug data section")?;
+        }
         ret.producers
             .add_processed_by("walrus", env!("CARGO_PKG_VERSION"));
 
-        match ret.start{
-            Some(a) => if let Some(r) = old_start{
-                let mut new_builder = FunctionBuilder::new(&mut ret.types, &[], &[]);
-                new_builder.func_body().call(r).call(a).return_();
-                let new = new_builder.local_func(vec![]);
-                let new = ret.funcs.add_local(new);
-                ret.start = Some(new);
-            },
+        match ret.start {
+            Some(a) => {
+                if let Some(r) = old_start {
+                    let mut new_builder = FunctionBuilder::new(&mut ret.types, &[], &[]);
+                    new_builder.func_body().call(r).call(a).return_();
+                    let new = new_builder.local_func(vec![]);
+                    let new = ret.funcs.add_local(new);
+                    ret.start = Some(new);
+                }
+            }
             None => ret.start = old_start,
         }
         if let Some(on_parse) = &config.on_parse {

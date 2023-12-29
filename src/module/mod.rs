@@ -128,9 +128,20 @@ impl Module {
         ModuleConfig::new().parse(wasm)
     }
 
+    /// Merge a module from the in-memory wasm buffer with the default configuration
+    pub fn merge_buffer(&mut self, wasm: &[u8]) -> Result<()>{
+        return Self::parse_in(wasm, &ModuleConfig::default(), self);
+    }
+
     fn parse(wasm: &[u8], config: &ModuleConfig) -> Result<Module> {
         let mut ret = Module::default();
         ret.config = config.clone();
+        Self::parse_in(wasm, config, &mut ret)?;
+        return Ok(ret);
+    }
+    fn parse_in(wasm: &[u8], config: &ModuleConfig, ret: &mut Module) -> Result<()> {
+        // let mut ret = Module::default();
+        // ret.config = config.clone();
         let mut indices = IndicesToIds::default();
         let mut validator = Validator::new();
         validator.wasm_features(WasmFeatures {
@@ -307,11 +318,11 @@ impl Module {
             .add_processed_by("walrus", env!("CARGO_PKG_VERSION"));
 
         if let Some(on_parse) = &config.on_parse {
-            on_parse(&mut ret, &indices)?;
+            on_parse(ret, &indices)?;
         }
 
         log::debug!("parse complete");
-        Ok(ret)
+        Ok(())
     }
 
     /// Emit this module into a `.wasm` file at the given path.

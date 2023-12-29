@@ -129,7 +129,7 @@ impl Module {
     }
 
     /// Merge a module from the in-memory wasm buffer with the default configuration
-    pub fn merge_buffer(&mut self, wasm: &[u8]) -> Result<()>{
+    pub fn merge_buffer(&mut self, wasm: &[u8]) -> Result<()> {
         return Self::parse_in(wasm, &ModuleConfig::default(), self);
     }
 

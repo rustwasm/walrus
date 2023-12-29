@@ -208,6 +208,12 @@ impl ModuleConfig {
         Module::parse(wasm, self)
     }
 
+    /// Parses an in-memory WebAssembly file into an existing `Module` using this
+    /// configuration.
+    pub fn parse_into(&self, wasm: &[u8], pre: &mut Module) -> Result<()> {
+        Module::parse_in(wasm, self, pre)
+    }
+
     /// Parses a WebAssembly file into a `Module` using this configuration.
     pub fn parse_file<P>(&self, path: P) -> Result<Module>
     where

@@ -26,6 +26,7 @@ pub struct IndicesToIds {
     elements: Vec<ElementId>,
     data: Vec<DataId>,
     locals: IdHashMap<Function, Vec<LocalId>>,
+    pub(crate) num_fun_imports: usize,
 }
 
 macro_rules! define_push_get {

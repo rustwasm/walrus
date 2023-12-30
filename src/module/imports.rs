@@ -160,6 +160,7 @@ impl Module {
                         entry.field.expect("module linking not supported"),
                         ty,
                     );
+                    ids.num_fun_imports += 1;
                     ids.push_func(id.0);
                 }
                 wasmparser::ImportSectionEntryType::Table(t) => {

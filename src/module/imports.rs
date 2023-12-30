@@ -172,6 +172,7 @@ impl Module {
                         t.maximum,
                         ty,
                     );
+                    ids.num_table_imports += 1;
                     ids.push_table(id.0);
                 }
                 wasmparser::ImportSectionEntryType::Memory(m) => {
@@ -185,6 +186,7 @@ impl Module {
                         m.initial as u32,
                         m.maximum.map(|m| m as u32),
                     );
+                    ids.num_mem_imports += 1;
                     ids.push_memory(id.0);
                 }
                 wasmparser::ImportSectionEntryType::Global(g) => {
@@ -194,6 +196,7 @@ impl Module {
                         ValType::parse(&g.content_type)?,
                         g.mutable,
                     );
+                    ids.num_global_imports += 1;
                     ids.push_global(id.0);
                 }
                 wasmparser::ImportSectionEntryType::Module(_)

@@ -137,10 +137,10 @@ impl Module {
     fn parse(wasm: &[u8], config: &ModuleConfig) -> Result<Module> {
         let mut ret = Module::default();
         ret.config = config.clone();
-       ret.parse_in(wasm, config)?;
+        ret.parse_in(wasm, config)?;
         return Ok(ret);
     }
-    fn parse_in(&mut self,wasm: &[u8], config: &ModuleConfig) -> Result<()> {
+    fn parse_in(&mut self, wasm: &[u8], config: &ModuleConfig) -> Result<()> {
         // let mut ret = Module::default();
         // ret.config = config.clone();
         let old_start = self.start.take();
@@ -316,7 +316,7 @@ impl Module {
             self.parse_debug_sections(debug_sections)
                 .context("failed to parse debug data section")?;
         }
-       self.producers
+        self.producers
             .add_processed_by("walrus", env!("CARGO_PKG_VERSION"));
 
         match self.start {

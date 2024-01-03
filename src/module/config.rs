@@ -89,11 +89,11 @@ impl ModuleConfig {
         return self;
     }
 
-        /// Sets a flag to whether DWARF debug sections are skipped for this module.
-        pub fn  skip_dwarf(&mut self, dw: bool) -> &mut ModuleConfig {
-            self.skip_debug_sections = dw;
-            return self;
-        }
+    /// Sets a flag to whether DWARF debug sections are skipped for this module.
+    pub fn skip_dwarf(&mut self, dw: bool) -> &mut ModuleConfig {
+        self.skip_debug_sections = dw;
+        return self;
+    }
     /// Sets a flag to whether DWARF debug sections are generated for this
     /// module.
     ///
@@ -226,7 +226,7 @@ impl ModuleConfig {
     /// Parses an in-memory WebAssembly file into an existing `Module` using this
     /// configuration.
     pub fn parse_into(&self, wasm: &[u8], pre: &mut Module) -> Result<()> {
-       pre.parse_in(wasm, self)
+        pre.parse_in(wasm, self)
     }
 
     /// Parses a WebAssembly file into a `Module` using this configuration.

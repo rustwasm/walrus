@@ -131,19 +131,19 @@ impl Module {
 
     /// Merge a module from the in-memory wasm buffer with the default configuration
     pub fn merge_buffer(&mut self, wasm: &[u8]) -> Result<()> {
-        return Self::parse_in(wasm, &ModuleConfig::default(), self);
+        return self.parse_in(wasm, &ModuleConfig::default());
     }
 
     fn parse(wasm: &[u8], config: &ModuleConfig) -> Result<Module> {
         let mut ret = Module::default();
         ret.config = config.clone();
-        Self::parse_in(wasm, config, &mut ret)?;
+       ret.parse_in(wasm, config)?;
         return Ok(ret);
     }
-    fn parse_in(wasm: &[u8], config: &ModuleConfig, ret: &mut Module) -> Result<()> {
+    fn parse_in(&mut self,wasm: &[u8], config: &ModuleConfig) -> Result<()> {
         // let mut ret = Module::default();
         // ret.config = config.clone();
-        let old_start = ret.start.take();
+        let old_start = self.start.take();
         let mut indices = IndicesToIds::default();
         let mut validator = Validator::new();
         validator.wasm_features(WasmFeatures {
@@ -168,67 +168,67 @@ impl Module {
                     validator
                         .data_section(&s)
                         .context("failed to parse data section")?;
-                    ret.parse_data(s, &mut indices)?;
+                    self.parse_data(s, &mut indices)?;
                 }
                 Payload::TypeSection(s) => {
                     validator
                         .type_section(&s)
                         .context("failed to parse type section")?;
-                    ret.parse_types(s, &mut indices)?;
+                    self.parse_types(s, &mut indices)?;
                 }
                 Payload::ImportSection(s) => {
                     validator
                         .import_section(&s)
                         .context("failed to parse import section")?;
-                    ret.parse_imports(s, &mut indices)?;
+                    self.parse_imports(s, &mut indices)?;
                 }
                 Payload::TableSection(s) => {
                     validator
                         .table_section(&s)
                         .context("failed to parse table section")?;
-                    ret.parse_tables(s, &mut indices)?;
+                    self.parse_tables(s, &mut indices)?;
                 }
                 Payload::MemorySection(s) => {
                     validator
                         .memory_section(&s)
                         .context("failed to parse memory section")?;
-                    ret.parse_memories(s, &mut indices)?;
+                    self.parse_memories(s, &mut indices)?;
                 }
                 Payload::GlobalSection(s) => {
                     validator
                         .global_section(&s)
                         .context("failed to parse global section")?;
-                    ret.parse_globals(s, &mut indices)?;
+                    self.parse_globals(s, &mut indices)?;
                 }
                 Payload::ExportSection(s) => {
                     validator
                         .export_section(&s)
                         .context("failed to parse export section")?;
-                    ret.parse_exports(s, &mut indices)?;
+                    self.parse_exports(s, &mut indices)?;
                 }
                 Payload::ElementSection(s) => {
                     validator
                         .element_section(&s)
                         .context("failed to parse element section")?;
-                    ret.parse_elements(s, &mut indices)?;
+                    self.parse_elements(s, &mut indices)?;
                 }
                 Payload::StartSection { func, range, .. } => {
                     validator.start_section(func, &range)?;
-                    ret.start = Some(indices.get_func(func)?);
+                    self.start = Some(indices.get_func(func)?);
                 }
                 Payload::FunctionSection(s) => {
                     validator
                         .function_section(&s)
                         .context("failed to parse function section")?;
-                    ret.declare_local_functions(s, &mut indices)?;
+                    self.declare_local_functions(s, &mut indices)?;
                 }
                 Payload::DataCountSection { count, range } => {
                     validator.data_count_section(count, &range)?;
-                    ret.reserve_data(count, &mut indices);
+                    self.reserve_data(count, &mut indices);
                 }
                 Payload::CodeSectionStart { count, range, .. } => {
                     validator.code_section_start(count, &range)?;
-                    ret.funcs.code_section_offset = range.start;
+                    self.funcs.code_section_offset = range.start;
                 }
                 Payload::CodeSectionEntry(body) => {
                     let validator = validator.code_section_entry()?;
@@ -243,10 +243,10 @@ impl Module {
                     let result = match name {
                         "producers" => wasmparser::ProducersSectionReader::new(data, data_offset)
                             .map_err(anyhow::Error::from)
-                            .and_then(|s| ret.parse_producers_section(s)),
+                            .and_then(|s| self.parse_producers_section(s)),
                         "name" => wasmparser::NameSectionReader::new(data, data_offset)
                             .map_err(anyhow::Error::from)
-                            .and_then(|r| ret.parse_name_section(r, &indices)),
+                            .and_then(|r| self.parse_name_section(r, &indices)),
                         _ => {
                             log::debug!("parsing custom section `{}`", name);
                             if name.starts_with(".debug") {
@@ -255,7 +255,7 @@ impl Module {
                                     data: data.to_vec(),
                                 });
                             } else {
-                                ret.customs.add(RawCustomSection {
+                                self.customs.add(RawCustomSection {
                                     name: name.to_string(),
                                     data: data.to_vec(),
                                 });
@@ -306,33 +306,33 @@ impl Module {
             }
         }
 
-        ret.parse_local_functions(
+        self.parse_local_functions(
             local_functions,
             &mut indices,
             config.on_instr_loc.as_ref().map(|f| f.as_ref()),
         )
         .context("failed to parse code section")?;
-        if !config.no_read_dwarf {
-            ret.parse_debug_sections(debug_sections)
+        if !config.skip_debug_sections {
+            self.parse_debug_sections(debug_sections)
                 .context("failed to parse debug data section")?;
         }
-        ret.producers
+       self.producers
             .add_processed_by("walrus", env!("CARGO_PKG_VERSION"));
 
-        match ret.start {
+        match self.start {
             Some(a) => {
                 if let Some(r) = old_start {
-                    let mut new_builder = FunctionBuilder::new(&mut ret.types, &[], &[]);
+                    let mut new_builder = FunctionBuilder::new(&mut self.types, &[], &[]);
                     new_builder.func_body().call(r).call(a).return_();
                     let new = new_builder.local_func(vec![]);
-                    let new = ret.funcs.add_local(new);
-                    ret.start = Some(new);
+                    let new = self.funcs.add_local(new);
+                    self.start = Some(new);
                 }
             }
-            None => ret.start = old_start,
+            None => self.start = old_start,
         }
         if let Some(on_parse) = &config.on_parse {
-            on_parse(ret, &indices)?;
+            on_parse(self, &indices)?;
         }
 
         log::debug!("parse complete");

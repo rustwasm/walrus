@@ -18,7 +18,7 @@ pub struct ModuleConfig {
     pub(crate) on_parse:
         Option<Box<dyn Fn(&mut Module, &IndicesToIds) -> Result<()> + Sync + Send + 'static>>,
     pub(crate) on_instr_loc: Option<Box<dyn Fn(&usize) -> InstrLocId + Sync + Send + 'static>>,
-    pub(crate) no_read_dwarf: bool,
+    pub(crate) skip_debug_sections: bool,
 }
 
 impl Clone for ModuleConfig {
@@ -33,7 +33,7 @@ impl Clone for ModuleConfig {
             skip_producers_section: self.skip_producers_section,
             skip_name_section: self.skip_name_section,
             preserve_code_transform: self.preserve_code_transform,
-            no_read_dwarf: self.no_read_dwarf,
+            skip_debug_sections: self.skip_debug_sections,
 
             // ... and this is left empty.
             on_parse: None,
@@ -56,7 +56,7 @@ impl fmt::Debug for ModuleConfig {
             ref preserve_code_transform,
             ref on_parse,
             ref on_instr_loc,
-            ref no_read_dwarf,
+            ref skip_debug_sections,
         } = self;
 
         f.debug_struct("ModuleConfig")
@@ -72,7 +72,7 @@ impl fmt::Debug for ModuleConfig {
             .field("preserve_code_transform", preserve_code_transform)
             .field("on_parse", &on_parse.as_ref().map(|_| ".."))
             .field("on_instr_loc", &on_instr_loc.as_ref().map(|_| ".."))
-            .field("no_read_dwarf", no_read_dwarf)
+            .field("skip_debug_sections", skip_debug_sections)
             .finish()
     }
 }
@@ -85,9 +85,15 @@ impl ModuleConfig {
 
     /// Sets a flag to whether DWARF debug sections are read for this module.
     pub fn read_dwarf(&mut self, dw: bool) -> &mut ModuleConfig {
-        self.no_read_dwarf = !dw;
+        self.skip_debug_sections = !dw;
         return self;
     }
+
+        /// Sets a flag to whether DWARF debug sections are skipped for this module.
+        pub fn  skip_dwarf(&mut self, dw: bool) -> &mut ModuleConfig {
+            self.skip_debug_sections = dw;
+            return self;
+        }
     /// Sets a flag to whether DWARF debug sections are generated for this
     /// module.
     ///
@@ -220,7 +226,7 @@ impl ModuleConfig {
     /// Parses an in-memory WebAssembly file into an existing `Module` using this
     /// configuration.
     pub fn parse_into(&self, wasm: &[u8], pre: &mut Module) -> Result<()> {
-        Module::parse_in(wasm, self, pre)
+       pre.parse_in(wasm, self)
     }
 
     /// Parses a WebAssembly file into a `Module` using this configuration.

@@ -83,12 +83,6 @@ impl ModuleConfig {
         ModuleConfig::default()
     }
 
-    /// Sets a flag to whether DWARF debug sections are read for this module.
-    pub fn read_dwarf(&mut self, dw: bool) -> &mut ModuleConfig {
-        self.skip_debug_sections = !dw;
-        return self;
-    }
-
     /// Sets a flag to whether DWARF debug sections are skipped for this module.
     pub fn skip_dwarf(&mut self, dw: bool) -> &mut ModuleConfig {
         self.skip_debug_sections = dw;

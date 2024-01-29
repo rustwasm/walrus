@@ -73,12 +73,12 @@ impl ModuleGlobals {
         })
     }
 
-    /// Gets a reference to a memory given its id
+    /// Gets a reference to a global given its id
     pub fn get(&self, id: GlobalId) -> &Global {
         &self.arena[id]
     }
 
-    /// Gets a reference to a memory given its id
+    /// Gets a reference to a global given its id
     pub fn get_mut(&mut self, id: GlobalId) -> &mut Global {
         &mut self.arena[id]
     }

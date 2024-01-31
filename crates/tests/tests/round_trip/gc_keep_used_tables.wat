@@ -2,7 +2,7 @@
 
 (module
   (type (;0;) (func (result i32)))
-  (table 1 1 anyfunc)
+  (table 1 1 funcref)
   (export "t" (table 0)))
 
 (; CHECK-ALL:

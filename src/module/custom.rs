@@ -36,9 +36,7 @@ pub trait CustomSection: WalrusAny + Debug + Send + Sync {
     /// array provided.
     ///
     /// The default provided method does nothing.
-    fn add_gc_roots(&self, roots: &mut Roots) {
-        drop(roots);
-    }
+    fn add_gc_roots(&self, _roots: &mut Roots) {}
 
     /// Apply the given code transformations to this custom section.
     ///

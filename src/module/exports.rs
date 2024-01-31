@@ -1,6 +1,6 @@
 //! Exported items in a wasm module.
 
-use anyhow::{bail, Context};
+use anyhow::Context;
 
 use crate::emit::{Emit, EmitContext};
 use crate::parse::IndicesToIds;

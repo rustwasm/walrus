@@ -1,5 +1,5 @@
 (module
-  (table 1 anyfunc)
+  (table 1 funcref)
   (func)
   (elem (i32.const 1) 0)
   (export "foo" (table 0))

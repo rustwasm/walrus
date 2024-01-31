@@ -1,5 +1,5 @@
 (module
-  (import "" "" (table 1 anyfunc))
+  (import "" "" (table 1 funcref))
   (export "b" (table 0))
   )
 

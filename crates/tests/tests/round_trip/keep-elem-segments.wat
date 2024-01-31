@@ -1,7 +1,7 @@
 (module
   (type (func))
 
-  (table anyfunc (elem 1))
+  (table funcref (elem 1))
 
   (func
     i32.const 0

@@ -1,6 +1,6 @@
 (module
   (import "x" "y" (global i32))
-  (table 1 anyfunc)
+  (table 1 funcref)
   (func)
   (elem (global.get 0) 0)
   (export "x" (table 0)))

@@ -2,7 +2,7 @@
 
 (module
   (type (;0;) (func (result i32)))
-  (table 1 1 anyfunc)
+  (table 1 1 funcref)
   (func $f (type 0) (result i32)
     i32.const 42)
   (export "f" (func $f)))

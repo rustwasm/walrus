@@ -185,7 +185,10 @@ impl Emit for ModuleElements {
                         None => wasm_encoder::ConstExpr::ref_null(wasm_encoder::HeapType::Func),
                     })
                     .collect();
-                let els = wasm_encoder::Elements::Expressions(els_vec.as_slice());
+                let els = wasm_encoder::Elements::Expressions(
+                    wasm_encoder::RefType::FUNCREF,
+                    els_vec.as_slice(),
+                );
                 emit_elem(cx, &mut wasm_element_section, &element.kind, els);
             } else {
                 let els_vec: Vec<u32> = element
@@ -212,15 +215,14 @@ impl Emit for ModuleElements {
                         wasm_element_section.active(
                             table_index,
                             &offset.to_wasmencoder_type(&cx),
-                            wasm_encoder::RefType::FUNCREF,
                             els,
                         );
                     }
                     ElementKind::Passive => {
-                        wasm_element_section.passive(wasm_encoder::RefType::FUNCREF, els);
+                        wasm_element_section.passive(els);
                     }
                     ElementKind::Declared => {
-                        wasm_element_section.declared(wasm_encoder::RefType::FUNCREF, els);
+                        wasm_element_section.declared(els);
                     }
                 }
             }

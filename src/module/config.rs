@@ -18,6 +18,7 @@ pub struct ModuleConfig {
     pub(crate) on_parse:
         Option<Box<dyn Fn(&mut Module, &IndicesToIds) -> Result<()> + Sync + Send + 'static>>,
     pub(crate) on_instr_loc: Option<Box<dyn Fn(&usize) -> InstrLocId + Sync + Send + 'static>>,
+    pub(crate) skip_debug_sections: bool,
 }
 
 impl Clone for ModuleConfig {
@@ -32,6 +33,7 @@ impl Clone for ModuleConfig {
             skip_producers_section: self.skip_producers_section,
             skip_name_section: self.skip_name_section,
             preserve_code_transform: self.preserve_code_transform,
+            skip_debug_sections: self.skip_debug_sections,
 
             // ... and this is left empty.
             on_parse: None,
@@ -54,6 +56,7 @@ impl fmt::Debug for ModuleConfig {
             ref preserve_code_transform,
             ref on_parse,
             ref on_instr_loc,
+            ref skip_debug_sections,
         } = self;
 
         f.debug_struct("ModuleConfig")
@@ -69,6 +72,7 @@ impl fmt::Debug for ModuleConfig {
             .field("preserve_code_transform", preserve_code_transform)
             .field("on_parse", &on_parse.as_ref().map(|_| ".."))
             .field("on_instr_loc", &on_instr_loc.as_ref().map(|_| ".."))
+            .field("skip_debug_sections", skip_debug_sections)
             .finish()
     }
 }
@@ -79,6 +83,11 @@ impl ModuleConfig {
         ModuleConfig::default()
     }
 
+    /// Sets a flag to whether DWARF debug sections are skipped for this module.
+    pub fn skip_dwarf(&mut self, dw: bool) -> &mut ModuleConfig {
+        self.skip_debug_sections = dw;
+        return self;
+    }
     /// Sets a flag to whether DWARF debug sections are generated for this
     /// module.
     ///
@@ -206,6 +215,12 @@ impl ModuleConfig {
     /// configuration.
     pub fn parse(&self, wasm: &[u8]) -> Result<Module> {
         Module::parse(wasm, self)
+    }
+
+    /// Parses an in-memory WebAssembly file into an existing `Module` using this
+    /// configuration.
+    pub fn parse_into(&self, wasm: &[u8], pre: &mut Module) -> Result<()> {
+        pre.parse_in(wasm, self)
     }
 
     /// Parses a WebAssembly file into a `Module` using this configuration.

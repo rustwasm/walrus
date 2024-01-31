@@ -350,7 +350,7 @@ impl Module {
         // necessary and it's a bottleneck!
         let mut bodies = Vec::with_capacity(functions.len());
         for (i, (body, mut validator)) in functions.into_iter().enumerate() {
-            let index = (num_imports + i) as u32;
+            let index = (indices.num_fun_imports + i) as u32;
             let id = indices.get_func(index)?;
             let ty = match self.funcs.arena[id].kind {
                 FunctionKind::Uninitialized(ty) => ty,

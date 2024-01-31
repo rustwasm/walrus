@@ -131,6 +131,30 @@ where
         .into())
     }
 
+    fn test_merge(&self, wata: &str, watb: &str) -> Result<()> {
+        let wasma = self.wat2wasm(&wata)?;
+        let wasmb = self.wat2wasm(&watb)?;
+        let mut module = walrus::Module::from_buffer(&wasma)
+            .context("walrus failed to parse the first wasm buffer")?;
+        walrus::ModuleConfig::default()
+            .generate_dwarf(false)
+            .parse_into(&wasmb, &mut module)
+            .context("walrus failed to merge the second wasm buffer")?;
+
+        module.emit_wasm();
+        return Ok(());
+    }
+    /// Generate two wasm files and confirm that merging them is valid in `walrus`
+    ///     ///
+    /// Does not attempt to reduce any failing test cases.
+    pub fn run_merge(&mut self) -> Result<()> {
+        let wata = self.gen_wat();
+        let watb = self.gen_wat();
+        self.test_merge(&wata, &watb)
+            .with_context(|| format!("wata = {}, watb = {}", wata, watb))?;
+        return Ok(());
+    }
+
     /// Generate a single wasm file and then compare its output in the reference
     /// interpreter before and after round tripping it through `walrus`.
     ///

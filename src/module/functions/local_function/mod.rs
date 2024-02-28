@@ -1347,6 +1347,6 @@ fn append_instruction<'context>(
         Operator::I16x8DotI8x16I7x16S => todo!(),
         Operator::I32x4DotI8x16I7x16AddS => todo!(),
         Operator::F32x4RelaxedDotBf16x8AddF32x4 => todo!(),
-        Operator::MemoryDiscard { mem } => todo!(),
+        Operator::MemoryDiscard { mem: _ } => todo!(),
     }
 }

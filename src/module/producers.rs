@@ -83,7 +83,7 @@ impl Module {
         for field in data {
             let field = field?;
             let mut values = Vec::new();
-            for value in field.get_producer_field_values_reader()? {
+            for value in field.values {
                 let value = value?;
                 values.push(Value {
                     name: value.name.to_string(),

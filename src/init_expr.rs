@@ -22,7 +22,7 @@ pub enum InitExpr {
 }
 
 impl InitExpr {
-    pub(crate) fn eval(init: &wasmparser::InitExpr, ids: &IndicesToIds) -> Result<InitExpr> {
+    pub(crate) fn eval(init: &wasmparser::ConstExpr, ids: &IndicesToIds) -> Result<InitExpr> {
         use wasmparser::Operator::*;
         let mut reader = init.get_operators_reader();
         let val = match reader.read()? {

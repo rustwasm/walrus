@@ -2,7 +2,6 @@
 
 use crate::error::Result;
 use crate::tombstone_arena::Tombstone;
-use anyhow::bail;
 use id_arena::Id;
 use std::cmp::Ordering;
 use std::fmt;
@@ -142,11 +141,8 @@ pub enum ValType {
 }
 
 impl ValType {
-    pub(crate) fn from_wasmparser_type(ty: wasmparser::Type) -> Result<Box<[ValType]>> {
-        let v = match ty {
-            wasmparser::Type::EmptyBlockType => Vec::new(),
-            _ => vec![ValType::parse(&ty)?],
-        };
+    pub(crate) fn from_wasmparser_type(ty: wasmparser::ValType) -> Result<Box<[ValType]>> {
+        let v = vec![ValType::parse(&ty)?];
         Ok(v.into_boxed_slice())
     }
 
@@ -162,16 +158,15 @@ impl ValType {
         }
     }
 
-    pub(crate) fn parse(input: &wasmparser::Type) -> Result<ValType> {
+    pub(crate) fn parse(input: &wasmparser::ValType) -> Result<ValType> {
         match input {
-            wasmparser::Type::I32 => Ok(ValType::I32),
-            wasmparser::Type::I64 => Ok(ValType::I64),
-            wasmparser::Type::F32 => Ok(ValType::F32),
-            wasmparser::Type::F64 => Ok(ValType::F64),
-            wasmparser::Type::V128 => Ok(ValType::V128),
-            wasmparser::Type::ExternRef => Ok(ValType::Externref),
-            wasmparser::Type::FuncRef => Ok(ValType::Funcref),
-            _ => bail!("not a value type"),
+            wasmparser::ValType::I32 => Ok(ValType::I32),
+            wasmparser::ValType::I64 => Ok(ValType::I64),
+            wasmparser::ValType::F32 => Ok(ValType::F32),
+            wasmparser::ValType::F64 => Ok(ValType::F64),
+            wasmparser::ValType::V128 => Ok(ValType::V128),
+            wasmparser::ValType::ExternRef => Ok(ValType::Externref),
+            wasmparser::ValType::FuncRef => Ok(ValType::Funcref),
         }
     }
 }

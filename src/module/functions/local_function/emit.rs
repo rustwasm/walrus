@@ -356,7 +356,7 @@ impl<'instr> Visitor<'instr> for Emit<'_> {
                     I8x16MinU => Instruction::I8x16MinU,
                     I8x16MaxS => Instruction::I8x16MaxS,
                     I8x16MaxU => Instruction::I8x16MaxU,
-                    I8x16RoundingAverageU => Instruction::I8x16AvgrU,
+                    I8x16AvgrU => Instruction::I8x16AvgrU,
 
                     I16x8NarrowI32x4S => Instruction::I16x8NarrowI32x4S,
                     I16x8NarrowI32x4U => Instruction::I16x8NarrowI32x4U,
@@ -374,7 +374,7 @@ impl<'instr> Visitor<'instr> for Emit<'_> {
                     I16x8MinU => Instruction::I16x8MinU,
                     I16x8MaxS => Instruction::I16x8MaxS,
                     I16x8MaxU => Instruction::I16x8MaxU,
-                    I16x8RoundingAverageU => Instruction::I16x8AvgrU,
+                    I16x8AvgrU => Instruction::I16x8AvgrU,
 
                     I32x4Shl => Instruction::I32x4Shl,
                     I32x4ShrS => Instruction::I32x4ShrS,
@@ -423,10 +423,21 @@ impl<'instr> Visitor<'instr> for Emit<'_> {
                     I32x4ExtMulHighI16x8S => Instruction::I32x4ExtMulHighI16x8S,
                     I32x4ExtMulLowI16x8U => Instruction::I32x4ExtMulLowI16x8U,
                     I32x4ExtMulHighI16x8U => Instruction::I32x4ExtMulHighI16x8U,
+                    I8x16RelaxedSwizzle => Instruction::I8x16RelaxedSwizzle,
                     I64x2ExtMulLowI32x4S => Instruction::I64x2ExtMulLowI32x4S,
                     I64x2ExtMulHighI32x4S => Instruction::I64x2ExtMulHighI32x4S,
                     I64x2ExtMulLowI32x4U => Instruction::I64x2ExtMulLowI32x4U,
                     I64x2ExtMulHighI32x4U => Instruction::I64x2ExtMulHighI32x4U,
+                    I8x16RelaxedLaneselect => Instruction::I8x16RelaxedLaneselect,
+                    I16x8RelaxedLaneselect => Instruction::I16x8RelaxedLaneselect,
+                    I32x4RelaxedLaneselect => Instruction::I32x4RelaxedLaneselect,
+                    I64x2RelaxedLaneselect => Instruction::I64x2RelaxedLaneselect,
+                    F64x2RelaxedFma => Instruction::F64x2RelaxedMadd,
+                    F64x2RelaxedFnma => Instruction::F64x2RelaxedNmadd,
+                    F64x2MinRelaxed => Instruction::F64x2RelaxedMin,
+                    F64x2MaxRelaxed => Instruction::F64x2RelaxedMax,
+                    F32x4RelaxedFma => Instruction::F32x4RelaxedMadd,
+                    F32x4RelaxedFnma => Instruction::F32x4RelaxedNmadd,
                 }
             }
 
@@ -586,6 +597,14 @@ impl<'instr> Visitor<'instr> for Emit<'_> {
                     F64x2ConvertLowI32x4U => Instruction::F64x2ConvertLowI32x4U,
                     F32x4DemoteF64x2Zero => Instruction::F32x4DemoteF64x2Zero,
                     F64x2PromoteLowF32x4 => Instruction::F64x2PromoteLowF32x4,
+                    I32x4TruncSatF32x4SRelaxed => Instruction::I32x4RelaxedTruncF32x4S,
+                    I32x4TruncSatF32x4URelaxed => Instruction::I32x4RelaxedTruncF32x4U,
+                    I32x4TruncSatF64x2SZeroRelaxed => Instruction::I32x4RelaxedTruncF64x2SZero,
+                    I32x4TruncSatF64x2UZeroRelaxed => Instruction::I32x4RelaxedTruncF64x2UZero,
+                    F32x4FmaRelaxed => Instruction::F32x4RelaxedMadd,
+                    F32x4FmsRelaxed => Instruction::F32x4RelaxedNmadd,
+                    F32x4MinRelaxed => Instruction::F32x4RelaxedMin,
+                    F32x4MaxRelaxed => Instruction::F32x4RelaxedMax,
                 }
             }
 

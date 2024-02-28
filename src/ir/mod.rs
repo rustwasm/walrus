@@ -496,7 +496,7 @@ pub enum Instr {
     },
 
     /// The `atomic.fence` instruction
-    AtomicFence {},
+    AtomicFence,
 
     /// `table.get`
     TableGet {
@@ -717,6 +717,10 @@ pub enum BinaryOp {
     I64x2ReplaceLane { idx: u8 },
     F32x4ReplaceLane { idx: u8 },
     F64x2ReplaceLane { idx: u8 },
+    I8x16RelaxedLaneselect,
+    I16x8RelaxedLaneselect,
+    I32x4RelaxedLaneselect,
+    I64x2RelaxedLaneselect,
 
     I8x16Eq,
     I8x16Ne,
@@ -817,6 +821,8 @@ pub enum BinaryOp {
     F32x4Max,
     F32x4PMin,
     F32x4PMax,
+    F32x4RelaxedFma,
+    F32x4RelaxedFnma,
     F64x2Add,
     F64x2Sub,
     F64x2Mul,
@@ -825,13 +831,18 @@ pub enum BinaryOp {
     F64x2Max,
     F64x2PMin,
     F64x2PMax,
+    F64x2RelaxedFma,
+    F64x2RelaxedFnma,
+    F64x2MinRelaxed,
+    F64x2MaxRelaxed,
 
+    I8x16RelaxedSwizzle,
     I8x16NarrowI16x8S,
     I8x16NarrowI16x8U,
     I16x8NarrowI32x4S,
     I16x8NarrowI32x4U,
-    I8x16RoundingAverageU,
-    I16x8RoundingAverageU,
+    I8x16AvgrU,
+    I16x8AvgrU,
 
     I8x16MinS,
     I8x16MinU,
@@ -970,6 +981,10 @@ pub enum UnaryOp {
     F32x4Floor,
     F32x4Trunc,
     F32x4Nearest,
+    F32x4FmaRelaxed,
+    F32x4FmsRelaxed,
+    F32x4MinRelaxed,
+    F32x4MaxRelaxed,
     F64x2Abs,
     F64x2Neg,
     F64x2Sqrt,
@@ -982,6 +997,10 @@ pub enum UnaryOp {
     I16x8ExtAddPairwiseI8x16U,
     I32x4ExtAddPairwiseI16x8S,
     I32x4ExtAddPairwiseI16x8U,
+    I32x4TruncSatF32x4SRelaxed,
+    I32x4TruncSatF32x4URelaxed,
+    I32x4TruncSatF64x2SZeroRelaxed,
+    I32x4TruncSatF64x2UZeroRelaxed,
     I64x2ExtendLowI32x4S,
     I64x2ExtendHighI32x4S,
     I64x2ExtendLowI32x4U,

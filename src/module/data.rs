@@ -1,10 +1,11 @@
 //! Data segments within a wasm module.
 
 use crate::emit::{Emit, EmitContext};
+use crate::init_expr::InitExpr;
 use crate::ir::Value;
 use crate::parse::IndicesToIds;
 use crate::tombstone_arena::{Id, Tombstone, TombstoneArena};
-use crate::{GlobalId, InitExpr, MemoryId, Module, Result, ValType};
+use crate::{GlobalId, MemoryId, Module, Result, ValType};
 use anyhow::{bail, Context};
 
 /// A passive element segment identifier
@@ -222,7 +223,7 @@ impl Module {
                 }
                 wasmparser::DataKind::Active {
                     memory_index,
-                    init_expr,
+                    offset_expr,
                 } => {
                     data.value = segment.data.to_vec();
 
@@ -230,7 +231,7 @@ impl Module {
                     let memory = self.memories.get_mut(memory_id);
                     memory.data_segments.insert(data.id);
 
-                    let offset = InitExpr::eval(&init_expr, ids)
+                    let offset = InitExpr::eval(&offset_expr, ids)
                         .with_context(|| format!("in segment {}", i))?;
                     data.kind = DataKind::Active(ActiveData {
                         memory: memory_id,

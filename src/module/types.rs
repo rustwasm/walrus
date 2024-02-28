@@ -119,19 +119,16 @@ impl Module {
     ) -> Result<()> {
         log::debug!("parsing type section");
         for ty in section {
-            let fun_ty = match ty? {
-                wasmparser::TypeDef::Func(ty) => ty,
-                _ => unimplemented!("module linking not supported"),
-            };
+            let wasmparser::Type::Func(fun_ty) = ty?;
             let id = self.types.arena.next_id();
             let params = fun_ty
-                .params
+                .params()
                 .iter()
-                .map(ValType::parse)
+                .map(|t| ValType::parse(t))
                 .collect::<Result<Vec<_>>>()?
                 .into_boxed_slice();
             let results = fun_ty
-                .returns
+                .results()
                 .iter()
                 .map(ValType::parse)
                 .collect::<Result<Vec<_>>>()?

@@ -153,53 +153,40 @@ impl Module {
         for entry in section {
             let entry = entry?;
             match entry.ty {
-                wasmparser::ImportSectionEntryType::Function(idx) => {
+                wasmparser::TypeRef::Func(idx) => {
                     let ty = ids.get_type(idx)?;
-                    let id = self.add_import_func(
-                        entry.module,
-                        entry.field.expect("module linking not supported"),
-                        ty,
-                    );
+                    let id = self.add_import_func(entry.module, entry.name, ty);
                     ids.push_func(id.0);
                 }
-                wasmparser::ImportSectionEntryType::Table(t) => {
+                wasmparser::TypeRef::Table(t) => {
                     let ty = ValType::parse(&t.element_type)?;
-                    let id = self.add_import_table(
-                        entry.module,
-                        entry.field.expect("module linking not supported"),
-                        t.initial,
-                        t.maximum,
-                        ty,
-                    );
+                    let id =
+                        self.add_import_table(entry.module, entry.name, t.initial, t.maximum, ty);
                     ids.push_table(id.0);
                 }
-                wasmparser::ImportSectionEntryType::Memory(m) => {
+                wasmparser::TypeRef::Memory(m) => {
                     if m.memory64 {
                         bail!("64-bit memories not supported")
                     };
                     let id = self.add_import_memory(
                         entry.module,
-                        entry.field.expect("module linking not supported"),
+                        entry.name,
                         m.shared,
                         m.initial as u32,
                         m.maximum.map(|m| m as u32),
                     );
                     ids.push_memory(id.0);
                 }
-                wasmparser::ImportSectionEntryType::Global(g) => {
+                wasmparser::TypeRef::Global(g) => {
                     let id = self.add_import_global(
                         entry.module,
-                        entry.field.expect("module linking not supported"),
+                        entry.name,
                         ValType::parse(&g.content_type)?,
                         g.mutable,
                     );
                     ids.push_global(id.0);
                 }
-                wasmparser::ImportSectionEntryType::Module(_)
-                | wasmparser::ImportSectionEntryType::Instance(_) => {
-                    unimplemented!("component model not implemented");
-                }
-                wasmparser::ImportSectionEntryType::Tag(_) => {
+                wasmparser::TypeRef::Tag(_) => {
                     unimplemented!("exception handling not implemented");
                 }
             }

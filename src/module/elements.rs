@@ -1,9 +1,10 @@
 //! Table elements within a wasm module.
 
 use crate::emit::{Emit, EmitContext};
+use crate::init_expr::InitExpr;
 use crate::parse::IndicesToIds;
 use crate::tombstone_arena::{Id, Tombstone, TombstoneArena};
-use crate::{ir::Value, FunctionId, InitExpr, Module, Result, TableId, ValType};
+use crate::{ir::Value, FunctionId, Module, Result, TableId, ValType};
 use anyhow::{bail, Context};
 
 /// A passive element segment identifier
@@ -116,17 +117,15 @@ impl Module {
                 ValType::Funcref => {}
                 _ => bail!("only funcref type allowed in element segments"),
             }
-            let members = segment
-                .items
-                .get_items_reader()?
-                .into_iter()
-                .map(|e| -> Result<_> {
-                    Ok(match e? {
-                        wasmparser::ElementItem::Func(f) => Some(ids.get_func(f)?),
-                        wasmparser::ElementItem::Null(_) => None,
-                    })
-                })
-                .collect::<Result<_>>()?;
+            let members = match segment.items {
+                wasmparser::ElementItems::Functions(funcs) => funcs
+                    .into_iter()
+                    .map(|f| Ok(Some(ids.get_func(f?)?)))
+                    .collect::<Result<_>>()?,
+                wasmparser::ElementItems::Expressions(exprs) => {
+                    exprs.into_iter().map(|_| Ok(None)).collect::<Result<_>>()?
+                }
+            };
             let id = self.elements.arena.next_id();
 
             let kind = match segment.kind {
@@ -134,12 +133,12 @@ impl Module {
                 wasmparser::ElementKind::Declared => ElementKind::Declared,
                 wasmparser::ElementKind::Active {
                     table_index,
-                    init_expr,
+                    offset_expr,
                 } => {
                     let table = ids.get_table(table_index)?;
                     self.tables.get_mut(table).elem_segments.insert(id);
 
-                    let offset = InitExpr::eval(&init_expr, ids)
+                    let offset = InitExpr::eval(&offset_expr, ids)
                         .with_context(|| format!("in segment {}", i))?;
                     match offset {
                         InitExpr::Value(Value::I32(_)) => {}

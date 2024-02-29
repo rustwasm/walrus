@@ -164,20 +164,17 @@ impl Module {
         for entry in section {
             let entry = entry?;
             let item = match entry.kind {
-                Function => ExportItem::Function(ids.get_func(entry.index)?),
+                Func => ExportItem::Function(ids.get_func(entry.index)?),
                 Table => ExportItem::Table(ids.get_table(entry.index)?),
                 Memory => ExportItem::Memory(ids.get_memory(entry.index)?),
                 Global => ExportItem::Global(ids.get_global(entry.index)?),
-                Type | Module | Instance => {
-                    unimplemented!("module linking not supported");
-                }
                 Tag => {
                     unimplemented!("exception handling not supported");
                 }
             };
             self.exports.arena.alloc_with_id(|id| Export {
                 id,
-                name: entry.field.to_string(),
+                name: entry.name.to_string(),
                 item,
             });
         }

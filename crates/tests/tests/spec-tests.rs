@@ -22,18 +22,29 @@ fn run(wast: &Path) -> Result<(), anyhow::Error> {
         .skip(1)
         .next()
         .map(|s| s.to_str().unwrap());
+
+    let mut config = walrus::ModuleConfig::new();
     let extra_args: &[&str] = match proposal {
         // stable features
-        None
-        | Some("multi-value")
+        Some("multi-value")
         | Some("nontrapping-float-to-int-conversions")
         | Some("sign-extension-ops")
-        | Some("mutable-global") => &[],
+        | Some("mutable-global")
+        | Some("simd") => {
+            config.only_stable_features(true);
+            &[]
+        }
 
-        Some("simd") => &["--enable-simd"],
-        Some("bulk-memory-operations") => &["--enable-bulk-memory"],
+        None | Some("bulk-memory-operations") => &[],
 
-        Some("reference-types") => &["--enable-reference-types", "--enable-bulk-memory"],
+        Some("multi-memory") => &["--enable-multi-memory"],
+
+        Some("reference-types") => &[],
+
+        Some("extended-const") => &["--enable-extended-const"],
+
+        Some("relaxed-simd") => return Ok(()),
+        Some("gc") => return Ok(()),
 
         // TODO: should get threads working
         Some("threads") => return Ok(()),
@@ -68,11 +79,6 @@ fn run(wast: &Path) -> Result<(), anyhow::Error> {
     let contents = fs::read_to_string(&json).context("failed to read file")?;
     let test: Test = serde_json::from_str(&contents).context("failed to parse file")?;
     let mut files = Vec::new();
-
-    let mut config = walrus::ModuleConfig::new();
-    if extra_args.len() == 0 {
-        config.only_stable_features(true);
-    }
 
     for command in test.commands {
         let filename = match command.get("filename") {

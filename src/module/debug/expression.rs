@@ -1,6 +1,6 @@
 use crate::{CodeTransform, Function, InstrLocId, ModuleFunctions};
 use id_arena::Id;
-use std::cmp::Ordering;
+use std::{cmp::Ordering, ops::Range};
 
 use super::dwarf::AddressSearchPreference;
 
@@ -22,7 +22,7 @@ pub(crate) enum CodeAddress {
 /// Converts original code address to CodeAddress
 pub(crate) struct CodeAddressGenerator {
     /// Function range based convert table
-    address_convert_table: Vec<(wasmparser::Range, Id<Function>)>,
+    address_convert_table: Vec<(Range<usize>, Id<Function>)>,
     /// Instrument based convert table
     instrument_address_convert_table: Vec<(usize, InstrLocId)>,
 }
@@ -31,7 +31,7 @@ impl CodeAddressGenerator {
     pub(crate) fn new(funcs: &ModuleFunctions) -> Self {
         let mut address_convert_table = funcs
             .iter_local()
-            .filter_map(|(func_id, func)| func.original_range.map(|range| (range, func_id)))
+            .filter_map(|(func_id, func)| func.original_range.clone().map(|range| (range, func_id)))
             .collect::<Vec<_>>();
 
         let mut instrument_address_convert_table = funcs
@@ -75,7 +75,7 @@ impl CodeAddressGenerator {
         };
 
         // If the address is not mapped to any instruction, falling back to function-range-based comparison.
-        let inclusive_range_comparor = |range: &(wasmparser::Range, Id<Function>)| {
+        let inclusive_range_comparor = |range: &(Range<usize>, Id<Function>)| {
             // range.start < address <= range.end
             if range.0.end < address {
                 Ordering::Less
@@ -85,7 +85,7 @@ impl CodeAddressGenerator {
                 Ordering::Equal
             }
         };
-        let exclusive_range_comparor = |range: &(wasmparser::Range, Id<Function>)| {
+        let exclusive_range_comparor = |range: &(Range<usize>, Id<Function>)| {
             // normal comparison: range.start <= address < range.end
             if range.0.end <= address {
                 Ordering::Less
@@ -189,7 +189,7 @@ mod tests {
             crate::FunctionBuilder::new(&mut module.types, &[], &[]),
         );
 
-        func1.original_range = Some(wasmparser::Range { start: 20, end: 30 });
+        func1.original_range = Some(Range { start: 20, end: 30 });
 
         let id1 = module.funcs.add_local(func1);
 
@@ -198,7 +198,7 @@ mod tests {
             crate::FunctionBuilder::new(&mut module.types, &[], &[]),
         );
 
-        func2.original_range = Some(wasmparser::Range { start: 30, end: 50 });
+        func2.original_range = Some(Range { start: 30, end: 50 });
 
         let id2 = module.funcs.add_local(func2);
 
@@ -262,7 +262,7 @@ mod tests {
         {
             code_transform
                 .function_ranges
-                .push((id1, wasmparser::Range { start: 50, end: 80 }));
+                .push((id1, Range { start: 50, end: 80 }));
             code_transform.instruction_map.push((instr_id1, 60));
             code_transform.instruction_map.push((instr_id2, 65));
         }

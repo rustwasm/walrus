@@ -2,10 +2,11 @@
 
 use std::cmp;
 use std::collections::BTreeMap;
+use std::ops::Range;
 
 use anyhow::{bail, Context};
 use wasm_encoder::Encode;
-use wasmparser::{FuncValidator, FunctionBody, Range, ValidatorResources};
+use wasmparser::{FuncToValidate, FuncValidatorAllocations, FunctionBody, ValidatorResources};
 
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
@@ -337,19 +338,21 @@ impl Module {
     /// Add the locally defined functions in the wasm module to this instance.
     pub(crate) fn parse_local_functions(
         &mut self,
-        functions: Vec<(FunctionBody<'_>, FuncValidator<ValidatorResources>)>,
+        functions: Vec<(FunctionBody<'_>, FuncToValidate<ValidatorResources>)>,
         indices: &mut IndicesToIds,
         on_instr_pos: Option<&(dyn Fn(&usize) -> InstrLocId + Sync + Send + 'static)>,
     ) -> Result<()> {
         log::debug!("parse code section");
         let num_imports = self.funcs.arena.len() - functions.len();
 
+        let mut allocs = FuncValidatorAllocations::default();
+
         // First up serially create corresponding `LocalId` instances for all
         // functions as well as extract the operators parser for each function.
         // This is pretty tough to parallelize, but we can look into it later if
         // necessary and it's a bottleneck!
         let mut bodies = Vec::with_capacity(functions.len());
-        for (i, (body, mut validator)) in functions.into_iter().enumerate() {
+        for (i, (body, to_validate)) in functions.into_iter().enumerate() {
             let index = (num_imports + i) as u32;
             let id = indices.get_func(index)?;
             let ty = match self.funcs.arena[id].kind {
@@ -380,10 +383,11 @@ impl Module {
 
             // Next up comes all the locals of the function.
             let mut reader = body.get_binary_reader();
+            let mut validator = to_validate.into_validator(Default::default());
             for _ in 0..reader.read_var_u32()? {
                 let pos = reader.original_position();
                 let count = reader.read_var_u32()?;
-                let ty = reader.read_type()?;
+                let ty = reader.read()?;
                 validator.define_locals(pos, count, ty)?;
                 let ty = ValType::parse(&ty)?;
                 for _ in 0..count {
@@ -395,7 +399,6 @@ impl Module {
                     }
                 }
             }
-
             bodies.push((id, reader, args, ty, validator));
         }
 
@@ -403,19 +406,22 @@ impl Module {
         // take some time, so parse all function bodies in parallel.
         let results = maybe_parallel!(bodies.(into_iter | into_par_iter))
             .map(|(id, body, args, ty, validator)| {
-                (
+                match LocalFunction::parse(
+                    self,
+                    indices,
                     id,
-                    LocalFunction::parse(
-                        self,
-                        indices,
-                        id,
-                        ty,
-                        args,
-                        body,
-                        on_instr_pos,
-                        validator,
-                    ),
-                )
+                    ty,
+                    args,
+                    body,
+                    on_instr_pos,
+                    validator,
+                ) {
+                    Ok((func, func_allocs)) => {
+                        allocs = func_allocs;
+                        (id, Ok(func))
+                    }
+                    Err(err) => (id, Err(err)),
+                }
             })
             .collect::<Vec<_>>();
 

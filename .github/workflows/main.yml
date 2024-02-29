@@ -51,8 +51,8 @@ jobs:
     - name: Install wabt
       run: |
         set -e
-        curl -L https://github.com/WebAssembly/wabt/releases/download/1.0.13/wabt-1.0.13-linux.tar.gz | tar xzf -
-        echo "`pwd`/wabt-1.0.13" > $GITHUB_PATH
+        curl -L https://github.com/WebAssembly/wabt/releases/download/1.0.33/wabt-1.0.33-linux.tar.gz | tar xzf -
+        echo "`pwd`/wabt-1.0.33" > $GITHUB_PATH
     - name: Install binaryen
       run: |
         set -e
@@ -78,8 +78,8 @@ jobs:
     - name: Install wabt
       run: |
         set -e
-        curl -L https://github.com/WebAssembly/wabt/releases/download/1.0.13/wabt-1.0.13-linux.tar.gz | tar xzf -
-        echo "`pwd`/wabt-1.0.13" > $GITHUB_PATH
+        curl -L https://github.com/WebAssembly/wabt/releases/download/1.0.33/wabt-1.0.33-linux.tar.gz | tar xzf -
+        echo "`pwd`/wabt-1.0.33" > $GITHUB_PATH
     - name: Install binaryen
       run: |
         set -e

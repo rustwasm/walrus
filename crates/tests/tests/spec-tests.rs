@@ -26,18 +26,25 @@ fn run(wast: &Path) -> Result<(), anyhow::Error> {
     let mut config = walrus::ModuleConfig::new();
     let extra_args: &[&str] = match proposal {
         // stable features
-        None
-        | Some("multi-value")
+        Some("multi-value")
         | Some("nontrapping-float-to-int-conversions")
         | Some("sign-extension-ops")
-        | Some("mutable-global") => {
+        | Some("mutable-global")
+        | Some("simd") => {
             config.only_stable_features(true);
             &[]
         }
 
-        Some("bulk-memory-operations") | Some("simd") => &[],
+        None | Some("bulk-memory-operations") => &[],
 
-        Some("reference-types") => &["--enable-reference-types"],
+        Some("multi-memory") => &["--enable-multi-memory"],
+
+        Some("reference-types") => &[],
+
+        Some("extended-const") => &["--enable-extended-const"],
+
+        Some("relaxed-simd") => return Ok(()),
+        Some("gc") => return Ok(()),
 
         // TODO: should get threads working
         Some("threads") => return Ok(()),

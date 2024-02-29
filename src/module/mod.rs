@@ -136,10 +136,10 @@ impl Module {
         let mut validator = Validator::new_with_features(WasmFeatures {
             reference_types: !config.only_stable_features,
             multi_value: true,
-            bulk_memory: !config.only_stable_features,
-            simd: !config.only_stable_features,
+            bulk_memory: true,
+            simd: true,
             threads: !config.only_stable_features,
-            multi_memory: !config.only_stable_features,
+            multi_memory: true,
             ..WasmFeatures::default()
         });
 

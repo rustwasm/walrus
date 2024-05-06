@@ -132,7 +132,14 @@ impl Used {
                 // Active segments are rooted because they initialize imported
                 // or exported tables. Declared segments can probably get gc'd
                 // but for now we're conservative and we root them.
-                ElementKind::Active { .. } | ElementKind::Declared => {
+                ElementKind::Active { table, .. } => {
+                    if module.exports.get_exported_table(table).is_some()
+                        || module.tables.get(table).import.is_some()
+                    {
+                        stack.push_element(elem.id());
+                    }
+                }
+                ElementKind::Declared => {
                     stack.push_element(elem.id());
                 }
                 ElementKind::Passive => {}

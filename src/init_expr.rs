@@ -58,8 +58,14 @@ impl InitExpr {
                 wasm_encoder::ConstExpr::global_get(cx.indices.get_global_index(*g))
             }
             InitExpr::RefNull(ty) => wasm_encoder::ConstExpr::ref_null(match ty {
-                ValType::Externref => wasm_encoder::HeapType::Abstract { shared: false, ty: wasm_encoder::AbstractHeapType::Extern },
-                ValType::Funcref => wasm_encoder::HeapType::Abstract { shared: false, ty: wasm_encoder::AbstractHeapType::Func },
+                ValType::Externref => wasm_encoder::HeapType::Abstract {
+                    shared: false,
+                    ty: wasm_encoder::AbstractHeapType::Extern,
+                },
+                ValType::Funcref => wasm_encoder::HeapType::Abstract {
+                    shared: false,
+                    ty: wasm_encoder::AbstractHeapType::Func,
+                },
                 _ => unreachable!(),
             }),
             InitExpr::RefFunc(f) => {

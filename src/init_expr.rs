@@ -22,7 +22,7 @@ pub enum InitExpr {
 }
 
 impl InitExpr {
-    pub(crate) fn eval(init: &wasmparser::InitExpr, ids: &IndicesToIds) -> Result<InitExpr> {
+    pub(crate) fn eval(init: &wasmparser::ConstExpr, ids: &IndicesToIds) -> Result<InitExpr> {
         use wasmparser::Operator::*;
         let mut reader = init.get_operators_reader();
         let val = match reader.read()? {
@@ -32,7 +32,8 @@ impl InitExpr {
             F64Const { value } => InitExpr::Value(Value::F64(f64::from_bits(value.bits()))),
             V128Const { value } => InitExpr::Value(Value::V128(v128_to_u128(&value))),
             GlobalGet { global_index } => InitExpr::Global(ids.get_global(global_index)?),
-            RefNull { ty } => InitExpr::RefNull(ValType::parse(&ty)?),
+            // TODO: handle RefNull
+            // RefNull { hty } => InitExpr::RefNull(ValType::parse(&hty)?),
             RefFunc { function_index } => InitExpr::RefFunc(ids.get_func(function_index)?),
             _ => bail!("invalid constant expression"),
         };
@@ -57,8 +58,8 @@ impl InitExpr {
                 wasm_encoder::ConstExpr::global_get(cx.indices.get_global_index(*g))
             }
             InitExpr::RefNull(ty) => wasm_encoder::ConstExpr::ref_null(match ty {
-                ValType::Externref => wasm_encoder::HeapType::Extern,
-                ValType::Funcref => wasm_encoder::HeapType::Func,
+                ValType::Externref => wasm_encoder::HeapType::Abstract { shared: false, ty: wasm_encoder::AbstractHeapType::Extern },
+                ValType::Funcref => wasm_encoder::HeapType::Abstract { shared: false, ty: wasm_encoder::AbstractHeapType::Func },
                 _ => unreachable!(),
             }),
             InitExpr::RefFunc(f) => {

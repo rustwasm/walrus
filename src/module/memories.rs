@@ -16,10 +16,12 @@ pub struct Memory {
     id: MemoryId,
     /// Is this memory shared?
     pub shared: bool,
+    /// Whether or not this is a 64-bit memory.
+    pub memory64: bool,
     /// The initial page size for this memory.
-    pub initial: u32,
+    pub initial: u64,
     /// The maximum page size for this memory.
-    pub maximum: Option<u32>,
+    pub maximum: Option<u64>,
     /// Whether or not this memory is imported, and if so from where.
     pub import: Option<ImportId>,
     /// Active data segments that will be used to initialize this memory.
@@ -53,14 +55,16 @@ impl ModuleMemories {
     pub fn add_import(
         &mut self,
         shared: bool,
-        initial: u32,
-        maximum: Option<u32>,
+        memory64: bool,
+        initial: u64,
+        maximum: Option<u64>,
         import: ImportId,
     ) -> MemoryId {
         let id = self.arena.next_id();
         let id2 = self.arena.alloc(Memory {
             id,
             shared,
+            memory64,
             initial,
             maximum,
             import: Some(import),
@@ -73,11 +77,18 @@ impl ModuleMemories {
 
     /// Construct a new memory, that does not originate from any of the input
     /// wasm memories.
-    pub fn add_local(&mut self, shared: bool, initial: u32, maximum: Option<u32>) -> MemoryId {
+    pub fn add_local(
+        &mut self,
+        shared: bool,
+        memory64: bool,
+        initial: u64,
+        maximum: Option<u64>,
+    ) -> MemoryId {
         let id = self.arena.next_id();
         let id2 = self.arena.alloc(Memory {
             id,
             shared,
+            memory64,
             initial,
             maximum,
             import: None,
@@ -135,9 +146,9 @@ impl Module {
             if m.memory64 {
                 bail!("64-bit memories not supported")
             };
-            let id =
-                self.memories
-                    .add_local(m.shared, m.initial as u32, m.maximum.map(|m| m as u32));
+            let id = self
+                .memories
+                .add_local(m.shared, m.memory64, m.initial, m.maximum);
             ids.push_memory(id);
         }
         Ok(())
@@ -164,6 +175,7 @@ impl Emit for ModuleMemories {
                 maximum: memory.maximum.map(|v| v as u64),
                 memory64: false,
                 shared: memory.shared,
+                page_size_log2: None, // No support for the custom-page-sizes proposal
             });
         }
 
@@ -180,10 +192,10 @@ mod tests {
         let mut module = Module::default();
         assert_eq!(module.memories.len(), 0);
 
-        module.memories.add_local(false, 0, Some(1024));
+        module.memories.add_local(false, false, 0, Some(1024));
         assert_eq!(module.memories.len(), 1);
 
-        module.memories.add_local(true, 1024, Some(2048));
+        module.memories.add_local(true, true, 1024, Some(2048));
         assert_eq!(module.memories.len(), 2);
     }
 }

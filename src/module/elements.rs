@@ -110,36 +110,35 @@ impl Module {
     ) -> Result<()> {
         log::debug!("parse element section");
         for (i, segment) in section.into_iter().enumerate() {
-            let segment = segment?;
-            let ty = ValType::parse(&segment.ty)?;
-            match ty {
-                ValType::Funcref => {}
-                _ => bail!("only funcref type allowed in element segments"),
-            }
-            let members = segment
-                .items
-                .get_items_reader()?
-                .into_iter()
-                .map(|e| -> Result<_> {
-                    Ok(match e? {
-                        wasmparser::ElementItem::Func(f) => Some(ids.get_func(f)?),
-                        wasmparser::ElementItem::Null(_) => None,
+            let element = segment?;
+
+            let members = match element.items {
+                wasmparser::ElementItems::Functions(f) => f
+                    .into_iter()
+                    .map(|f| -> Result<_> {
+                        match ids.get_func(f?) {
+                            Ok(f) => Ok(Some(f)),
+                            Err(_) => Ok(None),
+                        }
                     })
-                })
-                .collect::<Result<_>>()?;
+                    .collect::<Result<_>>()?,
+                wasmparser::ElementItems::Expressions(_, _) => todo!(),
+            };
+
             let id = self.elements.arena.next_id();
 
-            let kind = match segment.kind {
+            let kind = match element.kind {
                 wasmparser::ElementKind::Passive => ElementKind::Passive,
                 wasmparser::ElementKind::Declared => ElementKind::Declared,
                 wasmparser::ElementKind::Active {
                     table_index,
-                    init_expr,
+                    offset_expr,
                 } => {
-                    let table = ids.get_table(table_index)?;
+                    // TODO: check if this is correct
+                    let table = ids.get_table(table_index.unwrap_or_default())?;
                     self.tables.get_mut(table).elem_segments.insert(id);
 
-                    let offset = InitExpr::eval(&init_expr, ids)
+                    let offset = InitExpr::eval(&offset_expr, ids)
                         .with_context(|| format!("in segment {}", i))?;
                     match offset {
                         InitExpr::Value(Value::I32(_)) => {}
@@ -152,7 +151,7 @@ impl Module {
             };
             self.elements.arena.alloc(Element {
                 id,
-                ty,
+                ty: ValType::Funcref,
                 kind,
                 members,
                 name: None,
@@ -182,7 +181,12 @@ impl Emit for ModuleElements {
                         Some(func) => {
                             wasm_encoder::ConstExpr::ref_func(cx.indices.get_func_index(*func))
                         }
-                        None => wasm_encoder::ConstExpr::ref_null(wasm_encoder::HeapType::Func),
+                        None => {
+                            wasm_encoder::ConstExpr::ref_null(wasm_encoder::HeapType::Abstract {
+                                shared: false,
+                                ty: wasm_encoder::AbstractHeapType::Func,
+                            })
+                        }
                     })
                     .collect();
                 let els = wasm_encoder::Elements::Expressions(

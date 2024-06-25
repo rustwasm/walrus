@@ -830,8 +830,8 @@ pub enum BinaryOp {
     I8x16NarrowI16x8U,
     I16x8NarrowI32x4S,
     I16x8NarrowI32x4U,
-    I8x16RoundingAverageU,
-    I16x8RoundingAverageU,
+    I8x16AvgrU,
+    I16x8AvgrU,
 
     I8x16MinS,
     I8x16MinU,

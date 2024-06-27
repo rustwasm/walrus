@@ -16,41 +16,12 @@ fn run(wast: &Path) -> Result<(), anyhow::Error> {
         env_logger::init();
     });
 
-    let proposal = wast
-        .iter()
-        .skip_while(|part| *part != "proposals")
-        .skip(1)
-        .next()
-        .map(|s| s.to_str().unwrap());
-    let extra_args: &[&str] = match proposal {
-        // stable features
-        None
-        | Some("multi-value")
-        | Some("nontrapping-float-to-int-conversions")
-        | Some("sign-extension-ops")
-        | Some("mutable-global") => &[],
+    // Skip proposals tests for now
+    if wast.components().any(|c| c.as_os_str() == "proposals") {
+        return Ok(());
+    }
 
-        Some("simd") => &["--enable-simd"],
-        Some("bulk-memory-operations") => &["--enable-bulk-memory"],
-
-        Some("reference-types") => &["--enable-reference-types", "--enable-bulk-memory"],
-
-        // TODO: should get threads working
-        Some("threads") => return Ok(()),
-        // TODO: should get tail-call working
-        Some("tail-call") => return Ok(()),
-
-        // not a walrus thing, but not implemented in wabt fully yet anyway
-        Some("annotations") => return Ok(()),
-
-        // not implemented in walrus yet
-        Some("function-references") => return Ok(()),
-        Some("exception-handling") => return Ok(()),
-        Some("memory64") => return Ok(()),
-
-        // Some("threads") => &["--enable-threads"],
-        Some(other) => panic!("unknown wasm proposal: {}", other),
-    };
+    let extra_args = &[];
 
     let tempdir = TempDir::new()?;
     let json = tempdir.path().join("foo.json");

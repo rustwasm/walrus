@@ -1,7 +1,7 @@
 use crate::ir::*;
 use crate::map::IdHashSet;
 use crate::{ActiveDataLocation, Data, DataId, DataKind, Element, ExportItem, Function, InitExpr};
-use crate::{ElementId, ElementKind, Module, Type, TypeId};
+use crate::{ElementId, ElementItems, ElementKind, Module, Type, TypeId};
 use crate::{FunctionId, FunctionKind, Global, GlobalId};
 use crate::{GlobalKind, Memory, MemoryId, Table, TableId};
 
@@ -204,10 +204,10 @@ impl Used {
 
             while let Some(e) = stack.elements.pop() {
                 let e = module.elements.get(e);
-                for func in e.members.iter() {
-                    if let Some(func) = func {
-                        stack.push_func(*func);
-                    }
+                if let ElementItems::Functions(function_ids) = &e.items {
+                    function_ids.iter().for_each(|f| {
+                        stack.push_func(*f);
+                    });
                 }
                 if let ElementKind::Active { offset, table } = &e.kind {
                     if let InitExpr::Global(g) = offset {

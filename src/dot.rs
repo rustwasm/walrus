@@ -526,10 +526,8 @@ impl DotNode for Element {
     }
 
     fn edges(&self, edges: &mut impl EdgeAggregator) {
-        for m in self.members.iter() {
-            if let Some(m) = m {
-                edges.add_edge(m);
-            }
+        if let ElementItems::Functions(function_ids) = &self.items {
+            function_ids.iter().for_each(|f| edges.add_edge(f));
         }
     }
 }

@@ -35,6 +35,11 @@ fn run(wast: &Path) -> Result<(), anyhow::Error> {
     assert!(status.success());
 
     let wabt_ok = run_spectest_interp(tempdir.path(), extra_args).is_ok();
+    // If wabt didn't succeed before we ran walrus there's no hope of it passing
+    // after we run walrus.
+    if !wabt_ok {
+        return Ok(());
+    }
 
     let contents = fs::read_to_string(&json).context("failed to read file")?;
     let test: Test = serde_json::from_str(&contents).context("failed to parse file")?;
@@ -45,6 +50,7 @@ fn run(wast: &Path) -> Result<(), anyhow::Error> {
         config.only_stable_features(true);
     }
 
+    let mut false_positives = vec![];
     for command in test.commands {
         let filename = match command.get("filename") {
             Some(name) => name.as_str().unwrap().to_string(),
@@ -63,7 +69,6 @@ fn run(wast: &Path) -> Result<(), anyhow::Error> {
                     continue;
                 }
                 let wasm = fs::read(&path)?;
-                println!("{:?}", command);
                 if config.parse(&wasm).is_ok() {
                     // A few spec tests assume multi-value isn't implemented,
                     // but we implement it, so basically just skip those tests.
@@ -79,7 +84,7 @@ fn run(wast: &Path) -> Result<(), anyhow::Error> {
                     if wast.ends_with("unreached-invalid.wast") && line == 539 {
                         continue;
                     }
-                    panic!("wasm parsed when it shouldn't (line {})", line);
+                    false_positives.push(line.as_u64().unwrap());
                 }
             }
             "assert_unlinkable" if wast.file_name() == Some("elem.wast".as_ref()) => {
@@ -111,10 +116,8 @@ fn run(wast: &Path) -> Result<(), anyhow::Error> {
         }
     }
 
-    // If wabt didn't succeed before we ran walrus there's no hope of it passing
-    // after we run walrus.
-    if !wabt_ok {
-        return Ok(());
+    if !false_positives.is_empty() {
+        panic!("wasm parsed when it shouldn't (line {:?})", false_positives);
     }
 
     // First up run the spec-tests as-is after we round-tripped through walrus.

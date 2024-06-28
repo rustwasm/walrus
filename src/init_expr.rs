@@ -32,8 +32,17 @@ impl InitExpr {
             F64Const { value } => InitExpr::Value(Value::F64(f64::from_bits(value.bits()))),
             V128Const { value } => InitExpr::Value(Value::V128(v128_to_u128(&value))),
             GlobalGet { global_index } => InitExpr::Global(ids.get_global(global_index)?),
-            // TODO: handle RefNull
-            // RefNull { hty } => InitExpr::RefNull(ValType::parse(&hty)?),
+            RefNull { hty } => {
+                let val_type = match hty {
+                    wasmparser::HeapType::Abstract { shared: _, ty } => match ty {
+                        wasmparser::AbstractHeapType::Func => ValType::Funcref,
+                        wasmparser::AbstractHeapType::Extern => ValType::Externref,
+                        _ => bail!("invalid constant expression"),
+                    },
+                    wasmparser::HeapType::Concrete(_) => bail!("invalid constant expression"),
+                };
+                InitExpr::RefNull(val_type)
+            }
             RefFunc { function_index } => InitExpr::RefFunc(ids.get_func(function_index)?),
             _ => bail!("invalid constant expression"),
         };

@@ -603,9 +603,12 @@ impl<'instr> Visitor<'instr> for Emit<'_> {
             Call(e) => Instruction::Call(self.indices.get_func_index(e.func)),
 
             CallIndirect(e) => {
-                let ty = self.indices.get_type_index(e.ty);
-                let table = self.indices.get_table_index(e.table);
-                Instruction::CallIndirect { ty, table }
+                let type_index = self.indices.get_type_index(e.ty);
+                let table_index = self.indices.get_table_index(e.table);
+                Instruction::CallIndirect {
+                    type_index,
+                    table_index,
+                }
             }
 
             LocalGet(e) => Instruction::LocalGet(self.local_indices[&e.local]),

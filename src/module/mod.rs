@@ -133,10 +133,14 @@ impl Module {
         let mut ret = Module::default();
         ret.config = config.clone();
         let mut indices = IndicesToIds::default();
-        let wasm_features = match config.only_stable_features {
-            true => WasmFeatures::default(),
-            false => WasmFeatures::all(),
-        };
+
+        // The wasm-tools project is using the following features to run the spectests without proposals
+        // See tests/roundtrip.rs::TestState::wasmparser_validator_for
+        let mut wasm_features = WasmFeatures::default();
+        wasm_features.remove(WasmFeatures::COMPONENT_MODEL);
+        wasm_features.remove(WasmFeatures::MULTI_MEMORY);
+        wasm_features.remove(WasmFeatures::THREADS);
+
         let mut validator = Validator::new_with_features(wasm_features);
 
         let mut local_functions = Vec::new();

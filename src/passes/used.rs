@@ -209,6 +209,19 @@ impl Used {
                         stack.push_func(*f);
                     });
                 }
+                if let ElementItems::Expressions(crate::ValType::Funcref, items) = &e.items {
+                    for item in items {
+                        match item {
+                            InitExpr::Global(g) => {
+                                stack.push_global(*g);
+                            }
+                            InitExpr::RefFunc(f) => {
+                                stack.push_func(*f);
+                            }
+                            _ => {}
+                        }
+                    }
+                }
                 if let ElementKind::Active { offset, table } = &e.kind {
                     if let InitExpr::Global(g) = offset {
                         stack.push_global(*g);

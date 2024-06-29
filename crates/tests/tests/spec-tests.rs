@@ -71,7 +71,7 @@ fn run(wast: &Path) -> Result<(), anyhow::Error> {
         let path = tempdir.path().join(filename);
         match command["type"].as_str().unwrap() {
             "assert_invalid" | "assert_malformed" => {
-                // The multiple-memories feature is on (from wasmparser::WasmFeatures::default()).
+                // The multiple-memory feature is on (from wasmparser::WasmFeatures::default()).
                 // In imports.wast and memory.wast, following cases will be parsed which should not.
                 if proposal.is_none() && command["text"] == "multiple memories" {
                     continue;

@@ -16,12 +16,27 @@ fn run(wast: &Path) -> Result<(), anyhow::Error> {
         env_logger::init();
     });
 
-    // Skip proposals tests for now
-    if wast.components().any(|c| c.as_os_str() == "proposals") {
-        return Ok(());
-    }
+    let proposal = wast
+        .iter()
+        .skip_while(|part| *part != "proposals")
+        .skip(1)
+        .next()
+        .map(|s| s.to_str().unwrap());
 
-    let extra_args = &[];
+    let extra_args: &[&str] = match proposal {
+        None => &[],
+        Some("annotations") => return Ok(()),
+        Some("exception-handling") => return Ok(()),
+        Some("extended-const") => return Ok(()),
+        Some("function-references") => return Ok(()),
+        Some("gc") => return Ok(()),
+        Some("memory64") => return Ok(()),
+        Some("multi-memory") => &["--enable-multi-memory"],
+        Some("relaxed-simd") => return Ok(()),
+        Some("tail-call") => return Ok(()),
+        Some("threads") => return Ok(()),
+        Some(other) => bail!("unknown wasm proposal: {}", other),
+    };
 
     let tempdir = TempDir::new()?;
     let json = tempdir.path().join("foo.json");
@@ -56,10 +71,16 @@ fn run(wast: &Path) -> Result<(), anyhow::Error> {
         let path = tempdir.path().join(filename);
         match command["type"].as_str().unwrap() {
             "assert_invalid" | "assert_malformed" => {
-                // The multiple-memories feature is on by default in walrus (align with wasmparser::WasmFeatures::default())
-                if command["text"] == "multiple memories" {
+                // The multiple-memories feature is on (from wasmparser::WasmFeatures::default()).
+                // In imports.wast and memory.wast, following cases will be parsed which should not.
+                if proposal.is_none() && command["text"] == "multiple memories" {
                     continue;
                 }
+                // In binary.wast, following cases will be parsed which should not.
+                if proposal.is_none() && command["text"] == "zero byte expected" {
+                    continue;
+                }
+
                 let wasm = fs::read(&path)?;
                 if config.parse(&wasm).is_ok() {
                     should_not_parse.push(line);

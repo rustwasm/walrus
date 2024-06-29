@@ -23,7 +23,7 @@ jobs:
       run: |
         set -e
         curl -L https://github.com/WebAssembly/binaryen/releases/download/version_117/binaryen-version_117-x86_64-linux.tar.gz | tar xzf -
-        echo "`pwd`/binaryen-version_117" > $GITHUB_PATH
+        echo "`pwd`/binaryen-version_117/bin" > $GITHUB_PATH
     - run: cargo build --all
     - run: cargo test --all
     - run: cargo check --benches
@@ -46,7 +46,7 @@ jobs:
       run: |
         set -e
         curl -L https://github.com/WebAssembly/binaryen/releases/download/version_117/binaryen-version_117-x86_64-linux.tar.gz | tar xzf -
-        echo "`pwd`/binaryen-version_117" > $GITHUB_PATH
+        echo "`pwd`/binaryen-version_117/bin" > $GITHUB_PATH
     - name: Run fuzzer
       run: cargo test -p walrus-fuzz-utils > fuzz.log || (tail -n 1000 fuzz.log && exit 1)
       env:
@@ -73,7 +73,7 @@ jobs:
       run: |
         set -e
         curl -L https://github.com/WebAssembly/binaryen/releases/download/version_117/binaryen-version_117-x86_64-linux.tar.gz | tar xzf -
-        echo "`pwd`/binaryen-version_117" > $GITHUB_PATH
+        echo "`pwd`/binaryen-version_117/bin" > $GITHUB_PATH
     - name: Run fuzzer
       run: |
         cargo fuzz run ${{ matrix.test }} -- -max_total_time=300 -rss_limit_mb=4096 > fuzz.log 2>&1 || (tail -n 1000 fuzz.log && exit 1)

@@ -200,7 +200,7 @@ impl ModuleFunctions {
     /// return the first function in the module with the given name.
     pub fn by_name(&self, name: &str) -> Option<FunctionId> {
         self.arena.iter().find_map(|(id, f)| {
-            if f.name.as_deref() == Some(name) {
+            if f.name.as_ref().map(|s| s.as_str()) == Some(name) {
                 Some(id)
             } else {
                 None
@@ -292,7 +292,7 @@ impl ModuleFunctions {
     pub(crate) fn emit_func_section(&self, cx: &mut EmitContext) {
         log::debug!("emit function section");
         let functions = used_local_functions(cx);
-        if functions.is_empty() {
+        if functions.len() == 0 {
             return;
         }
         let mut func_section = wasm_encoder::FunctionSection::new();
@@ -605,7 +605,7 @@ impl Emit for ModuleFunctions {
     fn emit(&self, cx: &mut EmitContext) {
         log::debug!("emit code section");
         let functions = used_local_functions(cx);
-        if functions.is_empty() {
+        if functions.len() == 0 {
             return;
         }
 

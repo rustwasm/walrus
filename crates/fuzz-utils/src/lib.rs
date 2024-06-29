@@ -68,7 +68,7 @@ where
             .join("..") // pop `crates`
             .join("target")
             .join("walrus-fuzz");
-        fs::create_dir_all(&dir).unwrap_or_else(|_| panic!("should create directory: {:?}", dir));
+        fs::create_dir_all(&dir).expect(&format!("should create directory: {:?}", dir));
 
         let scratch = tempfile::NamedTempFile::new_in(dir).expect("should create temp file OK");
 
@@ -99,20 +99,20 @@ where
     }
 
     fn interp(&self, wasm: &[u8]) -> Result<String> {
-        fs::write(self.scratch.path(), wasm).context("failed to write to scratch file")?;
+        fs::write(self.scratch.path(), &wasm).context("failed to write to scratch file")?;
         wasm_interp(self.scratch.path())
     }
 
     fn round_trip_through_walrus(&self, wasm: &[u8]) -> Result<Vec<u8>> {
         let mut module =
-            walrus::Module::from_buffer(wasm).context("walrus failed to parse the wasm buffer")?;
+            walrus::Module::from_buffer(&wasm).context("walrus failed to parse the wasm buffer")?;
         walrus::passes::gc::run(&mut module);
         let buf = module.emit_wasm();
         Ok(buf)
     }
 
     fn test_wat(&self, wat: &str) -> Result<()> {
-        let wasm = self.wat2wasm(wat)?;
+        let wasm = self.wat2wasm(&wat)?;
         let expected = self.interp(&wasm)?;
 
         let walrus_wasm = self.round_trip_through_walrus(&wasm)?;
@@ -160,7 +160,6 @@ where
                 Ok(()) => {
                     // We reduced fuel as far as we could, so return the last
                     // failing test case.
-                    #[allow(clippy::question_mark)]
                     if failing.is_err() {
                         return failing;
                     }
@@ -314,7 +313,7 @@ impl<R: Rng> WatGen<R> {
         self.wat.push_str(&operator.to_string());
 
         for op in immediates.into_iter() {
-            self.wat.push(' ');
+            self.wat.push_str(" ");
             self.wat.push_str(op.as_ref());
         }
 

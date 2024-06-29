@@ -44,7 +44,6 @@ impl LocalFunction {
     ///
     /// Validates the given function body and constructs the `Instr` IR at the
     /// same time.
-    #[allow(clippy::too_many_arguments)]
     pub(crate) fn parse(
         module: &Module,
         indices: &IndicesToIds,
@@ -70,7 +69,7 @@ impl LocalFunction {
             }),
         };
 
-        let result: Vec<_> = module.types.get(ty).results().to_vec();
+        let result: Vec<_> = module.types.get(ty).results().iter().cloned().collect();
         let result = result.into_boxed_slice();
 
         let controls = &mut context::ControlStack::new();
@@ -207,7 +206,6 @@ impl LocalFunction {
     }
 
     /// Emit this function's compact locals declarations.
-    #[allow(clippy::type_complexity)]
     pub(crate) fn emit_locals(
         &self,
         module: &Module,
@@ -301,7 +299,11 @@ fn block_param_tys(ctx: &ValidationContext, ty: wasmparser::BlockType) -> Result
     }
 }
 
-fn append_instruction(ctx: &mut ValidationContext, inst: Operator, loc: InstrLocId) {
+fn append_instruction<'context>(
+    ctx: &'context mut ValidationContext,
+    inst: Operator,
+    loc: InstrLocId,
+) {
     // NB. there's a lot of `unwrap()` here in this function, and that's because
     // the `Operator` was validated above to already be valid, so everything
     // should succeed.
@@ -961,7 +963,10 @@ fn append_instruction(ctx: &mut ValidationContext, inst: Operator, loc: InstrLoc
         }
         Operator::MemoryAtomicWait32 { ref memarg }
         | Operator::MemoryAtomicWait64 { ref memarg } => {
-            let sixty_four = !matches!(inst, Operator::MemoryAtomicWait32 { .. });
+            let sixty_four = match inst {
+                Operator::MemoryAtomicWait32 { .. } => false,
+                _ => true,
+            };
             let (memory, arg) = mem_arg(ctx, memarg);
             ctx.alloc_instr(
                 AtomicWait {

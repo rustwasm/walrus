@@ -130,10 +130,8 @@ impl Module {
     }
 
     fn parse(wasm: &[u8], config: &ModuleConfig) -> Result<Module> {
-        let mut ret = Module {
-            config: config.clone(),
-            ..Default::default()
-        };
+        let mut ret = Module::default();
+        ret.config = config.clone();
         let mut indices = IndicesToIds::default();
 
         // TODO: how should we handle config.only_stable_features?
@@ -157,7 +155,7 @@ impl Module {
                     validator
                         .data_section(&s)
                         .context("failed to parse data section")?;
-                    ret.parse_data(s, &indices)?;
+                    ret.parse_data(s, &mut indices)?;
                 }
                 Payload::TypeSection(s) => {
                     validator
@@ -193,7 +191,7 @@ impl Module {
                     validator
                         .export_section(&s)
                         .context("failed to parse export section")?;
-                    ret.parse_exports(s, &indices)?;
+                    ret.parse_exports(s, &mut indices)?;
                 }
                 Payload::ElementSection(s) => {
                     validator
@@ -370,7 +368,7 @@ impl Module {
             log::debug!("skipping DWARF custom section");
         }
 
-        let indices = std::mem::take(cx.indices);
+        let indices = mem::replace(cx.indices, Default::default());
 
         for (_id, section) in customs.iter_mut() {
             if section.name().starts_with(".debug") {
@@ -552,7 +550,7 @@ fn emit_name_section(cx: &mut EmitContext) {
                     Some((*index, name))
                 })
                 .collect::<Vec<_>>();
-            if local_names.is_empty() {
+            if local_names.len() == 0 {
                 None
             } else {
                 Some((cx.indices.get_func_index(func.id()), local_names))
@@ -561,7 +559,7 @@ fn emit_name_section(cx: &mut EmitContext) {
         .collect::<Vec<_>>();
     locals.sort_by_key(|p| p.0); // sort by index
 
-    if cx.module.name.is_none() && funcs.is_empty() && locals.is_empty() {
+    if cx.module.name.is_none() && funcs.len() == 0 && locals.len() == 0 {
         return;
     }
 
@@ -569,7 +567,7 @@ fn emit_name_section(cx: &mut EmitContext) {
         wasm_name_section.module(name);
     }
 
-    if !funcs.is_empty() {
+    if funcs.len() > 0 {
         let mut name_map = wasm_encoder::NameMap::new();
         for (index, name) in funcs {
             name_map.append(index, name);
@@ -577,7 +575,7 @@ fn emit_name_section(cx: &mut EmitContext) {
         wasm_name_section.functions(&name_map);
     }
 
-    if !locals.is_empty() {
+    if locals.len() > 0 {
         let mut indirect_name_map = wasm_encoder::IndirectNameMap::new();
         for (index, mut map) in locals {
             let mut name_map = wasm_encoder::NameMap::new();

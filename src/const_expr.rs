@@ -58,17 +58,17 @@ impl ConstExpr {
         Ok(val)
     }
 
-    pub(crate) fn to_wasmencoder_type(self, cx: &EmitContext) -> wasm_encoder::ConstExpr {
+    pub(crate) fn to_wasmencoder_type(&self, cx: &EmitContext) -> wasm_encoder::ConstExpr {
         match self {
             ConstExpr::Value(v) => match v {
-                Value::I32(v) => wasm_encoder::ConstExpr::i32_const(v),
-                Value::I64(v) => wasm_encoder::ConstExpr::i64_const(v),
-                Value::F32(v) => wasm_encoder::ConstExpr::f32_const(v),
-                Value::F64(v) => wasm_encoder::ConstExpr::f64_const(v),
-                Value::V128(v) => wasm_encoder::ConstExpr::v128_const(v as i128),
+                Value::I32(v) => wasm_encoder::ConstExpr::i32_const(*v),
+                Value::I64(v) => wasm_encoder::ConstExpr::i64_const(*v),
+                Value::F32(v) => wasm_encoder::ConstExpr::f32_const(*v),
+                Value::F64(v) => wasm_encoder::ConstExpr::f64_const(*v),
+                Value::V128(v) => wasm_encoder::ConstExpr::v128_const(*v as i128),
             },
             ConstExpr::Global(g) => {
-                wasm_encoder::ConstExpr::global_get(cx.indices.get_global_index(g))
+                wasm_encoder::ConstExpr::global_get(cx.indices.get_global_index(*g))
             }
             ConstExpr::RefNull(ty) => wasm_encoder::ConstExpr::ref_null(match ty {
                 RefType::Externref => wasm_encoder::HeapType::Abstract {
@@ -81,7 +81,7 @@ impl ConstExpr {
                 },
             }),
             ConstExpr::RefFunc(f) => {
-                wasm_encoder::ConstExpr::ref_func(cx.indices.get_func_index(f))
+                wasm_encoder::ConstExpr::ref_func(cx.indices.get_func_index(*f))
             }
         }
     }
@@ -89,7 +89,7 @@ impl ConstExpr {
 
 pub(crate) fn v128_to_u128(value: &wasmparser::V128) -> u128 {
     let n = value.bytes();
-    (n[0] as u128)
+    ((n[0] as u128) << 0)
         | ((n[1] as u128) << 8)
         | ((n[2] as u128) << 16)
         | ((n[3] as u128) << 24)

@@ -193,7 +193,10 @@ where
     T: CustomSection,
 {
     fn clone(&self) -> Self {
-        *self
+        TypedCustomSectionId {
+            id: self.id,
+            _phantom: PhantomData,
+        }
     }
 }
 
@@ -363,18 +366,26 @@ impl ModuleCustomSections {
 
     /// Iterate over shared references to custom sections and their ids.
     pub fn iter(&self) -> impl Iterator<Item = (UntypedCustomSectionId, &dyn CustomSection)> {
-        self.arena
-            .iter()
-            .flat_map(|(id, s)| s.as_ref().map(|s| (UntypedCustomSectionId(id), &**s)))
+        self.arena.iter().flat_map(|(id, s)| {
+            if let Some(s) = s.as_ref() {
+                Some((UntypedCustomSectionId(id), &**s))
+            } else {
+                None
+            }
+        })
     }
 
     /// Iterate over exclusive references to custom sections and their ids.
     pub fn iter_mut(
         &mut self,
     ) -> impl Iterator<Item = (UntypedCustomSectionId, &mut dyn CustomSection)> {
-        self.arena
-            .iter_mut()
-            .flat_map(|(id, s)| s.as_mut().map(|s| (UntypedCustomSectionId(id), &mut **s)))
+        self.arena.iter_mut().flat_map(|(id, s)| {
+            if let Some(s) = s.as_mut() {
+                Some((UntypedCustomSectionId(id), &mut **s))
+            } else {
+                None
+            }
+        })
     }
 
     /// Remove a custom section (by type) from the module.

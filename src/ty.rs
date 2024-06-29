@@ -109,13 +109,13 @@ impl Type {
     /// Get the parameters to this function type.
     #[inline]
     pub fn params(&self) -> &[ValType] {
-        &self.params
+        &*self.params
     }
 
     /// Get the results of this function type.
     #[inline]
     pub fn results(&self) -> &[ValType] {
-        &self.results
+        &*self.results
     }
 
     pub(crate) fn is_for_function_entry(&self) -> bool {
@@ -170,7 +170,7 @@ impl ValType {
         Ok(v.into_boxed_slice())
     }
 
-    pub(crate) fn to_wasmencoder_type(self) -> wasm_encoder::ValType {
+    pub(crate) fn to_wasmencoder_type(&self) -> wasm_encoder::ValType {
         match self {
             ValType::I32 => wasm_encoder::ValType::I32,
             ValType::I64 => wasm_encoder::ValType::I64,

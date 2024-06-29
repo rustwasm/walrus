@@ -19,7 +19,8 @@ fn run(wast: &Path) -> Result<(), anyhow::Error> {
     let proposal = wast
         .iter()
         .skip_while(|part| *part != "proposals")
-        .nth(1)
+        .skip(1)
+        .next()
         .map(|s| s.to_str().unwrap());
 
     let extra_args: &[&str] = match proposal {
@@ -53,7 +54,7 @@ fn run(wast: &Path) -> Result<(), anyhow::Error> {
     let mut files = Vec::new();
 
     let mut config = walrus::ModuleConfig::new();
-    if extra_args.is_empty() {
+    if extra_args.len() == 0 {
         config.only_stable_features(true);
     }
 
@@ -153,7 +154,7 @@ fn run(wast: &Path) -> Result<(), anyhow::Error> {
         }
 
         let wasm = module.emit_wasm();
-        fs::write(file, wasm)?;
+        fs::write(&file, wasm)?;
     }
 
     run_spectest_interp(tempdir.path(), extra_args)?;
@@ -176,7 +177,7 @@ fn run_spectest_interp(cwd: &Path, extra_args: &[&str]) -> Result<(), anyhow::Er
         let stdout = String::from_utf8_lossy(&output.stdout);
         if let Some(line) = stdout.lines().find(|l| l.ends_with("tests passed.")) {
             let part = line.split_whitespace().next().unwrap();
-            let mut parts = part.split('/');
+            let mut parts = part.split("/");
             let a = parts.next().unwrap().parse::<u32>();
             let b = parts.next().unwrap().parse::<u32>();
             if a == b {

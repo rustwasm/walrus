@@ -87,7 +87,7 @@ impl<'instr> Visitor<'instr> for Emit<'_> {
         if let Some(map) = self.map.as_mut() {
             let pos = self.encoder.byte_len();
             // Save the encoded_at position for the specified ExprId.
-            map.push((seq.end, pos));
+            map.push((seq.end.clone(), pos));
         }
 
         if let BlockKind::If = popped_kind.unwrap() {
@@ -107,7 +107,7 @@ impl<'instr> Visitor<'instr> for Emit<'_> {
         if let Some(map) = self.map.as_mut() {
             let pos = self.encoder.byte_len();
             // Save the encoded_at position for the specified ExprId.
-            map.push((*instr_loc, pos));
+            map.push((instr_loc.clone(), pos));
         }
 
         let is_block = match instr {

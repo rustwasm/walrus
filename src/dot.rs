@@ -103,7 +103,7 @@ impl<T: DotNode> Dot for T {
 
         impl FieldAggregator for AppendFields<'_> {
             fn add_field(&mut self, field: &[&str]) {
-                assert!(!field.is_empty());
+                assert!(field.len() > 0);
                 self.out.push_str("<tr>");
                 for f in field {
                     self.out.push_str("<td>");
@@ -114,7 +114,7 @@ impl<T: DotNode> Dot for T {
             }
 
             fn add_field_with_port(&mut self, port: &str, field: &str) {
-                assert!(!field.is_empty());
+                assert!(field.len() > 0);
                 self.out.push_str("<tr>");
                 self.out.push_str("<td port=\"");
                 self.out.push_str(port);
@@ -142,7 +142,7 @@ impl<T: DotNode> Dot for T {
             fn add_edge_from_port(&mut self, port: &str, to: &impl DotName) {
                 self.out.push_str("    ");
                 self.out.push_str(self.from);
-                self.out.push(':');
+                self.out.push_str(":");
                 self.out.push_str(port);
                 self.out.push_str(" -> ");
                 self.out.push_str(&to.dot_name());
@@ -174,7 +174,7 @@ impl Dot for Module {
         // self.name.dot(out);
         // self.config.dot(out);
 
-        out.push('}');
+        out.push_str("}");
     }
 }
 

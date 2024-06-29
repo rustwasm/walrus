@@ -141,14 +141,9 @@ impl ModuleMemories {
         self.arena.iter_mut().map(|(_, f)| f)
     }
 
-    /// Get the number of memories in this module.
+    /// Get the number of memories in this module
     pub fn len(&self) -> usize {
         self.arena.len()
-    }
-
-    /// Returns true if there are no memories in this module.
-    pub fn is_empty(&self) -> bool {
-        self.arena.len() == 0
     }
 }
 

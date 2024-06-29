@@ -48,7 +48,7 @@ impl ModuleTypes {
     /// preserve type names from the WAT.
     pub fn by_name(&self, name: &str) -> Option<TypeId> {
         self.arena.iter().find_map(|(id, ty)| {
-            if ty.name.as_deref() == Some(name) {
+            if ty.name.as_ref().map(|s| s.as_str()) == Some(name) {
                 Some(id)
             } else {
                 None
@@ -163,12 +163,8 @@ impl Emit for ModuleTypes {
         for (id, ty) in tys {
             cx.indices.push_type(id);
             wasm_type_section.function(
-                ty.params()
-                    .iter()
-                    .map(|ty| ValType::to_wasmencoder_type(*ty)),
-                ty.results()
-                    .iter()
-                    .map(|ty| ValType::to_wasmencoder_type(*ty)),
+                ty.params().iter().map(ValType::to_wasmencoder_type),
+                ty.results().iter().map(ValType::to_wasmencoder_type),
             );
         }
 

@@ -101,7 +101,7 @@ impl Module {
 impl Emit for ModuleProducers {
     fn emit(&self, cx: &mut EmitContext) {
         log::debug!("emit producers section");
-        if self.fields.len() == 0 {
+        if self.fields.is_empty() {
             return;
         }
         let mut wasm_producers_section = wasm_encoder::ProducersSection::new();

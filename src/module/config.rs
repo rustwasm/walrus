@@ -15,8 +15,10 @@ pub struct ModuleConfig {
     pub(crate) skip_producers_section: bool,
     pub(crate) skip_name_section: bool,
     pub(crate) preserve_code_transform: bool,
+    #[allow(clippy::type_complexity)]
     pub(crate) on_parse:
         Option<Box<dyn Fn(&mut Module, &IndicesToIds) -> Result<()> + Sync + Send + 'static>>,
+    #[allow(clippy::type_complexity)]
     pub(crate) on_instr_loc: Option<Box<dyn Fn(&usize) -> InstrLocId + Sync + Send + 'static>>,
 }
 

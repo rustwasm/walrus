@@ -18,7 +18,7 @@ jobs:
       run: |
         set -e
         curl -L https://github.com/WebAssembly/wabt/releases/download/1.0.35/wabt-1.0.35-ubuntu-20.04.tar.gz | tar xzf -
-        echo "`pwd`/wabt-1.0.35" > $GITHUB_PATH
+        echo "`pwd`/wabt-1.0.35/bin" > $GITHUB_PATH
     - name: Install binaryen
       run: |
         set -e
@@ -41,7 +41,7 @@ jobs:
       run: |
         set -e
         curl -L https://github.com/WebAssembly/wabt/releases/download/1.0.35/wabt-1.0.35-ubuntu-20.04.tar.gz | tar xzf -
-        echo "`pwd`/wabt-1.0.35" > $GITHUB_PATH
+        echo "`pwd`/wabt-1.0.35/bin" > $GITHUB_PATH
     - name: Install binaryen
       run: |
         set -e
@@ -68,7 +68,7 @@ jobs:
       run: |
         set -e
         curl -L https://github.com/WebAssembly/wabt/releases/download/1.0.35/wabt-1.0.35-ubuntu-20.04.tar.gz | tar xzf -
-        echo "`pwd`/wabt-1.0.35" > $GITHUB_PATH
+        echo "`pwd`/wabt-1.0.35/bin" > $GITHUB_PATH
     - name: Install binaryen
       run: |
         set -e

@@ -690,7 +690,7 @@ mod tests {
     #[test]
     fn get_memory_id() {
         let mut module = Module::default();
-        let expected_id = module.memories.add_local(false, false, 0, None);
+        let expected_id = module.memories.add_local(false, false, 0, None, None);
         assert!(module.get_memory_id().is_ok_and(|id| id == expected_id));
     }
 

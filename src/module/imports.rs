@@ -182,6 +182,7 @@ impl Module {
                         m.memory64,
                         m.initial,
                         m.maximum,
+                        m.page_size_log2,
                     );
                     ids.push_memory(id.0);
                 }
@@ -226,11 +227,12 @@ impl Module {
         memory64: bool,
         initial: u64,
         maximum: Option<u64>,
+        page_size_log2: Option<u32>,
     ) -> (MemoryId, ImportId) {
         let import = self.imports.arena.next_id();
-        let mem = self
-            .memories
-            .add_import(shared, memory64, initial, maximum, import);
+        let mem =
+            self.memories
+                .add_import(shared, memory64, initial, maximum, page_size_log2, import);
         self.imports.add(module, name, mem);
         (mem, import)
     }

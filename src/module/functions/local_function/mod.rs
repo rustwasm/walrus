@@ -1323,17 +1323,7 @@ fn append_instruction<'context>(
             ctx.alloc_instr(ElemDrop { elem }, loc);
         }
 
-        Operator::ReturnCall { .. }
-        | Operator::ReturnCallIndirect { .. }
-        | Operator::Try { blockty: _ }
-        | Operator::Catch { tag_index: _ }
-        | Operator::Throw { tag_index: _ }
-        | Operator::Rethrow { relative_depth: _ }
-        | Operator::Delegate { relative_depth: _ }
-        | Operator::CatchAll => {
-            unimplemented!("not supported")
-        }
-
-        _ => todo!("Many operators are not yet implemented"),
+        // TODO: The remaining operators are for some on-going proposals
+        other => unimplemented!("unsupported operator: {:?}", other),
     }
 }

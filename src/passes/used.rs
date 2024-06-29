@@ -145,12 +145,12 @@ impl Used {
         }
 
         // Iteratively visit all items until our stack is empty
-        while stack.funcs.len() > 0
-            || stack.tables.len() > 0
-            || stack.memories.len() > 0
-            || stack.globals.len() > 0
-            || stack.datas.len() > 0
-            || stack.elements.len() > 0
+        while !stack.funcs.is_empty()
+            || !stack.tables.is_empty()
+            || !stack.memories.is_empty()
+            || !stack.globals.is_empty()
+            || !stack.datas.is_empty()
+            || !stack.elements.is_empty()
         {
             while let Some(f) = stack.funcs.pop() {
                 let func = module.funcs.get(f);
@@ -238,7 +238,7 @@ impl Used {
         // Let's keep `wabt` passing though and just say that if there are data
         // segments kept, but no memories, then we try to add the first memory,
         // if any, to the used set.
-        if stack.used.data.len() > 0 && stack.used.memories.len() == 0 {
+        if !stack.used.data.is_empty() && stack.used.memories.is_empty() {
             if let Some(mem) = module.memories.iter().next() {
                 stack.used.memories.insert(mem.id());
             }

@@ -76,10 +76,10 @@ mod tests {
 
         let mut cursor = DebuggingInformationCursor::new(&mut unit1);
 
-        assert_eq!(cursor.current().is_none(), true);
+        assert!(cursor.current().is_none());
         assert_eq!(cursor.next_dfs().unwrap().id(), root_id);
         assert_eq!(cursor.next_dfs().unwrap().id(), child1_id);
         assert_eq!(cursor.next_dfs().unwrap().id(), child2_id);
-        assert_eq!(cursor.next_dfs().is_none(), true);
+        assert!(cursor.next_dfs().is_none());
     }
 }

@@ -324,9 +324,9 @@ mod tests {
     use gimli::*;
     use std::cell::RefCell;
 
-    fn make_test_debug_line<'a>(
-        debug_line: &'a mut write::DebugLine<write::EndianVec<LittleEndian>>,
-    ) -> IncompleteLineProgram<EndianSlice<'a, LittleEndian>> {
+    fn make_test_debug_line(
+        debug_line: &mut write::DebugLine<write::EndianVec<LittleEndian>>,
+    ) -> IncompleteLineProgram<EndianSlice<'_, LittleEndian>> {
         let encoding = Encoding {
             format: Format::Dwarf32,
             version: 4,
@@ -368,11 +368,10 @@ mod tests {
             .unwrap();
 
         let debug_line = read::DebugLine::new(debug_line.slice(), LittleEndian);
-        let incomplete_debug_line = debug_line
-            .program(DebugLineOffset(0), 4, None, None)
-            .unwrap();
 
-        incomplete_debug_line
+        debug_line
+            .program(DebugLineOffset(0), 4, None, None)
+            .unwrap()
     }
 
     #[test]

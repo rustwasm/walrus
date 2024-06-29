@@ -219,6 +219,7 @@ impl Module {
     }
 
     /// Add an imported memory to this module
+    #[allow(clippy::too_many_arguments)]
     pub fn add_import_memory(
         &mut self,
         module: &str,
@@ -310,8 +311,8 @@ impl Emit for ModuleImports {
                         cx.indices.push_memory(id);
                         let mem = cx.module.memories.get(id);
                         wasm_encoder::EntityType::Memory(wasm_encoder::MemoryType {
-                            minimum: mem.initial as u64,
-                            maximum: mem.maximum.map(|v| v as u64),
+                            minimum: mem.initial,
+                            maximum: mem.maximum,
                             memory64: false,
                             shared: mem.shared,
                             page_size_log2: None,

@@ -998,13 +998,18 @@ fn append_instruction<'context>(
             let table = ctx.indices.get_table(table).unwrap();
             ctx.alloc_instr(TableFill { table }, loc);
         }
-        Operator::RefNull { hty: _ } => {
-            // TODO:
-            // RefNull definition has changed in wasmparser.
-            // Should we update accordingly?
-
-            // let ty = ValType::parse(&hty).unwrap();
-            // ctx.alloc_instr(RefNull { ty }, loc);
+        Operator::RefNull { hty } => {
+            let ty = match hty {
+                wasmparser::HeapType::Abstract { shared: _, ty } => match ty {
+                    wasmparser::AbstractHeapType::Func => ValType::Funcref,
+                    wasmparser::AbstractHeapType::Extern => ValType::Externref,
+                    _ => panic!("unsupported abstract heap type for ref.null"),
+                },
+                wasmparser::HeapType::Concrete(_) => {
+                    panic!("unsupported concrete heap type for ref.null")
+                }
+            };
+            ctx.alloc_instr(RefNull { ty }, loc);
         }
         Operator::RefIsNull => {
             ctx.alloc_instr(RefIsNull {}, loc);

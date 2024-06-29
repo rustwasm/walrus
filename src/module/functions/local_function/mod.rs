@@ -402,7 +402,7 @@ fn append_instruction<'context>(
         Operator::F32Const { value } => const_(ctx, Value::F32(f32::from_bits(value.bits()))),
         Operator::F64Const { value } => const_(ctx, Value::F64(f64::from_bits(value.bits()))),
         Operator::V128Const { value } => {
-            let val = crate::init_expr::v128_to_u128(&value);
+            let val = crate::const_expr::v128_to_u128(&value);
             const_(ctx, Value::V128(val))
         }
         Operator::I32Eqz => unop(ctx, UnaryOp::I32Eqz),

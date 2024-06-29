@@ -4,7 +4,7 @@ use crate::emit::{Emit, EmitContext};
 use crate::ir::Value;
 use crate::parse::IndicesToIds;
 use crate::tombstone_arena::{Id, Tombstone, TombstoneArena};
-use crate::{GlobalId, InitExpr, MemoryId, Module, Result, ValType};
+use crate::{ConstExpr, GlobalId, MemoryId, Module, Result, ValType};
 use anyhow::{bail, Context};
 
 /// A passive element segment identifier
@@ -230,15 +230,15 @@ impl Module {
                     let memory = self.memories.get_mut(memory_id);
                     memory.data_segments.insert(data.id);
 
-                    let offset = InitExpr::eval(&offset_expr, ids)
+                    let offset = ConstExpr::eval(&offset_expr, ids)
                         .with_context(|| format!("in segment {}", i))?;
                     data.kind = DataKind::Active(ActiveData {
                         memory: memory_id,
                         location: match offset {
-                            InitExpr::Value(Value::I32(n)) => {
+                            ConstExpr::Value(Value::I32(n)) => {
                                 ActiveDataLocation::Absolute(n as u32)
                             }
-                            InitExpr::Global(global)
+                            ConstExpr::Global(global)
                                 if self.globals.get(global).ty == ValType::I32 =>
                             {
                                 ActiveDataLocation::Relative(global)

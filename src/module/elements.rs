@@ -3,7 +3,7 @@
 use crate::emit::{Emit, EmitContext};
 use crate::parse::IndicesToIds;
 use crate::tombstone_arena::{Id, Tombstone, TombstoneArena};
-use crate::{ir::Value, FunctionId, InitExpr, Module, RefType, Result, TableId, ValType};
+use crate::{ir::Value, ConstExpr, FunctionId, Module, RefType, Result, TableId, ValType};
 use anyhow::{bail, Context};
 
 /// A passive element segment identifier
@@ -34,7 +34,7 @@ pub enum ElementKind {
         /// The ID of the table being initialized.
         table: TableId,
         /// A constant defining an offset into that table.
-        offset: InitExpr,
+        offset: ConstExpr,
     },
 }
 
@@ -44,7 +44,7 @@ pub enum ElementItems {
     /// This element contains function indices.
     Functions(Vec<FunctionId>),
     /// This element contains constant expressions used to initialize the table.
-    Expressions(RefType, Vec<InitExpr>),
+    Expressions(RefType, Vec<ConstExpr>),
 }
 
 impl Element {
@@ -138,18 +138,18 @@ impl Module {
                         wasmparser::RefType::EXTERNREF => RefType::Externref,
                         _ => bail!("unsupported ref type in element segment {}", i),
                     };
-                    let mut init_exprs = Vec::with_capacity(items.count() as usize);
+                    let mut const_exprs = Vec::with_capacity(items.count() as usize);
                     for item in items {
                         let const_expr = item?;
-                        let expr = InitExpr::eval(&const_expr, ids).with_context(|| {
+                        let expr = ConstExpr::eval(&const_expr, ids).with_context(|| {
                             format!(
                                 "Failed to evaluate a const expr in element segment {}:\n{:?}",
                                 i, const_expr
                             )
                         })?;
-                        init_exprs.push(expr);
+                        const_exprs.push(expr);
                     }
-                    ElementItems::Expressions(ty, init_exprs)
+                    ElementItems::Expressions(ty, const_exprs)
                 }
             };
 
@@ -166,12 +166,12 @@ impl Module {
                     let table = ids.get_table(table_index.unwrap_or_default())?;
                     self.tables.get_mut(table).elem_segments.insert(id);
 
-                    let offset = InitExpr::eval(&offset_expr, ids)
+                    let offset = ConstExpr::eval(&offset_expr, ids)
                         .with_context(|| format!("in segment {}", i))?;
                     match offset {
-                        InitExpr::Value(Value::I32(_)) => {}
-                        InitExpr::Global(global) if self.globals.get(global).ty == ValType::I32 => {
-                        }
+                        ConstExpr::Value(Value::I32(_)) => {}
+                        ConstExpr::Global(global)
+                            if self.globals.get(global).ty == ValType::I32 => {}
                         _ => bail!("non-i32 constant in segment {}", i),
                     }
                     ElementKind::Active { table, offset }
@@ -209,12 +209,12 @@ impl Emit for ModuleElements {
                     let els = wasm_encoder::Elements::Functions(&idx);
                     emit_elem(cx, &mut wasm_element_section, &element.kind, els);
                 }
-                ElementItems::Expressions(ty, init_exprs) => {
+                ElementItems::Expressions(ty, const_exprs) => {
                     let ref_type = match ty {
                         RefType::Funcref => wasm_encoder::RefType::FUNCREF,
                         RefType::Externref => wasm_encoder::RefType::EXTERNREF,
                     };
-                    let const_exprs = init_exprs
+                    let const_exprs = const_exprs
                         .iter()
                         .map(|expr| expr.to_wasmencoder_type(cx))
                         .collect::<Vec<_>>();

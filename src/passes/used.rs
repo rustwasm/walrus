@@ -1,6 +1,6 @@
 use crate::ir::*;
 use crate::map::IdHashSet;
-use crate::{ActiveDataLocation, Data, DataId, DataKind, Element, ExportItem, Function, InitExpr};
+use crate::{ActiveDataLocation, ConstExpr, Data, DataId, DataKind, Element, ExportItem, Function};
 use crate::{ElementId, ElementItems, ElementKind, Module, RefType, Type, TypeId};
 use crate::{FunctionId, FunctionKind, Global, GlobalId};
 use crate::{GlobalKind, Memory, MemoryId, Table, TableId};
@@ -175,14 +175,14 @@ impl Used {
             while let Some(t) = stack.globals.pop() {
                 match &module.globals.get(t).kind {
                     GlobalKind::Import(_) => {}
-                    GlobalKind::Local(InitExpr::Global(global)) => {
+                    GlobalKind::Local(ConstExpr::Global(global)) => {
                         stack.push_global(*global);
                     }
-                    GlobalKind::Local(InitExpr::RefFunc(func)) => {
+                    GlobalKind::Local(ConstExpr::RefFunc(func)) => {
                         stack.push_func(*func);
                     }
-                    GlobalKind::Local(InitExpr::Value(_))
-                    | GlobalKind::Local(InitExpr::RefNull(_)) => {}
+                    GlobalKind::Local(ConstExpr::Value(_))
+                    | GlobalKind::Local(ConstExpr::RefNull(_)) => {}
                 }
             }
 
@@ -212,10 +212,10 @@ impl Used {
                 if let ElementItems::Expressions(RefType::Funcref, items) = &e.items {
                     for item in items {
                         match item {
-                            InitExpr::Global(g) => {
+                            ConstExpr::Global(g) => {
                                 stack.push_global(*g);
                             }
-                            InitExpr::RefFunc(f) => {
+                            ConstExpr::RefFunc(f) => {
                                 stack.push_func(*f);
                             }
                             _ => {}
@@ -223,7 +223,7 @@ impl Used {
                     }
                 }
                 if let ElementKind::Active { offset, table } = &e.kind {
-                    if let InitExpr::Global(g) = offset {
+                    if let ConstExpr::Global(g) = offset {
                         stack.push_global(*g);
                     }
                     stack.push_table(*table);

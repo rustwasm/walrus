@@ -10,7 +10,7 @@ use anyhow::bail;
 /// A constant which is produced in WebAssembly, typically used in global
 /// initializers or element/data offsets.
 #[derive(Debug, Copy, Clone)]
-pub enum InitExpr {
+pub enum ConstExpr {
     /// An immediate constant value
     Value(Value),
     /// A constant value referenced by the global specified
@@ -21,17 +21,17 @@ pub enum InitExpr {
     RefFunc(FunctionId),
 }
 
-impl InitExpr {
-    pub(crate) fn eval(init: &wasmparser::ConstExpr, ids: &IndicesToIds) -> Result<InitExpr> {
+impl ConstExpr {
+    pub(crate) fn eval(init: &wasmparser::ConstExpr, ids: &IndicesToIds) -> Result<ConstExpr> {
         use wasmparser::Operator::*;
         let mut reader = init.get_operators_reader();
         let val = match reader.read()? {
-            I32Const { value } => InitExpr::Value(Value::I32(value)),
-            I64Const { value } => InitExpr::Value(Value::I64(value)),
-            F32Const { value } => InitExpr::Value(Value::F32(f32::from_bits(value.bits()))),
-            F64Const { value } => InitExpr::Value(Value::F64(f64::from_bits(value.bits()))),
-            V128Const { value } => InitExpr::Value(Value::V128(v128_to_u128(&value))),
-            GlobalGet { global_index } => InitExpr::Global(ids.get_global(global_index)?),
+            I32Const { value } => ConstExpr::Value(Value::I32(value)),
+            I64Const { value } => ConstExpr::Value(Value::I64(value)),
+            F32Const { value } => ConstExpr::Value(Value::F32(f32::from_bits(value.bits()))),
+            F64Const { value } => ConstExpr::Value(Value::F64(f64::from_bits(value.bits()))),
+            V128Const { value } => ConstExpr::Value(Value::V128(v128_to_u128(&value))),
+            GlobalGet { global_index } => ConstExpr::Global(ids.get_global(global_index)?),
             RefNull { hty } => {
                 let val_type = match hty {
                     wasmparser::HeapType::Abstract { shared: _, ty } => match ty {
@@ -45,9 +45,9 @@ impl InitExpr {
                         bail!("unsupported concrete heap type in constant expression")
                     }
                 };
-                InitExpr::RefNull(val_type)
+                ConstExpr::RefNull(val_type)
             }
-            RefFunc { function_index } => InitExpr::RefFunc(ids.get_func(function_index)?),
+            RefFunc { function_index } => ConstExpr::RefFunc(ids.get_func(function_index)?),
             _ => bail!("invalid constant expression"),
         };
         match reader.read()? {
@@ -60,17 +60,17 @@ impl InitExpr {
 
     pub(crate) fn to_wasmencoder_type(&self, cx: &EmitContext) -> wasm_encoder::ConstExpr {
         match self {
-            InitExpr::Value(v) => match v {
+            ConstExpr::Value(v) => match v {
                 Value::I32(v) => wasm_encoder::ConstExpr::i32_const(*v),
                 Value::I64(v) => wasm_encoder::ConstExpr::i64_const(*v),
                 Value::F32(v) => wasm_encoder::ConstExpr::f32_const(*v),
                 Value::F64(v) => wasm_encoder::ConstExpr::f64_const(*v),
                 Value::V128(v) => wasm_encoder::ConstExpr::v128_const(*v as i128),
             },
-            InitExpr::Global(g) => {
+            ConstExpr::Global(g) => {
                 wasm_encoder::ConstExpr::global_get(cx.indices.get_global_index(*g))
             }
-            InitExpr::RefNull(ty) => wasm_encoder::ConstExpr::ref_null(match ty {
+            ConstExpr::RefNull(ty) => wasm_encoder::ConstExpr::ref_null(match ty {
                 RefType::Externref => wasm_encoder::HeapType::Abstract {
                     shared: false,
                     ty: wasm_encoder::AbstractHeapType::Extern,
@@ -80,7 +80,7 @@ impl InitExpr {
                     ty: wasm_encoder::AbstractHeapType::Func,
                 },
             }),
-            InitExpr::RefFunc(f) => {
+            ConstExpr::RefFunc(f) => {
                 wasm_encoder::ConstExpr::ref_func(cx.indices.get_func_index(*f))
             }
         }

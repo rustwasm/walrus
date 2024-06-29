@@ -2,7 +2,7 @@
 use crate::emit::{Emit, EmitContext};
 use crate::parse::IndicesToIds;
 use crate::tombstone_arena::{Id, Tombstone, TombstoneArena};
-use crate::{ImportId, InitExpr, Module, Result, ValType};
+use crate::{ConstExpr, ImportId, Module, Result, ValType};
 
 /// The id of a global.
 pub type GlobalId = Id<Global>;
@@ -34,7 +34,7 @@ pub enum GlobalKind {
     /// An imported global without a known initializer
     Import(ImportId),
     /// A locally declare global with the specified identifier
-    Local(InitExpr),
+    Local(ConstExpr),
 }
 
 impl Global {
@@ -77,7 +77,7 @@ impl ModuleGlobals {
         ty: ValType,
         mutable: bool,
         shared: bool,
-        init: InitExpr,
+        init: ConstExpr,
     ) -> GlobalId {
         self.arena.alloc_with_id(|id| Global {
             id,
@@ -127,7 +127,7 @@ impl Module {
                 ValType::parse(&g.ty.content_type)?,
                 g.ty.mutable,
                 g.ty.shared,
-                InitExpr::eval(&g.init_expr, ids)?,
+                ConstExpr::eval(&g.init_expr, ids)?,
             );
             ids.push_global(id);
         }
@@ -140,7 +140,7 @@ impl Emit for ModuleGlobals {
         log::debug!("emit global section");
         let mut wasm_global_section = wasm_encoder::GlobalSection::new();
 
-        fn get_local(global: &Global) -> Option<(&Global, &InitExpr)> {
+        fn get_local(global: &Global) -> Option<(&Global, &ConstExpr)> {
             match &global.kind {
                 GlobalKind::Import(_) => None,
                 GlobalKind::Local(local) => Some((global, local)),

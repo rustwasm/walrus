@@ -3,7 +3,7 @@
 use crate::emit::EmitContext;
 use crate::ir::Value;
 use crate::parse::IndicesToIds;
-use crate::ValType;
+use crate::RefType;
 use crate::{FunctionId, GlobalId, Result};
 use anyhow::bail;
 
@@ -16,7 +16,7 @@ pub enum InitExpr {
     /// A constant value referenced by the global specified
     Global(GlobalId),
     /// A null reference
-    RefNull(ValType),
+    RefNull(RefType),
     /// A function initializer
     RefFunc(FunctionId),
 }
@@ -35,11 +35,15 @@ impl InitExpr {
             RefNull { hty } => {
                 let val_type = match hty {
                     wasmparser::HeapType::Abstract { shared: _, ty } => match ty {
-                        wasmparser::AbstractHeapType::Func => ValType::Funcref,
-                        wasmparser::AbstractHeapType::Extern => ValType::Externref,
-                        _ => bail!("invalid constant expression"),
+                        wasmparser::AbstractHeapType::Func => RefType::Funcref,
+                        wasmparser::AbstractHeapType::Extern => RefType::Externref,
+                        other => bail!(
+                            "unsupported abstract heap type in constant expression: {other:?}"
+                        ),
                     },
-                    wasmparser::HeapType::Concrete(_) => bail!("invalid constant expression"),
+                    wasmparser::HeapType::Concrete(_) => {
+                        bail!("unsupported concrete heap type in constant expression")
+                    }
                 };
                 InitExpr::RefNull(val_type)
             }
@@ -67,15 +71,14 @@ impl InitExpr {
                 wasm_encoder::ConstExpr::global_get(cx.indices.get_global_index(*g))
             }
             InitExpr::RefNull(ty) => wasm_encoder::ConstExpr::ref_null(match ty {
-                ValType::Externref => wasm_encoder::HeapType::Abstract {
+                RefType::Externref => wasm_encoder::HeapType::Abstract {
                     shared: false,
                     ty: wasm_encoder::AbstractHeapType::Extern,
                 },
-                ValType::Funcref => wasm_encoder::HeapType::Abstract {
+                RefType::Funcref => wasm_encoder::HeapType::Abstract {
                     shared: false,
                     ty: wasm_encoder::AbstractHeapType::Func,
                 },
-                _ => unreachable!(),
             }),
             InitExpr::RefFunc(f) => {
                 wasm_encoder::ConstExpr::ref_func(cx.indices.get_func_index(*f))

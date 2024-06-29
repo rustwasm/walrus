@@ -1,8 +1,8 @@
 use crate::emit::IdsToIndices;
-use crate::ir::*;
 use crate::map::IdHashMap;
 use crate::module::functions::LocalFunction;
 use crate::module::memories::MemoryId;
+use crate::{ir::*, RefType};
 use wasm_encoder::Instruction;
 
 pub(crate) fn run(
@@ -775,15 +775,14 @@ impl<'instr> Visitor<'instr> for Emit<'_> {
             TableSize(e) => Instruction::TableSize(self.indices.get_table_index(e.table)),
             TableFill(e) => Instruction::TableFill(self.indices.get_table_index(e.table)),
             RefNull(e) => Instruction::RefNull(match &e.ty {
-                crate::ValType::Externref => wasm_encoder::HeapType::Abstract {
+                RefType::Externref => wasm_encoder::HeapType::Abstract {
                     shared: false,
                     ty: wasm_encoder::AbstractHeapType::Extern,
                 },
-                crate::ValType::Funcref => wasm_encoder::HeapType::Abstract {
+                RefType::Funcref => wasm_encoder::HeapType::Abstract {
                     shared: false,
                     ty: wasm_encoder::AbstractHeapType::Func,
                 },
-                _ => unreachable!(),
             }),
             RefIsNull(_) => Instruction::RefIsNull,
             RefFunc(e) => Instruction::RefFunc(self.indices.get_func_index(e.func)),

@@ -1,12 +1,14 @@
 //! A wasm module's imports.
 
+use std::convert::TryInto;
+
 use anyhow::{bail, Context};
 
 use crate::emit::{Emit, EmitContext};
 use crate::parse::IndicesToIds;
 use crate::tombstone_arena::{Id, Tombstone, TombstoneArena};
 use crate::{FunctionId, GlobalId, MemoryId, Result, TableId};
-use crate::{Module, TypeId, ValType};
+use crate::{Module, RefType, TypeId, ValType};
 
 /// The id of an import.
 pub type ImportId = Id<Import>;
@@ -159,14 +161,13 @@ impl Module {
                     ids.push_func(id.0);
                 }
                 wasmparser::TypeRef::Table(t) => {
-                    let ty = ValType::parse(&wasmparser::ValType::Ref(t.element_type))?;
                     let id = self.add_import_table(
                         entry.module,
                         entry.name,
                         t.table64,
                         t.initial,
                         t.maximum,
-                        ty,
+                        t.element_type.try_into()?,
                     );
                     ids.push_table(id.0);
                 }
@@ -242,7 +243,7 @@ impl Module {
         table64: bool,
         initial: u64,
         maximum: Option<u64>,
-        ty: ValType,
+        ty: RefType,
     ) -> (TableId, ImportId) {
         let import = self.imports.arena.next_id();
         let table = self
@@ -295,9 +296,8 @@ impl Emit for ModuleImports {
                         let table = cx.module.tables.get(id);
                         wasm_encoder::EntityType::Table(wasm_encoder::TableType {
                             element_type: match table.element_ty {
-                                ValType::Externref => wasm_encoder::RefType::EXTERNREF,
-                                ValType::Funcref => wasm_encoder::RefType::FUNCREF,
-                                _ => panic!("Unexpected table type"),
+                                RefType::Externref => wasm_encoder::RefType::EXTERNREF,
+                                RefType::Funcref => wasm_encoder::RefType::FUNCREF,
                             },
                             table64: table.table64,
                             minimum: table.initial,

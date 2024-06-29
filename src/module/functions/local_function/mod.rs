@@ -5,9 +5,9 @@ mod emit;
 
 use self::context::ValidationContext;
 use crate::emit::IdsToIndices;
-use crate::ir::*;
 use crate::map::{IdHashMap, IdHashSet};
 use crate::parse::IndicesToIds;
+use crate::{ir::*, RefType};
 use crate::{Data, DataId, FunctionBuilder, FunctionId, MemoryId, Module, Result, TypeId, ValType};
 use std::collections::BTreeMap;
 use std::ops::Range;
@@ -1001,9 +1001,11 @@ fn append_instruction<'context>(
         Operator::RefNull { hty } => {
             let ty = match hty {
                 wasmparser::HeapType::Abstract { shared: _, ty } => match ty {
-                    wasmparser::AbstractHeapType::Func => ValType::Funcref,
-                    wasmparser::AbstractHeapType::Extern => ValType::Externref,
-                    _ => panic!("unsupported abstract heap type for ref.null"),
+                    wasmparser::AbstractHeapType::Func => RefType::Funcref,
+                    wasmparser::AbstractHeapType::Extern => RefType::Externref,
+                    other => {
+                        panic!("unsupported abstract heap type for ref.null: {:?}", other)
+                    }
                 },
                 wasmparser::HeapType::Concrete(_) => {
                     panic!("unsupported concrete heap type for ref.null")

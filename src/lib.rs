@@ -38,4 +38,4 @@ pub use crate::init_expr::InitExpr;
 pub use crate::ir::{Local, LocalId};
 pub use crate::module::*;
 pub use crate::parse::IndicesToIds;
-pub use crate::ty::{Type, TypeId, ValType};
+pub use crate::ty::{RefType, Type, TypeId, ValType};

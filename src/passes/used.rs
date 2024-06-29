@@ -1,7 +1,7 @@
 use crate::ir::*;
 use crate::map::IdHashSet;
 use crate::{ActiveDataLocation, Data, DataId, DataKind, Element, ExportItem, Function, InitExpr};
-use crate::{ElementId, ElementItems, ElementKind, Module, Type, TypeId};
+use crate::{ElementId, ElementItems, ElementKind, Module, RefType, Type, TypeId};
 use crate::{FunctionId, FunctionKind, Global, GlobalId};
 use crate::{GlobalKind, Memory, MemoryId, Table, TableId};
 
@@ -209,7 +209,7 @@ impl Used {
                         stack.push_func(*f);
                     });
                 }
-                if let ElementItems::Expressions(crate::ValType::Funcref, items) = &e.items {
+                if let ElementItems::Expressions(RefType::Funcref, items) = &e.items {
                     for item in items {
                         match item {
                             InitExpr::Global(g) => {

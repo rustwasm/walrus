@@ -3,7 +3,7 @@
 use crate::emit::{Emit, EmitContext};
 use crate::parse::IndicesToIds;
 use crate::tombstone_arena::{Id, Tombstone, TombstoneArena};
-use crate::{ir::Value, FunctionId, InitExpr, Module, Result, TableId, ValType};
+use crate::{ir::Value, FunctionId, InitExpr, Module, RefType, Result, TableId, ValType};
 use anyhow::{bail, Context};
 
 /// A passive element segment identifier
@@ -44,7 +44,7 @@ pub enum ElementItems {
     /// This element contains function indices.
     Functions(Vec<FunctionId>),
     /// This element contains constant expressions used to initialize the table.
-    Expressions(ValType, Vec<InitExpr>),
+    Expressions(RefType, Vec<InitExpr>),
 }
 
 impl Element {
@@ -134,8 +134,8 @@ impl Module {
                 }
                 wasmparser::ElementItems::Expressions(ref_type, items) => {
                     let ty = match ref_type {
-                        wasmparser::RefType::FUNCREF => ValType::Funcref,
-                        wasmparser::RefType::EXTERNREF => ValType::Externref,
+                        wasmparser::RefType::FUNCREF => RefType::Funcref,
+                        wasmparser::RefType::EXTERNREF => RefType::Externref,
                         _ => bail!("unsupported ref type in element segment {}", i),
                     };
                     let mut init_exprs = Vec::with_capacity(items.count() as usize);
@@ -211,9 +211,8 @@ impl Emit for ModuleElements {
                 }
                 ElementItems::Expressions(ty, init_exprs) => {
                     let ref_type = match ty {
-                        ValType::Funcref => wasm_encoder::RefType::FUNCREF,
-                        ValType::Externref => wasm_encoder::RefType::EXTERNREF,
-                        _ => unreachable!(),
+                        RefType::Funcref => wasm_encoder::RefType::FUNCREF,
+                        RefType::Externref => wasm_encoder::RefType::EXTERNREF,
                     };
                     let const_exprs = init_exprs
                         .iter()

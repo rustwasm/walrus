@@ -78,11 +78,20 @@ jobs:
       run: |
         cargo fuzz run ${{ matrix.test }} -- -max_total_time=300 -rss_limit_mb=4096 > fuzz.log 2>&1 || (tail -n 1000 fuzz.log && exit 1)
 
-  rustfmt:
-    name: Rustfmt
+  fmt:
+    name: fmt
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
     - name: Install Rust
       run: rustup update stable && rustup default stable && rustup component add rustfmt
     - run: cargo fmt -- --check
+
+  clippy:
+    name: clippy
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Install Rust
+      run: rustup update stable && rustup default stable && rustup component add clippy
+    - run: cargo clippy --tests --benches -- -D warnings

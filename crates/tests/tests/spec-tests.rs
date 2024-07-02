@@ -147,8 +147,10 @@ fn run(wast: &Path) -> Result<(), anyhow::Error> {
         // Tests which assert that they're not linkable tend to not work with
         // the gc pass because it removes things which would cause a module to
         // become unlinkable. This doesn't matter too much in the real world
-        // (hopefully), so just don't gc assert_unlinkable modules.
-        if cmd != "assert_unlinkable" {
+        // (hopefully), so just don't gc assert_unlinkable modules. The same
+        // applies to assert_uninstantiable modules due to removal of unused
+        // elements and tables.
+        if !matches!(cmd.as_str(), "assert_unlinkable" | "assert_uninstantiable") {
             walrus::passes::gc::run(&mut module);
         }
 

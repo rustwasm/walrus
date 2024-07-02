@@ -135,7 +135,8 @@ impl Module {
         let mut indices = IndicesToIds::default();
 
         // For now we have the same set of wasm features
-        // regardless of config.only_stable_features.
+        // regardless of config.only_stable_features. New unstable features
+        // may be enabled under `only_stable_features: false` in future.
         let wasm_features = WasmFeatures::default();
 
         let mut validator = Validator::new_with_features(wasm_features);

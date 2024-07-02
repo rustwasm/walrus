@@ -134,7 +134,8 @@ impl Module {
         ret.config = config.clone();
         let mut indices = IndicesToIds::default();
 
-        // TODO: how should we handle config.only_stable_features?
+        // For now we have the same set of wasm features
+        // regardless of config.only_stable_features.
         let wasm_features = WasmFeatures::default();
 
         let mut validator = Validator::new_with_features(wasm_features);

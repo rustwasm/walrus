@@ -38,7 +38,7 @@ parallel = ['rayon', 'id-arena/rayon']
 
 [dev-dependencies]
 env_logger = "0.8.1"
-criterion = "0.3.0"
+criterion = "0.5.0"
 
 [workspace]
 members = [

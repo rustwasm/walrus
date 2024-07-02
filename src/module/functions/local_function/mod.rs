@@ -1318,7 +1318,172 @@ fn append_instruction(ctx: &mut ValidationContext, inst: Operator, loc: InstrLoc
             ctx.alloc_instr(ElemDrop { elem }, loc);
         }
 
-        // TODO: The remaining operators are for some on-going proposals
-        other => unimplemented!("unsupported operator: {:?}", other),
+        // List all unimplmented operators instead of have a catch-all arm.
+        // So that future upgrades won't miss additions to this list that may be important to know.
+        Operator::TryTable { try_table: _ }
+        | Operator::Throw { tag_index: _ }
+        | Operator::ThrowRef
+        | Operator::Try { blockty: _ }
+        | Operator::Catch { tag_index: _ }
+        | Operator::Rethrow { relative_depth: _ }
+        | Operator::Delegate { relative_depth: _ }
+        | Operator::CatchAll
+        | Operator::ReturnCall { function_index: _ }
+        | Operator::ReturnCallIndirect {
+            type_index: _,
+            table_index: _,
+        }
+        | Operator::RefEq
+        | Operator::StructNew {
+            struct_type_index: _,
+        }
+        | Operator::StructNewDefault {
+            struct_type_index: _,
+        }
+        | Operator::StructGet {
+            struct_type_index: _,
+            field_index: _,
+        }
+        | Operator::StructGetS {
+            struct_type_index: _,
+            field_index: _,
+        }
+        | Operator::StructGetU {
+            struct_type_index: _,
+            field_index: _,
+        }
+        | Operator::StructSet {
+            struct_type_index: _,
+            field_index: _,
+        }
+        | Operator::ArrayNew {
+            array_type_index: _,
+        }
+        | Operator::ArrayNewDefault {
+            array_type_index: _,
+        }
+        | Operator::ArrayNewFixed {
+            array_type_index: _,
+            array_size: _,
+        }
+        | Operator::ArrayNewData {
+            array_type_index: _,
+            array_data_index: _,
+        }
+        | Operator::ArrayNewElem {
+            array_type_index: _,
+            array_elem_index: _,
+        }
+        | Operator::ArrayGet {
+            array_type_index: _,
+        }
+        | Operator::ArrayGetS {
+            array_type_index: _,
+        }
+        | Operator::ArrayGetU {
+            array_type_index: _,
+        }
+        | Operator::ArraySet {
+            array_type_index: _,
+        }
+        | Operator::ArrayLen
+        | Operator::ArrayFill {
+            array_type_index: _,
+        }
+        | Operator::ArrayCopy {
+            array_type_index_dst: _,
+            array_type_index_src: _,
+        }
+        | Operator::ArrayInitData {
+            array_type_index: _,
+            array_data_index: _,
+        }
+        | Operator::ArrayInitElem {
+            array_type_index: _,
+            array_elem_index: _,
+        }
+        | Operator::RefTestNonNull { hty: _ }
+        | Operator::RefTestNullable { hty: _ }
+        | Operator::RefCastNonNull { hty: _ }
+        | Operator::RefCastNullable { hty: _ }
+        | Operator::BrOnCast {
+            relative_depth: _,
+            from_ref_type: _,
+            to_ref_type: _,
+        }
+        | Operator::BrOnCastFail {
+            relative_depth: _,
+            from_ref_type: _,
+            to_ref_type: _,
+        }
+        | Operator::AnyConvertExtern
+        | Operator::ExternConvertAny
+        | Operator::RefI31
+        | Operator::I31GetS
+        | Operator::I31GetU
+        | Operator::MemoryDiscard { mem: _ }
+        | Operator::GlobalAtomicGet {
+            ordering: _,
+            global_index: _,
+        }
+        | Operator::GlobalAtomicSet {
+            ordering: _,
+            global_index: _,
+        }
+        | Operator::GlobalAtomicRmwAdd {
+            ordering: _,
+            global_index: _,
+        }
+        | Operator::GlobalAtomicRmwSub {
+            ordering: _,
+            global_index: _,
+        }
+        | Operator::GlobalAtomicRmwAnd {
+            ordering: _,
+            global_index: _,
+        }
+        | Operator::GlobalAtomicRmwOr {
+            ordering: _,
+            global_index: _,
+        }
+        | Operator::GlobalAtomicRmwXor {
+            ordering: _,
+            global_index: _,
+        }
+        | Operator::GlobalAtomicRmwXchg {
+            ordering: _,
+            global_index: _,
+        }
+        | Operator::GlobalAtomicRmwCmpxchg {
+            ordering: _,
+            global_index: _,
+        }
+        | Operator::I8x16RelaxedSwizzle
+        | Operator::I32x4RelaxedTruncF32x4S
+        | Operator::I32x4RelaxedTruncF32x4U
+        | Operator::I32x4RelaxedTruncF64x2SZero
+        | Operator::I32x4RelaxedTruncF64x2UZero
+        | Operator::F32x4RelaxedMadd
+        | Operator::F32x4RelaxedNmadd
+        | Operator::F64x2RelaxedMadd
+        | Operator::F64x2RelaxedNmadd
+        | Operator::I8x16RelaxedLaneselect
+        | Operator::I16x8RelaxedLaneselect
+        | Operator::I32x4RelaxedLaneselect
+        | Operator::I64x2RelaxedLaneselect
+        | Operator::F32x4RelaxedMin
+        | Operator::F32x4RelaxedMax
+        | Operator::F64x2RelaxedMin
+        | Operator::F64x2RelaxedMax
+        | Operator::I16x8RelaxedQ15mulrS
+        | Operator::I16x8RelaxedDotI8x16I7x16S
+        | Operator::I32x4RelaxedDotI8x16I7x16AddS
+        | Operator::CallRef { type_index: _ }
+        | Operator::ReturnCallRef { type_index: _ }
+        | Operator::RefAsNonNull
+        | Operator::BrOnNull { relative_depth: _ }
+        | Operator::BrOnNonNull { relative_depth: _ } => {
+            unimplemented!("unsupported operator: {:?}", inst)
+        }
     }
 }

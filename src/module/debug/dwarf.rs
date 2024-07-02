@@ -556,6 +556,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::field_reassign_with_default)]
     fn test_convert_high_pc() {
         let sections = make_test_debug_info();
         let mut read_dwarf = Dwarf::default();

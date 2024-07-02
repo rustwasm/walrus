@@ -5,12 +5,13 @@ mod emit;
 
 use self::context::ValidationContext;
 use crate::emit::IdsToIndices;
-use crate::ir::*;
 use crate::map::{IdHashMap, IdHashSet};
 use crate::parse::IndicesToIds;
+use crate::{ir::*, RefType};
 use crate::{Data, DataId, FunctionBuilder, FunctionId, MemoryId, Module, Result, TypeId, ValType};
 use std::collections::BTreeMap;
-use wasmparser::{FuncValidator, Operator, Range, ValidatorResources};
+use std::ops::Range;
+use wasmparser::{FuncValidator, Operator, ValidatorResources};
 
 /// A function defined locally within the wasm module.
 #[derive(Debug)]
@@ -25,7 +26,7 @@ pub struct LocalFunction {
     pub instruction_mapping: Vec<(usize, InstrLocId)>,
 
     /// Original function binary range.
-    pub original_range: Option<Range>,
+    pub original_range: Option<Range<usize>>,
 }
 
 impl LocalFunction {
@@ -62,7 +63,7 @@ impl LocalFunction {
             builder: FunctionBuilder::without_entry(ty),
             args,
             instruction_mapping: Vec::new(),
-            original_range: Some(wasmparser::Range {
+            original_range: Some(Range::<usize> {
                 start: body.range().start - code_address_offset - (function_body_size_bit as usize),
                 end: body.range().end - code_address_offset,
             }),
@@ -276,29 +277,25 @@ impl LocalFunction {
     }
 }
 
-fn block_result_tys(
-    ctx: &ValidationContext,
-    ty: wasmparser::TypeOrFuncType,
-) -> Result<Box<[ValType]>> {
+fn block_result_tys(ctx: &ValidationContext, ty: wasmparser::BlockType) -> Result<Box<[ValType]>> {
     match ty {
-        wasmparser::TypeOrFuncType::Type(ty) => ValType::from_wasmparser_type(ty).map(Into::into),
-        wasmparser::TypeOrFuncType::FuncType(idx) => {
+        wasmparser::BlockType::Type(ty) => ValType::from_wasmparser_type(ty).map(Into::into),
+        wasmparser::BlockType::FuncType(idx) => {
             let ty = ctx.indices.get_type(idx)?;
             Ok(ctx.module.types.results(ty).into())
         }
+        wasmparser::BlockType::Empty => Ok(Box::new([])),
     }
 }
 
-fn block_param_tys(
-    ctx: &ValidationContext,
-    ty: wasmparser::TypeOrFuncType,
-) -> Result<Box<[ValType]>> {
+fn block_param_tys(ctx: &ValidationContext, ty: wasmparser::BlockType) -> Result<Box<[ValType]>> {
     match ty {
-        wasmparser::TypeOrFuncType::Type(_) => Ok([][..].into()),
-        wasmparser::TypeOrFuncType::FuncType(idx) => {
+        wasmparser::BlockType::Type(_) => Ok([][..].into()),
+        wasmparser::BlockType::FuncType(idx) => {
             let ty = ctx.indices.get_type(idx)?;
             Ok(ctx.module.types.params(ty).into())
         }
+        wasmparser::BlockType::Empty => Ok(Box::new([])),
     }
 }
 
@@ -325,16 +322,15 @@ fn append_instruction<'context>(
         ctx.alloc_instr(Binop { op }, loc);
     };
 
-    let mem_arg =
-        |ctx: &mut ValidationContext, arg: &wasmparser::MemoryImmediate| -> (MemoryId, MemArg) {
-            (
-                ctx.indices.get_memory(arg.memory).unwrap(),
-                MemArg {
-                    align: 1 << (arg.align as i32),
-                    offset: arg.offset as u32,
-                },
-            )
-        };
+    let mem_arg = |ctx: &mut ValidationContext, arg: &wasmparser::MemArg| -> (MemoryId, MemArg) {
+        (
+            ctx.indices.get_memory(arg.memory).unwrap(),
+            MemArg {
+                align: 1 << (arg.align as i32),
+                offset: arg.offset as u32,
+            },
+        )
+    };
 
     let load = |ctx: &mut ValidationContext, arg, kind| {
         let (memory, arg) = mem_arg(ctx, &arg);
@@ -373,8 +369,11 @@ fn append_instruction<'context>(
             let func = ctx.indices.get_func(function_index).unwrap();
             ctx.alloc_instr(Call { func }, loc);
         }
-        Operator::CallIndirect { index, table_index } => {
-            let type_id = ctx.indices.get_type(index).unwrap();
+        Operator::CallIndirect {
+            type_index,
+            table_index,
+        } => {
+            let type_id = ctx.indices.get_type(type_index).unwrap();
             let table = ctx.indices.get_table(table_index).unwrap();
             ctx.alloc_instr(CallIndirect { table, ty: type_id }, loc);
         }
@@ -403,7 +402,7 @@ fn append_instruction<'context>(
         Operator::F32Const { value } => const_(ctx, Value::F32(f32::from_bits(value.bits()))),
         Operator::F64Const { value } => const_(ctx, Value::F64(f64::from_bits(value.bits()))),
         Operator::V128Const { value } => {
-            let val = crate::init_expr::v128_to_u128(&value);
+            let val = crate::const_expr::v128_to_u128(&value);
             const_(ctx, Value::V128(val))
         }
         Operator::I32Eqz => unop(ctx, UnaryOp::I32Eqz),
@@ -562,25 +561,25 @@ fn append_instruction<'context>(
             ctx.alloc_instr(Unreachable {}, loc);
             ctx.unreachable();
         }
-        Operator::Block { ty } => {
-            let param_tys = block_param_tys(ctx, ty).unwrap();
-            let result_tys = block_result_tys(ctx, ty).unwrap();
+        Operator::Block { blockty } => {
+            let param_tys = block_param_tys(ctx, blockty).unwrap();
+            let result_tys = block_result_tys(ctx, blockty).unwrap();
             let seq = ctx
                 .push_control(BlockKind::Block, param_tys, result_tys)
                 .unwrap();
             ctx.alloc_instr_in_control(1, Block { seq }, loc).unwrap();
         }
-        Operator::Loop { ty } => {
-            let result_tys = block_result_tys(ctx, ty).unwrap();
-            let param_tys = block_param_tys(ctx, ty).unwrap();
+        Operator::Loop { blockty } => {
+            let result_tys = block_result_tys(ctx, blockty).unwrap();
+            let param_tys = block_param_tys(ctx, blockty).unwrap();
             let seq = ctx
                 .push_control(BlockKind::Loop, param_tys, result_tys)
                 .unwrap();
             ctx.alloc_instr_in_control(1, Loop { seq }, loc).unwrap();
         }
-        Operator::If { ty } => {
-            let result_tys = block_result_tys(ctx, ty).unwrap();
-            let param_tys = block_param_tys(ctx, ty).unwrap();
+        Operator::If { blockty } => {
+            let result_tys = block_result_tys(ctx, blockty).unwrap();
+            let param_tys = block_param_tys(ctx, blockty).unwrap();
 
             let consequent = ctx
                 .push_control(BlockKind::If, param_tys, result_tys)
@@ -672,22 +671,19 @@ fn append_instruction<'context>(
             ctx.alloc_instr(BrIf { block }, loc);
         }
 
-        Operator::BrTable { table } => {
-            let mut blocks = Vec::with_capacity(table.len());
-            let mut default = None;
-            for pair in table.targets() {
-                let (target, is_default) = pair.unwrap();
+        Operator::BrTable { targets } => {
+            let mut blocks = Vec::with_capacity(targets.len() as usize);
+            let default = ctx.control(targets.default() as usize).unwrap().block;
+            for target in targets.targets() {
+                let target = target.unwrap();
                 let control = ctx.control(target as usize).unwrap();
-                if is_default {
-                    default = Some(control.block);
-                } else {
-                    blocks.push(control.block);
-                }
+
+                blocks.push(control.block);
             }
             ctx.alloc_instr(
                 BrTable {
                     blocks: blocks.into(),
-                    default: default.unwrap(),
+                    default,
                 },
                 loc,
             );
@@ -702,18 +698,18 @@ fn append_instruction<'context>(
             let memory = ctx.indices.get_memory(mem).unwrap();
             ctx.alloc_instr(MemoryGrow { memory }, loc);
         }
-        Operator::MemoryInit { segment, mem } => {
+        Operator::MemoryInit { data_index, mem } => {
             let memory = ctx.indices.get_memory(mem).unwrap();
-            let data = ctx.indices.get_data(segment).unwrap();
+            let data = ctx.indices.get_data(data_index).unwrap();
             ctx.alloc_instr(MemoryInit { memory, data }, loc);
         }
-        Operator::DataDrop { segment } => {
-            let data = ctx.indices.get_data(segment).unwrap();
+        Operator::DataDrop { data_index } => {
+            let data = ctx.indices.get_data(data_index).unwrap();
             ctx.alloc_instr(DataDrop { data }, loc);
         }
-        Operator::MemoryCopy { src, dst } => {
-            let src = ctx.indices.get_memory(src).unwrap();
-            let dst = ctx.indices.get_memory(dst).unwrap();
+        Operator::MemoryCopy { dst_mem, src_mem } => {
+            let src = ctx.indices.get_memory(src_mem).unwrap();
+            let dst = ctx.indices.get_memory(dst_mem).unwrap();
             ctx.alloc_instr(MemoryCopy { src, dst }, loc);
         }
         Operator::MemoryFill { mem } => {
@@ -750,7 +746,7 @@ fn append_instruction<'context>(
         Operator::I64Store16 { memarg } => store(ctx, memarg, StoreKind::I64_16 { atomic: false }),
         Operator::I64Store32 { memarg } => store(ctx, memarg, StoreKind::I64_32 { atomic: false }),
 
-        Operator::AtomicFence { flags: _ } => ctx.alloc_instr(AtomicFence {}, loc),
+        Operator::AtomicFence => ctx.alloc_instr(AtomicFence {}, loc),
 
         Operator::I32AtomicLoad { memarg } => load(ctx, memarg, LoadKind::I32 { atomic: true }),
         Operator::I64AtomicLoad { memarg } => load(ctx, memarg, LoadKind::I64 { atomic: true }),
@@ -1002,8 +998,19 @@ fn append_instruction<'context>(
             let table = ctx.indices.get_table(table).unwrap();
             ctx.alloc_instr(TableFill { table }, loc);
         }
-        Operator::RefNull { ty } => {
-            let ty = ValType::parse(&ty).unwrap();
+        Operator::RefNull { hty } => {
+            let ty = match hty {
+                wasmparser::HeapType::Abstract { shared: _, ty } => match ty {
+                    wasmparser::AbstractHeapType::Func => RefType::Funcref,
+                    wasmparser::AbstractHeapType::Extern => RefType::Externref,
+                    other => {
+                        panic!("unsupported abstract heap type for ref.null: {:?}", other)
+                    }
+                },
+                wasmparser::HeapType::Concrete(_) => {
+                    panic!("unsupported concrete heap type for ref.null")
+                }
+            };
             ctx.alloc_instr(RefNull { ty }, loc);
         }
         Operator::RefIsNull => {
@@ -1273,8 +1280,8 @@ fn append_instruction<'context>(
         Operator::V128Load16x4U { memarg } => load_simd(ctx, memarg, LoadSimdKind::V128Load16x4U),
         Operator::V128Load32x2S { memarg } => load_simd(ctx, memarg, LoadSimdKind::V128Load32x2S),
         Operator::V128Load32x2U { memarg } => load_simd(ctx, memarg, LoadSimdKind::V128Load32x2U),
-        Operator::I8x16RoundingAverageU => binop(ctx, BinaryOp::I8x16RoundingAverageU),
-        Operator::I16x8RoundingAverageU => binop(ctx, BinaryOp::I16x8RoundingAverageU),
+        Operator::I8x16AvgrU => binop(ctx, BinaryOp::I8x16AvgrU),
+        Operator::I16x8AvgrU => binop(ctx, BinaryOp::I16x8AvgrU),
 
         Operator::I8x16MinS => binop(ctx, BinaryOp::I8x16MinS),
         Operator::I8x16MinU => binop(ctx, BinaryOp::I8x16MinU),
@@ -1305,26 +1312,183 @@ fn append_instruction<'context>(
             ctx.alloc_instr(TableCopy { src, dst }, loc);
         }
 
-        Operator::TableInit { segment, table } => {
-            let elem = ctx.indices.get_element(segment).unwrap();
+        Operator::TableInit { elem_index, table } => {
+            let elem = ctx.indices.get_element(elem_index).unwrap();
             let table = ctx.indices.get_table(table).unwrap();
             ctx.alloc_instr(TableInit { elem, table }, loc);
         }
 
-        Operator::ElemDrop { segment } => {
-            let elem = ctx.indices.get_element(segment).unwrap();
+        Operator::ElemDrop { elem_index } => {
+            let elem = ctx.indices.get_element(elem_index).unwrap();
             ctx.alloc_instr(ElemDrop { elem }, loc);
         }
 
-        Operator::ReturnCall { .. }
-        | Operator::ReturnCallIndirect { .. }
-        | Operator::Try { ty: _ }
-        | Operator::Catch { index: _ }
-        | Operator::Throw { index: _ }
+        // List all unimplmented operators instead of have a catch-all arm.
+        // So that future upgrades won't miss additions to this list that may be important to know.
+        Operator::TryTable { try_table: _ }
+        | Operator::Throw { tag_index: _ }
+        | Operator::ThrowRef
+        | Operator::Try { blockty: _ }
+        | Operator::Catch { tag_index: _ }
         | Operator::Rethrow { relative_depth: _ }
         | Operator::Delegate { relative_depth: _ }
-        | Operator::CatchAll => {
-            unimplemented!("not supported")
+        | Operator::CatchAll
+        | Operator::ReturnCall { function_index: _ }
+        | Operator::ReturnCallIndirect {
+            type_index: _,
+            table_index: _,
+        }
+        | Operator::RefEq
+        | Operator::StructNew {
+            struct_type_index: _,
+        }
+        | Operator::StructNewDefault {
+            struct_type_index: _,
+        }
+        | Operator::StructGet {
+            struct_type_index: _,
+            field_index: _,
+        }
+        | Operator::StructGetS {
+            struct_type_index: _,
+            field_index: _,
+        }
+        | Operator::StructGetU {
+            struct_type_index: _,
+            field_index: _,
+        }
+        | Operator::StructSet {
+            struct_type_index: _,
+            field_index: _,
+        }
+        | Operator::ArrayNew {
+            array_type_index: _,
+        }
+        | Operator::ArrayNewDefault {
+            array_type_index: _,
+        }
+        | Operator::ArrayNewFixed {
+            array_type_index: _,
+            array_size: _,
+        }
+        | Operator::ArrayNewData {
+            array_type_index: _,
+            array_data_index: _,
+        }
+        | Operator::ArrayNewElem {
+            array_type_index: _,
+            array_elem_index: _,
+        }
+        | Operator::ArrayGet {
+            array_type_index: _,
+        }
+        | Operator::ArrayGetS {
+            array_type_index: _,
+        }
+        | Operator::ArrayGetU {
+            array_type_index: _,
+        }
+        | Operator::ArraySet {
+            array_type_index: _,
+        }
+        | Operator::ArrayLen
+        | Operator::ArrayFill {
+            array_type_index: _,
+        }
+        | Operator::ArrayCopy {
+            array_type_index_dst: _,
+            array_type_index_src: _,
+        }
+        | Operator::ArrayInitData {
+            array_type_index: _,
+            array_data_index: _,
+        }
+        | Operator::ArrayInitElem {
+            array_type_index: _,
+            array_elem_index: _,
+        }
+        | Operator::RefTestNonNull { hty: _ }
+        | Operator::RefTestNullable { hty: _ }
+        | Operator::RefCastNonNull { hty: _ }
+        | Operator::RefCastNullable { hty: _ }
+        | Operator::BrOnCast {
+            relative_depth: _,
+            from_ref_type: _,
+            to_ref_type: _,
+        }
+        | Operator::BrOnCastFail {
+            relative_depth: _,
+            from_ref_type: _,
+            to_ref_type: _,
+        }
+        | Operator::AnyConvertExtern
+        | Operator::ExternConvertAny
+        | Operator::RefI31
+        | Operator::I31GetS
+        | Operator::I31GetU
+        | Operator::MemoryDiscard { mem: _ }
+        | Operator::GlobalAtomicGet {
+            ordering: _,
+            global_index: _,
+        }
+        | Operator::GlobalAtomicSet {
+            ordering: _,
+            global_index: _,
+        }
+        | Operator::GlobalAtomicRmwAdd {
+            ordering: _,
+            global_index: _,
+        }
+        | Operator::GlobalAtomicRmwSub {
+            ordering: _,
+            global_index: _,
+        }
+        | Operator::GlobalAtomicRmwAnd {
+            ordering: _,
+            global_index: _,
+        }
+        | Operator::GlobalAtomicRmwOr {
+            ordering: _,
+            global_index: _,
+        }
+        | Operator::GlobalAtomicRmwXor {
+            ordering: _,
+            global_index: _,
+        }
+        | Operator::GlobalAtomicRmwXchg {
+            ordering: _,
+            global_index: _,
+        }
+        | Operator::GlobalAtomicRmwCmpxchg {
+            ordering: _,
+            global_index: _,
+        }
+        | Operator::I8x16RelaxedSwizzle
+        | Operator::I32x4RelaxedTruncF32x4S
+        | Operator::I32x4RelaxedTruncF32x4U
+        | Operator::I32x4RelaxedTruncF64x2SZero
+        | Operator::I32x4RelaxedTruncF64x2UZero
+        | Operator::F32x4RelaxedMadd
+        | Operator::F32x4RelaxedNmadd
+        | Operator::F64x2RelaxedMadd
+        | Operator::F64x2RelaxedNmadd
+        | Operator::I8x16RelaxedLaneselect
+        | Operator::I16x8RelaxedLaneselect
+        | Operator::I32x4RelaxedLaneselect
+        | Operator::I64x2RelaxedLaneselect
+        | Operator::F32x4RelaxedMin
+        | Operator::F32x4RelaxedMax
+        | Operator::F64x2RelaxedMin
+        | Operator::F64x2RelaxedMax
+        | Operator::I16x8RelaxedQ15mulrS
+        | Operator::I16x8RelaxedDotI8x16I7x16S
+        | Operator::I32x4RelaxedDotI8x16I7x16AddS
+        | Operator::CallRef { type_index: _ }
+        | Operator::ReturnCallRef { type_index: _ }
+        | Operator::RefAsNonNull
+        | Operator::BrOnNull { relative_depth: _ }
+        | Operator::BrOnNonNull { relative_depth: _ } => {
+            unimplemented!("unsupported operator: {:?}", inst)
         }
     }
 }

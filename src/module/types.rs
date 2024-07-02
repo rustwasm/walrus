@@ -118,20 +118,17 @@ impl Module {
         ids: &mut IndicesToIds,
     ) -> Result<()> {
         log::debug!("parsing type section");
-        for ty in section {
-            let fun_ty = match ty? {
-                wasmparser::TypeDef::Func(ty) => ty,
-                _ => unimplemented!("module linking not supported"),
-            };
+        for ty in section.into_iter_err_on_gc_types() {
+            let fun_ty = ty?;
             let id = self.types.arena.next_id();
             let params = fun_ty
-                .params
+                .params()
                 .iter()
                 .map(ValType::parse)
                 .collect::<Result<Vec<_>>>()?
                 .into_boxed_slice();
             let results = fun_ty
-                .returns
+                .results()
                 .iter()
                 .map(ValType::parse)
                 .collect::<Result<Vec<_>>>()?

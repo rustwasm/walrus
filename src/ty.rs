@@ -5,6 +5,7 @@ use crate::tombstone_arena::Tombstone;
 use anyhow::bail;
 use id_arena::Id;
 use std::cmp::Ordering;
+use std::convert::TryFrom;
 use std::fmt;
 use std::hash;
 
@@ -135,18 +136,37 @@ pub enum ValType {
     F64,
     /// 128-bit vector.
     V128,
-    /// The `externref` opaque value type
-    Externref,
-    /// The `funcref` value type, representing a callable function
+    /// Reference.
+    Ref(RefType),
+}
+
+/// A reference type.
+///
+/// The "function references" and "gc" proposals will add more reference types.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[non_exhaustive]
+pub enum RefType {
+    /// A nullable reference to an untyped function
     Funcref,
+    /// A nullable reference to an extern object
+    Externref,
+}
+
+impl TryFrom<wasmparser::RefType> for RefType {
+    type Error = anyhow::Error;
+
+    fn try_from(ref_type: wasmparser::RefType) -> Result<RefType> {
+        match ref_type {
+            wasmparser::RefType::FUNCREF => Ok(RefType::Funcref),
+            wasmparser::RefType::EXTERNREF => Ok(RefType::Externref),
+            _ => bail!("unsupported ref type {:?}", ref_type),
+        }
+    }
 }
 
 impl ValType {
-    pub(crate) fn from_wasmparser_type(ty: wasmparser::Type) -> Result<Box<[ValType]>> {
-        let v = match ty {
-            wasmparser::Type::EmptyBlockType => Vec::new(),
-            _ => vec![ValType::parse(&ty)?],
-        };
+    pub(crate) fn from_wasmparser_type(ty: wasmparser::ValType) -> Result<Box<[ValType]>> {
+        let v = vec![ValType::parse(&ty)?];
         Ok(v.into_boxed_slice())
     }
 
@@ -157,21 +177,25 @@ impl ValType {
             ValType::F32 => wasm_encoder::ValType::F32,
             ValType::F64 => wasm_encoder::ValType::F64,
             ValType::V128 => wasm_encoder::ValType::V128,
-            ValType::Externref => wasm_encoder::ValType::Ref(wasm_encoder::RefType::EXTERNREF),
-            ValType::Funcref => wasm_encoder::ValType::Ref(wasm_encoder::RefType::FUNCREF),
+            ValType::Ref(ref_type) => match ref_type {
+                RefType::Externref => wasm_encoder::ValType::Ref(wasm_encoder::RefType::EXTERNREF),
+                RefType::Funcref => wasm_encoder::ValType::Ref(wasm_encoder::RefType::FUNCREF),
+            },
         }
     }
 
-    pub(crate) fn parse(input: &wasmparser::Type) -> Result<ValType> {
+    pub(crate) fn parse(input: &wasmparser::ValType) -> Result<ValType> {
         match input {
-            wasmparser::Type::I32 => Ok(ValType::I32),
-            wasmparser::Type::I64 => Ok(ValType::I64),
-            wasmparser::Type::F32 => Ok(ValType::F32),
-            wasmparser::Type::F64 => Ok(ValType::F64),
-            wasmparser::Type::V128 => Ok(ValType::V128),
-            wasmparser::Type::ExternRef => Ok(ValType::Externref),
-            wasmparser::Type::FuncRef => Ok(ValType::Funcref),
-            _ => bail!("not a value type"),
+            wasmparser::ValType::I32 => Ok(ValType::I32),
+            wasmparser::ValType::I64 => Ok(ValType::I64),
+            wasmparser::ValType::F32 => Ok(ValType::F32),
+            wasmparser::ValType::F64 => Ok(ValType::F64),
+            wasmparser::ValType::V128 => Ok(ValType::V128),
+            wasmparser::ValType::Ref(ref_type) => match *ref_type {
+                wasmparser::RefType::EXTERNREF => Ok(ValType::Ref(RefType::Externref)),
+                wasmparser::RefType::FUNCREF => Ok(ValType::Ref(RefType::Funcref)),
+                _ => bail!("unsupported ref type {:?}", ref_type),
+            },
         }
     }
 }
@@ -187,8 +211,8 @@ impl fmt::Display for ValType {
                 ValType::F32 => "f32",
                 ValType::F64 => "f64",
                 ValType::V128 => "v128",
-                ValType::Externref => "externref",
-                ValType::Funcref => "funcref",
+                ValType::Ref(RefType::Externref) => "externref",
+                ValType::Ref(RefType::Funcref) => "funcref",
             }
         )
     }

@@ -22,34 +22,20 @@ fn run(wast: &Path) -> Result<(), anyhow::Error> {
         .skip(1)
         .next()
         .map(|s| s.to_str().unwrap());
+
     let extra_args: &[&str] = match proposal {
-        // stable features
-        None
-        | Some("multi-value")
-        | Some("nontrapping-float-to-int-conversions")
-        | Some("sign-extension-ops")
-        | Some("mutable-global") => &[],
-
-        Some("simd") => &["--enable-simd"],
-        Some("bulk-memory-operations") => &["--enable-bulk-memory"],
-
-        Some("reference-types") => &["--enable-reference-types", "--enable-bulk-memory"],
-
-        // TODO: should get threads working
-        Some("threads") => return Ok(()),
-        // TODO: should get tail-call working
-        Some("tail-call") => return Ok(()),
-
-        // not a walrus thing, but not implemented in wabt fully yet anyway
+        None => &[],
         Some("annotations") => return Ok(()),
-
-        // not implemented in walrus yet
-        Some("function-references") => return Ok(()),
         Some("exception-handling") => return Ok(()),
+        Some("extended-const") => return Ok(()),
+        Some("function-references") => return Ok(()),
+        Some("gc") => return Ok(()),
         Some("memory64") => return Ok(()),
-
-        // Some("threads") => &["--enable-threads"],
-        Some(other) => panic!("unknown wasm proposal: {}", other),
+        Some("multi-memory") => &["--enable-multi-memory"],
+        Some("relaxed-simd") => return Ok(()),
+        Some("tail-call") => return Ok(()),
+        Some("threads") => return Ok(()),
+        Some(other) => bail!("unknown wasm proposal: {}", other),
     };
 
     let tempdir = TempDir::new()?;
@@ -63,8 +49,6 @@ fn run(wast: &Path) -> Result<(), anyhow::Error> {
         .context("executing `wast2json`")?;
     assert!(status.success());
 
-    let wabt_ok = run_spectest_interp(tempdir.path(), extra_args).is_ok();
-
     let contents = fs::read_to_string(&json).context("failed to read file")?;
     let test: Test = serde_json::from_str(&contents).context("failed to parse file")?;
     let mut files = Vec::new();
@@ -74,70 +58,75 @@ fn run(wast: &Path) -> Result<(), anyhow::Error> {
         config.only_stable_features(true);
     }
 
+    let wabt_ok = run_spectest_interp(tempdir.path(), extra_args).is_ok();
+
+    let mut should_not_parse = vec![];
+    let mut non_deterministic = vec![];
     for command in test.commands {
         let filename = match command.get("filename") {
             Some(name) => name.as_str().unwrap().to_string(),
             None => continue,
         };
-        let line = &command["line"];
+        let line = command["line"].as_u64().unwrap();
         let path = tempdir.path().join(filename);
         match command["type"].as_str().unwrap() {
             "assert_invalid" | "assert_malformed" => {
-                // Skip tests that are actually valid with various in-flight proposals
-                let text = command["text"].as_str().unwrap();
-                if text == "invalid result arity"
-                    || text == "multiple memories"
-                    || text == "multiple tables"
-                {
+                // The multiple-memory feature is on (from wasmparser::WasmFeatures::default()).
+                // In imports.wast and memory.wast, following cases will be parsed which should not.
+                if proposal.is_none() && command["text"] == "multiple memories" {
                     continue;
                 }
-                let wasm = fs::read(&path)?;
-                println!("{:?}", command);
-                if config.parse(&wasm).is_ok() {
-                    // A few spec tests assume multi-value isn't implemented,
-                    // but we implement it, so basically just skip those tests.
-                    let message = command["text"].as_str().unwrap();
-                    if message.contains("invalid result arity") {
-                        continue;
-                    }
+                // In binary.wast, following cases will be parsed which should not.
+                if proposal.is_none() && command["text"] == "zero byte expected" {
+                    continue;
+                }
 
-                    // MVP wasm considers this tests to fail, but
-                    // reference-types-enhanced wasm considers this test to
-                    // pass. We implement the reference-types semantics, so
-                    // let's go forward with that.
-                    if wast.ends_with("unreached-invalid.wast") && line == 539 {
-                        continue;
-                    }
-                    panic!("wasm parsed when it shouldn't (line {})", line);
+                let wasm = fs::read(&path)?;
+                if config.parse(&wasm).is_ok() {
+                    should_not_parse.push(line);
                 }
             }
-            "assert_unlinkable" if wast.file_name() == Some("elem.wast".as_ref()) => {
-                // The `elem.wast` file has some unlinkable modules which place
-                // table elements at massive (aka negative) offsets. Our
-                // representation means that we try to allocate a massive amount
-                // of space for null elements. For now we skip these tests as an
-                // implementation detail. This is arguably a bug on our end
-                // where we should improve our representation to not allocate so
-                // much, but that's another bug for another day.
-            }
             cmd => {
-                let wasm = fs::read(&path)?;
-                let mut wasm = config
-                    .parse(&wasm)
+                // The bytes read from the original spec test case
+                let bytes0 = fs::read(&path)?;
+                // The module parsed from bytes0
+                let mut wasm1 = config
+                    .parse(&bytes0)
                     .with_context(|| format!("error parsing wasm (line {})", line))?;
-                let wasm1 = wasm.emit_wasm();
-                fs::write(&path, &wasm1)?;
-                let wasm2 = config
-                    .parse(&wasm1)
-                    .map(|mut m| m.emit_wasm())
+                // The bytes emitted from wasm1
+                let bytes1 = wasm1.emit_wasm();
+                fs::write(&path, &bytes1)?;
+                // The module parsed from bytes1
+                let mut wasm2 = config
+                    .parse(&bytes1)
                     .with_context(|| format!("error re-parsing wasm (line {})", line))?;
-                if wasm1 != wasm2 {
-                    panic!("wasm module at line {} isn't deterministic", line);
+                // The bytes emitted from wasm2
+                let bytes2 = wasm2.emit_wasm();
+
+                if bytes1 != bytes2 {
+                    non_deterministic.push(line);
                 }
                 files.push((cmd.to_string(), path.to_path_buf()));
                 continue;
             }
         }
+    }
+
+    let mut message = String::new();
+    if !should_not_parse.is_empty() {
+        message.push_str(&format!(
+            "wasm parsed when it shouldn't at line: {:?}",
+            should_not_parse
+        ));
+    }
+    if !non_deterministic.is_empty() {
+        message.push_str(&format!(
+            "wasm isn't deterministic at line: {:?}",
+            non_deterministic
+        ));
+    }
+    if !message.is_empty() {
+        panic!("{}", message);
     }
 
     // If wabt didn't succeed before we ran walrus there's no hope of it passing

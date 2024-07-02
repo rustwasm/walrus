@@ -1,12 +1,14 @@
 //! A wasm module's imports.
 
+use std::convert::TryInto;
+
 use anyhow::{bail, Context};
 
 use crate::emit::{Emit, EmitContext};
 use crate::parse::IndicesToIds;
 use crate::tombstone_arena::{Id, Tombstone, TombstoneArena};
 use crate::{FunctionId, GlobalId, MemoryId, Result, TableId};
-use crate::{Module, TypeId, ValType};
+use crate::{Module, RefType, TypeId, ValType};
 
 /// The id of an import.
 pub type ImportId = Id<Import>;
@@ -153,53 +155,48 @@ impl Module {
         for entry in section {
             let entry = entry?;
             match entry.ty {
-                wasmparser::ImportSectionEntryType::Function(idx) => {
+                wasmparser::TypeRef::Func(idx) => {
                     let ty = ids.get_type(idx)?;
-                    let id = self.add_import_func(
-                        entry.module,
-                        entry.field.expect("module linking not supported"),
-                        ty,
-                    );
+                    let id = self.add_import_func(entry.module, entry.name, ty);
                     ids.push_func(id.0);
                 }
-                wasmparser::ImportSectionEntryType::Table(t) => {
-                    let ty = ValType::parse(&t.element_type)?;
+                wasmparser::TypeRef::Table(t) => {
                     let id = self.add_import_table(
                         entry.module,
-                        entry.field.expect("module linking not supported"),
+                        entry.name,
+                        t.table64,
                         t.initial,
                         t.maximum,
-                        ty,
+                        t.element_type.try_into()?,
                     );
                     ids.push_table(id.0);
                 }
-                wasmparser::ImportSectionEntryType::Memory(m) => {
+                wasmparser::TypeRef::Memory(m) => {
                     if m.memory64 {
                         bail!("64-bit memories not supported")
                     };
                     let id = self.add_import_memory(
                         entry.module,
-                        entry.field.expect("module linking not supported"),
+                        entry.name,
                         m.shared,
-                        m.initial as u32,
-                        m.maximum.map(|m| m as u32),
+                        m.memory64,
+                        m.initial,
+                        m.maximum,
+                        m.page_size_log2,
                     );
                     ids.push_memory(id.0);
                 }
-                wasmparser::ImportSectionEntryType::Global(g) => {
+                wasmparser::TypeRef::Global(g) => {
                     let id = self.add_import_global(
                         entry.module,
-                        entry.field.expect("module linking not supported"),
+                        entry.name,
                         ValType::parse(&g.content_type)?,
                         g.mutable,
+                        g.shared,
                     );
                     ids.push_global(id.0);
                 }
-                wasmparser::ImportSectionEntryType::Module(_)
-                | wasmparser::ImportSectionEntryType::Instance(_) => {
-                    unimplemented!("component model not implemented");
-                }
-                wasmparser::ImportSectionEntryType::Tag(_) => {
+                wasmparser::TypeRef::Tag(_) => {
                     unimplemented!("exception handling not implemented");
                 }
             }
@@ -227,11 +224,15 @@ impl Module {
         module: &str,
         name: &str,
         shared: bool,
-        initial: u32,
-        maximum: Option<u32>,
+        memory64: bool,
+        initial: u64,
+        maximum: Option<u64>,
+        page_size_log2: Option<u32>,
     ) -> (MemoryId, ImportId) {
         let import = self.imports.arena.next_id();
-        let mem = self.memories.add_import(shared, initial, maximum, import);
+        let mem =
+            self.memories
+                .add_import(shared, memory64, initial, maximum, page_size_log2, import);
         self.imports.add(module, name, mem);
         (mem, import)
     }
@@ -241,12 +242,15 @@ impl Module {
         &mut self,
         module: &str,
         name: &str,
-        initial: u32,
-        max: Option<u32>,
-        ty: ValType,
+        table64: bool,
+        initial: u64,
+        maximum: Option<u64>,
+        ty: RefType,
     ) -> (TableId, ImportId) {
         let import = self.imports.arena.next_id();
-        let table = self.tables.add_import(initial, max, ty, import);
+        let table = self
+            .tables
+            .add_import(table64, initial, maximum, ty, import);
         self.imports.add(module, name, table);
         (table, import)
     }
@@ -258,9 +262,10 @@ impl Module {
         name: &str,
         ty: ValType,
         mutable: bool,
+        shared: bool,
     ) -> (GlobalId, ImportId) {
         let import = self.imports.arena.next_id();
-        let global = self.globals.add_import(ty, mutable, import);
+        let global = self.globals.add_import(ty, mutable, shared, import);
         self.imports.add(module, name, global);
         (global, import)
     }
@@ -293,10 +298,10 @@ impl Emit for ModuleImports {
                         let table = cx.module.tables.get(id);
                         wasm_encoder::EntityType::Table(wasm_encoder::TableType {
                             element_type: match table.element_ty {
-                                ValType::Externref => wasm_encoder::RefType::EXTERNREF,
-                                ValType::Funcref => wasm_encoder::RefType::FUNCREF,
-                                _ => panic!("Unexpected table type"),
+                                RefType::Externref => wasm_encoder::RefType::EXTERNREF,
+                                RefType::Funcref => wasm_encoder::RefType::FUNCREF,
                             },
+                            table64: table.table64,
                             minimum: table.initial,
                             maximum: table.maximum,
                         })
@@ -309,6 +314,7 @@ impl Emit for ModuleImports {
                             maximum: mem.maximum.map(|v| v as u64),
                             memory64: false,
                             shared: mem.shared,
+                            page_size_log2: None,
                         })
                     }
                     ImportKind::Global(id) => {
@@ -317,6 +323,7 @@ impl Emit for ModuleImports {
                         wasm_encoder::EntityType::Global(wasm_encoder::GlobalType {
                             val_type: g.ty.to_wasmencoder_type(),
                             mutable: g.mutable,
+                            shared: g.shared,
                         })
                     }
                 },

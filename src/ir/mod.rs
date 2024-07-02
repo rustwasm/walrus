@@ -8,8 +8,8 @@ mod traversals;
 pub use self::traversals::*;
 
 use crate::{
-    DataId, ElementId, FunctionId, GlobalId, LocalFunction, MemoryId, ModuleTypes, TableId, TypeId,
-    ValType,
+    DataId, ElementId, FunctionId, GlobalId, LocalFunction, MemoryId, ModuleTypes, RefType,
+    TableId, TypeId, ValType,
 };
 use id_arena::Id;
 use std::fmt;
@@ -532,7 +532,7 @@ pub enum Instr {
     RefNull {
         /// The type of null that we're producing
         #[walrus(skip_visit)]
-        ty: ValType,
+        ty: RefType,
     },
 
     /// `ref.is_null`
@@ -830,8 +830,8 @@ pub enum BinaryOp {
     I8x16NarrowI16x8U,
     I16x8NarrowI32x4S,
     I16x8NarrowI32x4U,
-    I8x16RoundingAverageU,
-    I16x8RoundingAverageU,
+    I8x16AvgrU,
+    I16x8AvgrU,
 
     I8x16MinS,
     I8x16MinU,

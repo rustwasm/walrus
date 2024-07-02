@@ -1,10 +1,12 @@
 //! Tables within a wasm module.
 
+use std::convert::TryInto;
+
 use crate::emit::{Emit, EmitContext};
 use crate::map::IdHashSet;
 use crate::parse::IndicesToIds;
 use crate::tombstone_arena::{Id, Tombstone, TombstoneArena};
-use crate::{Element, ImportId, Module, Result, ValType};
+use crate::{Element, ImportId, Module, RefType, Result};
 use anyhow::bail;
 
 /// The id of a table.
@@ -14,12 +16,14 @@ pub type TableId = Id<Table>;
 #[derive(Debug)]
 pub struct Table {
     id: TableId,
+    /// Whether or not this is a 64-bit table.
+    pub table64: bool,
     /// The initial size of this table
-    pub initial: u32,
+    pub initial: u64,
     /// The maximum size of this table
-    pub maximum: Option<u32>,
+    pub maximum: Option<u64>,
     /// The type of the elements in this table
-    pub element_ty: ValType,
+    pub element_ty: RefType,
     /// Whether or not this table is imported, and if so what imports it.
     pub import: Option<ImportId>,
     /// Active data segments that will be used to initialize this memory.
@@ -49,16 +53,18 @@ impl ModuleTables {
     /// Adds a new imported table to this list of tables
     pub fn add_import(
         &mut self,
-        initial: u32,
-        max: Option<u32>,
-        element_ty: ValType,
+        table64: bool,
+        initial: u64,
+        maximum: Option<u64>,
+        element_ty: RefType,
         import: ImportId,
     ) -> TableId {
         let id = self.arena.next_id();
         self.arena.alloc(Table {
             id,
+            table64,
             initial,
-            maximum: max,
+            maximum,
             element_ty,
             import: Some(import),
             elem_segments: Default::default(),
@@ -68,12 +74,19 @@ impl ModuleTables {
 
     /// Construct a new table, that does not originate from any of the input
     /// wasm tables.
-    pub fn add_local(&mut self, initial: u32, max: Option<u32>, element_ty: ValType) -> TableId {
+    pub fn add_local(
+        &mut self,
+        table64: bool,
+        initial: u64,
+        maximum: Option<u64>,
+        element_ty: RefType,
+    ) -> TableId {
         let id = self.arena.next_id();
         let id2 = self.arena.alloc(Table {
             id,
+            table64,
             initial,
-            maximum: max,
+            maximum,
             element_ty,
             import: None,
             elem_segments: Default::default(),
@@ -117,7 +130,7 @@ impl ModuleTables {
     ///
     /// Returns an error if there are two function tables in this module
     pub fn main_function_table(&self) -> Result<Option<TableId>> {
-        let mut tables = self.iter().filter(|t| t.element_ty == ValType::Funcref);
+        let mut tables = self.iter().filter(|t| t.element_ty == RefType::Funcref);
         let id = match tables.next() {
             Some(t) => t.id(),
             None => return Ok(None),
@@ -144,9 +157,12 @@ impl Module {
         log::debug!("parse table section");
         for t in section {
             let t = t?;
-            let id = self
-                .tables
-                .add_local(t.initial, t.maximum, ValType::parse(&t.element_type)?);
+            let id = self.tables.add_local(
+                t.ty.table64,
+                t.ty.initial,
+                t.ty.maximum,
+                t.ty.element_type.try_into()?,
+            );
             ids.push_table(id);
         }
         Ok(())
@@ -169,12 +185,12 @@ impl Emit for ModuleTables {
             cx.indices.push_table(table.id());
 
             wasm_table_section.table(wasm_encoder::TableType {
+                table64: table.table64,
                 minimum: table.initial,
                 maximum: table.maximum,
                 element_type: match table.element_ty {
-                    ValType::Externref => wasm_encoder::RefType::EXTERNREF,
-                    ValType::Funcref => wasm_encoder::RefType::FUNCREF,
-                    _ => unreachable!(),
+                    RefType::Externref => wasm_encoder::RefType::EXTERNREF,
+                    RefType::Funcref => wasm_encoder::RefType::FUNCREF,
                 },
             });
         }

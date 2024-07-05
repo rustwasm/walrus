@@ -4,7 +4,7 @@ use crate::emit::{Emit, EmitContext};
 use crate::ir::Value;
 use crate::parse::IndicesToIds;
 use crate::tombstone_arena::{Id, Tombstone, TombstoneArena};
-use crate::{ConstExpr, GlobalId, MemoryId, Module, Result, ValType};
+use crate::{ConstExpr, MemoryId, Module, Result, ValType};
 use anyhow::{bail, Context};
 
 /// A passive element segment identifier
@@ -35,33 +35,19 @@ pub struct Data {
 pub enum DataKind {
     /// An active data segment that is automatically initialized at some address
     /// in a static memory.
-    Active(ActiveData),
+    Active {
+        /// The memory that this active data segment will be automatically
+        /// initialized in.
+        memory: MemoryId,
+        /// The memory offset where this active data segment will be automatically
+        /// initialized.
+        offset: ConstExpr,
+    },
     /// A passive data segment that must be manually initialized at a dynamic
     /// address via the `memory.init` instruction (perhaps multiple times in
     /// multiple different memories) and then manually freed when it's no longer
     /// needed via the `data.drop` instruction.
     Passive,
-}
-
-/// The parts of a data segment that are only present in active data segments.
-#[derive(Clone, Debug)]
-pub struct ActiveData {
-    /// The memory that this active data segment will be automatically
-    /// initialized in.
-    pub memory: MemoryId,
-    /// The memory location where this active data segment will be automatically
-    /// initialized.
-    pub location: ActiveDataLocation,
-}
-
-/// The memory location where an active data segment will be automatically
-/// initialized.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ActiveDataLocation {
-    /// A static, absolute address within the memory.
-    Absolute(u32),
-    /// A relative address (expressed as a global's value) within the memory.
-    Relative(GlobalId),
 }
 
 impl Tombstone for Data {
@@ -231,21 +217,33 @@ impl Module {
                     memory.data_segments.insert(data.id);
 
                     let offset = ConstExpr::eval(&offset_expr, ids)
-                        .with_context(|| format!("in segment {}", i))?;
-                    data.kind = DataKind::Active(ActiveData {
-                        memory: memory_id,
-                        location: match offset {
-                            ConstExpr::Value(Value::I32(n)) => {
-                                ActiveDataLocation::Absolute(n as u32)
-                            }
+                        .with_context(|| format!("failed to evaluate the offset of data {}", i))?;
+
+                    if memory.memory64 {
+                        match offset {
+                            ConstExpr::Value(Value::I64(_)) => {}
                             ConstExpr::Global(global)
-                                if self.globals.get(global).ty == ValType::I32 =>
-                            {
-                                ActiveDataLocation::Relative(global)
-                            }
-                            _ => bail!("non-i32 constant in segment {}", i),
-                        },
-                    });
+                                if self.globals.get(global).ty == ValType::I64 => {}
+                            _ => bail!(
+                                "data {} is active for 64-bit memory but has non-i64 offset",
+                                i
+                            ),
+                        }
+                    } else {
+                        match offset {
+                            ConstExpr::Value(Value::I32(_)) => {}
+                            ConstExpr::Global(global)
+                                if self.globals.get(global).ty == ValType::I32 => {}
+                            _ => bail!(
+                                "data {} is active for 32-bit memory but has non-i32 offset",
+                                i
+                            ),
+                        }
+                    }
+                    data.kind = DataKind::Active {
+                        memory: memory_id,
+                        offset,
+                    }
                 }
             }
         }
@@ -270,17 +268,10 @@ impl Emit for ModuleData {
                 DataKind::Passive => {
                     wasm_data_section.passive(data.value.clone());
                 }
-                DataKind::Active(ref a) => {
+                DataKind::Active { memory, offset } => {
                     wasm_data_section.active(
-                        cx.indices.get_memory_index(a.memory),
-                        &match a.location {
-                            ActiveDataLocation::Absolute(a) => {
-                                wasm_encoder::ConstExpr::i32_const(a as i32)
-                            }
-                            ActiveDataLocation::Relative(g) => {
-                                wasm_encoder::ConstExpr::global_get(cx.indices.get_global_index(g))
-                            }
-                        },
+                        cx.indices.get_memory_index(memory),
+                        &offset.to_wasmencoder_type(cx),
                         data.value.clone(),
                     );
                 }

@@ -163,18 +163,39 @@ impl Module {
                     offset_expr,
                 } => {
                     // TODO: Why table_index is Option?
-                    let table = ids.get_table(table_index.unwrap_or_default())?;
-                    self.tables.get_mut(table).elem_segments.insert(id);
+                    let table_id = ids.get_table(table_index.unwrap_or_default())?;
+                    let table = self.tables.get_mut(table_id);
+                    table.elem_segments.insert(id);
 
-                    let offset = ConstExpr::eval(&offset_expr, ids)
-                        .with_context(|| format!("in segment {}", i))?;
-                    match offset {
-                        ConstExpr::Value(Value::I32(_)) => {}
-                        ConstExpr::Global(global)
-                            if self.globals.get(global).ty == ValType::I32 => {}
-                        _ => bail!("non-i32 constant in segment {}", i),
+                    let offset = ConstExpr::eval(&offset_expr, ids).with_context(|| {
+                        format!("failed to evaluate the offset of element {}", i)
+                    })?;
+                    if table.table64 {
+                        match offset {
+                            ConstExpr::Value(Value::I64(_)) => {}
+                            ConstExpr::Global(global)
+                                if self.globals.get(global).ty == ValType::I64 => {}
+                            _ => bail!(
+                                "element {} is active for 64-bit table but has non-i64 offset",
+                                i
+                            ),
+                        }
+                    } else {
+                        match offset {
+                            ConstExpr::Value(Value::I32(_)) => {}
+                            ConstExpr::Global(global)
+                                if self.globals.get(global).ty == ValType::I32 => {}
+                            _ => bail!(
+                                "element {} is active for 32-bit table but has non-i32 offset",
+                                i
+                            ),
+                        }
                     }
-                    ElementKind::Active { table, offset }
+
+                    ElementKind::Active {
+                        table: table_id,
+                        offset,
+                    }
                 }
             };
             self.elements.arena.alloc(Element {

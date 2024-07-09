@@ -177,7 +177,13 @@ impl ModuleConfig {
         features.insert(WasmFeatures::SIMD);
         // Enable supported active proposals.
         if !self.only_stable_features {
+            // # Fully supported proposals.
             features.insert(WasmFeatures::MULTI_MEMORY);
+            // # Partially supported proposals.
+            // ## threads
+            // spec-tests/proposals/threads still fail
+            // round_trip tests already require this feature, so we can't disable it by default.
+            features.insert(WasmFeatures::THREADS);
         }
         features
     }

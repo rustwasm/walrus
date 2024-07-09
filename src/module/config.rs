@@ -4,6 +4,7 @@ use crate::module::Module;
 use crate::parse::IndicesToIds;
 use std::fmt;
 use std::path::Path;
+use wasmparser::WasmFeatures;
 
 /// Configuration for a `Module` which currently affects parsing.
 #[derive(Default)]
@@ -153,10 +154,38 @@ impl ModuleConfig {
     /// the codebase, even if set to `true` some unstable features may still be
     /// allowed.
     ///
-    /// By default this flag is `false`
+    /// By default this flag is `false`.
     pub fn only_stable_features(&mut self, only: bool) -> &mut ModuleConfig {
         self.only_stable_features = only;
         self
+    }
+
+    /// Returns a `wasmparser::WasmFeatures` based on the enabled proposals
+    /// which should be used for `wasmparser::Parser`` and `wasmparser::Validator`.
+    pub(crate) fn get_wasmparser_wasm_features(&self) -> WasmFeatures {
+        // Start from empty so that we explicitly control what is enabled.
+        let mut features = WasmFeatures::empty();
+        // This is not a proposal.
+        features.insert(WasmFeatures::FLOATS);
+        // Always enable [finished proposals](https://github.com/WebAssembly/proposals/blob/main/finished-proposals.md).
+        features.insert(WasmFeatures::MUTABLE_GLOBAL);
+        features.insert(WasmFeatures::SATURATING_FLOAT_TO_INT);
+        features.insert(WasmFeatures::SIGN_EXTENSION);
+        features.insert(WasmFeatures::MULTI_VALUE);
+        features.insert(WasmFeatures::REFERENCE_TYPES);
+        features.insert(WasmFeatures::BULK_MEMORY);
+        features.insert(WasmFeatures::SIMD);
+        // Enable supported active proposals.
+        if !self.only_stable_features {
+            // # Fully supported proposals.
+            features.insert(WasmFeatures::MULTI_MEMORY);
+            // # Partially supported proposals.
+            // ## threads
+            // spec-tests/proposals/threads still fail
+            // round_trip tests already require this feature, so we can't disable it by default.
+            features.insert(WasmFeatures::THREADS);
+        }
+        features
     }
 
     /// Provide a function that is invoked after successfully parsing a module,

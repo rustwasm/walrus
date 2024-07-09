@@ -16,7 +16,7 @@ jobs:
       run: rustup update ${{ matrix.rust }} && rustup default ${{ matrix.rust }}
     - uses: cargo-bins/cargo-binstall@main
     - name: Install wasm-tools (need json-from-wast subcommand)
-      run: cargo binstall wasm-tools
+      run: cargo binstall wasm-tools -y
     - name: Install wabt
       run: |
         set -e

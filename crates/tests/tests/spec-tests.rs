@@ -54,7 +54,7 @@ fn run(wast: &Path) -> Result<(), anyhow::Error> {
     let mut files = Vec::new();
 
     let mut config = walrus::ModuleConfig::new();
-    if extra_args.len() == 0 {
+    if proposal.is_none() {
         // For non-proposals tests, we only enable the stable features.
         // For proposals tests, we enable all supported features.
         config.only_stable_features(true);

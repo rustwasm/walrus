@@ -54,7 +54,9 @@ fn run(wast: &Path) -> Result<(), anyhow::Error> {
     let mut files = Vec::new();
 
     let mut config = walrus::ModuleConfig::new();
-    if extra_args.len() == 0 {
+    if proposal.is_none() {
+        // For non-proposals tests, we only enable the stable features.
+        // For proposals tests, we enable all supported features.
         config.only_stable_features(true);
     }
 
@@ -71,16 +73,6 @@ fn run(wast: &Path) -> Result<(), anyhow::Error> {
         let path = tempdir.path().join(filename);
         match command["type"].as_str().unwrap() {
             "assert_invalid" | "assert_malformed" => {
-                // The multiple-memory feature is on (from wasmparser::WasmFeatures::default()).
-                // In imports.wast and memory.wast, following cases will be parsed which should not.
-                if proposal.is_none() && command["text"] == "multiple memories" {
-                    continue;
-                }
-                // In binary.wast, following cases will be parsed which should not.
-                if proposal.is_none() && command["text"] == "zero byte expected" {
-                    continue;
-                }
-
                 let wasm = fs::read(&path)?;
                 if config.parse(&wasm).is_ok() {
                     should_not_parse.push(line);

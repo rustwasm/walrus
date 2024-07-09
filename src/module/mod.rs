@@ -45,7 +45,7 @@ use std::fs;
 use std::mem;
 use std::ops::Range;
 use std::path::Path;
-use wasmparser::{BinaryReader, Parser, Payload, Validator, WasmFeatures};
+use wasmparser::{BinaryReader, Parser, Payload, Validator};
 
 pub use self::config::ModuleConfig;
 
@@ -137,15 +137,17 @@ impl Module {
         // For now we have the same set of wasm features
         // regardless of config.only_stable_features. New unstable features
         // may be enabled under `only_stable_features: false` in future.
-        let mut wasm_features = WasmFeatures::default();
-        wasm_features.insert(WasmFeatures::MEMORY64);
+        let wasm_features = config.get_wasmparser_wasm_features();
 
         let mut validator = Validator::new_with_features(wasm_features);
 
         let mut local_functions = Vec::new();
         let mut debug_sections = Vec::new();
 
-        for payload in Parser::new(0).parse_all(wasm) {
+        let mut parser = Parser::new(0);
+        parser.set_features(wasm_features);
+
+        for payload in parser.parse_all(wasm) {
             match payload? {
                 Payload::Version {
                     num,

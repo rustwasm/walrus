@@ -40,6 +40,8 @@ fn run(wast: &Path) -> Result<(), anyhow::Error> {
 
     let tempdir = TempDir::new()?;
     let json = tempdir.path().join("foo.json");
+    // Using `wasm-tools json-from-wast` instead of wabt's `wast2json`
+    // because the latter is slow to support new proposals.
     let output = Command::new("wasm-tools")
         .arg("json-from-wast")
         .arg("--pretty")

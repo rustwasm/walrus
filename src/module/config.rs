@@ -179,6 +179,7 @@ impl ModuleConfig {
         if !self.only_stable_features {
             // # Fully supported proposals.
             features.insert(WasmFeatures::MULTI_MEMORY);
+            features.insert(WasmFeatures::MEMORY64);
             // # Partially supported proposals.
             // ## threads
             // spec-tests/proposals/threads still fail

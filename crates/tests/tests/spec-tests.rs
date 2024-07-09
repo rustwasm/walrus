@@ -40,14 +40,19 @@ fn run(wast: &Path) -> Result<(), anyhow::Error> {
 
     let tempdir = TempDir::new()?;
     let json = tempdir.path().join("foo.json");
-    let status = Command::new("wast2json")
+    let output = Command::new("wasm-tools")
+        .arg("json-from-wast")
+        .arg("--pretty")
         .arg(wast)
-        .arg("-o")
+        .arg("--output")
         .arg(&json)
-        .args(extra_args)
-        .status()
-        .context("executing `wast2json`")?;
-    assert!(status.success());
+        .arg("--wasm-dir")
+        .arg(tempdir.path())
+        .output()?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        bail!("failed to run `wasm-tools json-from-wast`\nstderr: {stderr}");
+    }
 
     let contents = fs::read_to_string(&json).context("failed to read file")?;
     let test: Test = serde_json::from_str(&contents).context("failed to parse file")?;
@@ -69,10 +74,23 @@ fn run(wast: &Path) -> Result<(), anyhow::Error> {
             Some(name) => name.as_str().unwrap().to_string(),
             None => continue,
         };
+        // walrus only process .wasm binary files
+        if filename.ends_with(".wat") {
+            continue;
+        }
         let line = command["line"].as_u64().unwrap();
         let path = tempdir.path().join(filename);
         match command["type"].as_str().unwrap() {
             "assert_invalid" | "assert_malformed" => {
+                if proposal.is_some()
+                    && ["zero byte expected", "multiple memories"]
+                        .contains(&command["text"].as_str().unwrap())
+                {
+                    // The multi-memory proposal is enabled for all proprosals tests
+                    // but some proposals tests still expect them to fail.
+                    continue;
+                }
+
                 let wasm = fs::read(&path)?;
                 if config.parse(&wasm).is_ok() {
                     should_not_parse.push(line);

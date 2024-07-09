@@ -514,8 +514,8 @@ impl DotNode for Data {
     }
 
     fn edges(&self, edges: &mut impl EdgeAggregator) {
-        if let DataKind::Active(ref a) = self.kind {
-            edges.add_edge_from_port("kind", &a.memory);
+        if let DataKind::Active { memory, offset: _ } = self.kind {
+            edges.add_edge_from_port("kind", &memory);
         }
     }
 }

@@ -1,6 +1,6 @@
 use crate::ir::*;
 use crate::map::IdHashSet;
-use crate::{ActiveDataLocation, ConstExpr, Data, DataId, DataKind, Element, ExportItem, Function};
+use crate::{ConstExpr, Data, DataId, DataKind, Element, ExportItem, Function};
 use crate::{ElementId, ElementItems, ElementKind, Module, RefType, Type, TypeId};
 use crate::{FunctionId, FunctionKind, Global, GlobalId};
 use crate::{GlobalKind, Memory, MemoryId, Table, TableId};
@@ -200,10 +200,10 @@ impl Used {
 
             while let Some(d) = stack.datas.pop() {
                 let d = module.data.get(d);
-                if let DataKind::Active(a) = &d.kind {
-                    stack.push_memory(a.memory);
-                    if let ActiveDataLocation::Relative(g) = a.location {
-                        stack.push_global(g);
+                if let DataKind::Active { memory, offset } = &d.kind {
+                    stack.push_memory(*memory);
+                    if let ConstExpr::Global(g) = offset {
+                        stack.push_global(*g);
                     }
                 }
             }

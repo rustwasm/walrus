@@ -22,7 +22,7 @@ pub use crate::module::custom::{
     CustomSection, CustomSectionId, ModuleCustomSections, RawCustomSection, TypedCustomSectionId,
     UntypedCustomSectionId,
 };
-pub use crate::module::data::{ActiveData, ActiveDataLocation, Data, DataId, DataKind, ModuleData};
+pub use crate::module::data::{Data, DataId, DataKind, ModuleData};
 pub use crate::module::debug::ModuleDebugData;
 pub use crate::module::elements::{Element, ElementId, ModuleElements};
 pub use crate::module::elements::{ElementItems, ElementKind};

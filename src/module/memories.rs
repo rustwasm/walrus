@@ -5,7 +5,6 @@ use crate::map::IdHashSet;
 use crate::parse::IndicesToIds;
 use crate::tombstone_arena::{Id, Tombstone, TombstoneArena};
 use crate::{Data, ImportId, Module, Result};
-use anyhow::bail;
 
 /// The id of a memory.
 pub type MemoryId = Id<Memory>;
@@ -157,9 +156,6 @@ impl Module {
         log::debug!("parse memory section");
         for m in section {
             let m = m?;
-            if m.memory64 {
-                bail!("64-bit memories not supported")
-            };
             let id = self.memories.add_local(
                 m.shared,
                 m.memory64,

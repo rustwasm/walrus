@@ -2,7 +2,7 @@
 
 use std::convert::TryInto;
 
-use anyhow::{bail, Context};
+use anyhow::Context;
 
 use crate::emit::{Emit, EmitContext};
 use crate::parse::IndicesToIds;
@@ -172,9 +172,6 @@ impl Module {
                     ids.push_table(id.0);
                 }
                 wasmparser::TypeRef::Memory(m) => {
-                    if m.memory64 {
-                        bail!("64-bit memories not supported")
-                    };
                     let id = self.add_import_memory(
                         entry.module,
                         entry.name,

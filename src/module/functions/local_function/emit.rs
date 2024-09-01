@@ -845,6 +845,15 @@ impl<'instr> Visitor<'instr> for Emit<'_> {
                 }
             }
             ElemDrop(e) => Instruction::ElemDrop(self.indices.get_element_index(e.elem)),
+            ReturnCall(e) => Instruction::ReturnCall(self.indices.get_func_index(e.func)),
+            ReturnCallIndirect(e) => {
+                let type_index = self.indices.get_type_index(e.ty);
+                let table_index = self.indices.get_table_index(e.table);
+                Instruction::ReturnCallIndirect {
+                    type_index,
+                    table_index,
+                }
+            }
         });
     }
 }

@@ -591,6 +591,20 @@ pub enum Instr {
         /// The destination table
         dst: TableId,
     },
+
+    /// `return_call`
+    ReturnCall {
+        /// The function being invoked.
+        func: FunctionId,
+    },
+
+    /// `return_call_indirect`
+    ReturnCallIndirect {
+        /// The type signature of the function we're calling
+        ty: TypeId,
+        /// The table which `func` below is indexing into
+        table: TableId,
+    },
 }
 
 /// Argument in `V128Shuffle` of lane indices to select
@@ -1215,7 +1229,12 @@ impl Instr {
     /// (`i32.add`, etc...).
     pub fn following_instructions_are_unreachable(&self) -> bool {
         match *self {
-            Instr::Unreachable(..) | Instr::Br(..) | Instr::BrTable(..) | Instr::Return(..) => true,
+            Instr::Unreachable(..)
+            | Instr::Br(..)
+            | Instr::BrTable(..)
+            | Instr::Return(..)
+            | Instr::ReturnCall(..)
+            | Instr::ReturnCallIndirect(..) => true,
 
             // No `_` arm to make sure that we properly update this function as
             // we add support for new instructions.

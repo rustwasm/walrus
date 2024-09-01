@@ -1323,6 +1323,20 @@ fn append_instruction<'context>(
             ctx.alloc_instr(ElemDrop { elem }, loc);
         }
 
+        Operator::ReturnCall { function_index } => {
+            let func = ctx.indices.get_func(function_index).unwrap();
+            ctx.alloc_instr(ReturnCall { func }, loc);
+        }
+
+        Operator::ReturnCallIndirect {
+            type_index,
+            table_index,
+        } => {
+            let ty = ctx.indices.get_type(type_index).unwrap();
+            let table = ctx.indices.get_table(table_index).unwrap();
+            ctx.alloc_instr(ReturnCallIndirect { ty, table }, loc);
+        }
+
         // List all unimplmented operators instead of have a catch-all arm.
         // So that future upgrades won't miss additions to this list that may be important to know.
         Operator::TryTable { try_table: _ }
@@ -1333,11 +1347,6 @@ fn append_instruction<'context>(
         | Operator::Rethrow { relative_depth: _ }
         | Operator::Delegate { relative_depth: _ }
         | Operator::CatchAll
-        | Operator::ReturnCall { function_index: _ }
-        | Operator::ReturnCallIndirect {
-            type_index: _,
-            table_index: _,
-        }
         | Operator::RefEq
         | Operator::StructNew {
             struct_type_index: _,

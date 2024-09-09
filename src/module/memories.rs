@@ -144,6 +144,11 @@ impl ModuleMemories {
     pub fn len(&self) -> usize {
         self.arena.len()
     }
+
+    /// Checks if there are no memories in this module
+    pub fn is_empty(&self) -> bool {
+        self.arena.len() == 0
+    }
 }
 
 impl Module {

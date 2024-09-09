@@ -69,7 +69,7 @@ impl LocalFunction {
             }),
         };
 
-        let result: Vec<_> = module.types.get(ty).results().iter().cloned().collect();
+        let result: Vec<_> = module.types.get(ty).results().to_vec();
         let result = result.into_boxed_slice();
 
         let controls = &mut context::ControlStack::new();
@@ -299,11 +299,7 @@ fn block_param_tys(ctx: &ValidationContext, ty: wasmparser::BlockType) -> Result
     }
 }
 
-fn append_instruction<'context>(
-    ctx: &'context mut ValidationContext,
-    inst: Operator,
-    loc: InstrLocId,
-) {
+fn append_instruction(ctx: &mut ValidationContext, inst: Operator, loc: InstrLocId) {
     // NB. there's a lot of `unwrap()` here in this function, and that's because
     // the `Operator` was validated above to already be valid, so everything
     // should succeed.
@@ -963,10 +959,7 @@ fn append_instruction<'context>(
         }
         Operator::MemoryAtomicWait32 { ref memarg }
         | Operator::MemoryAtomicWait64 { ref memarg } => {
-            let sixty_four = match inst {
-                Operator::MemoryAtomicWait32 { .. } => false,
-                _ => true,
-            };
+            let sixty_four = !matches!(inst, Operator::MemoryAtomicWait32 { .. });
             let (memory, arg) = mem_arg(ctx, memarg);
             ctx.alloc_instr(
                 AtomicWait {

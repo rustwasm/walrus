@@ -109,13 +109,13 @@ impl Type {
     /// Get the parameters to this function type.
     #[inline]
     pub fn params(&self) -> &[ValType] {
-        &*self.params
+        &self.params
     }
 
     /// Get the results of this function type.
     #[inline]
     pub fn results(&self) -> &[ValType] {
-        &*self.results
+        &self.results
     }
 
     pub(crate) fn is_for_function_entry(&self) -> bool {

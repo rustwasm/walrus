@@ -258,7 +258,7 @@ impl Emit for ModuleElements {
                             Some(cx.indices.get_table_index(*table)).filter(|&index| index != 0);
                         wasm_element_section.active(
                             table_index,
-                            &offset.to_wasmencoder_type(&cx),
+                            &offset.to_wasmencoder_type(cx),
                             els,
                         );
                     }

@@ -103,7 +103,7 @@ impl Parse for WalrusFieldOpts {
                 if attr == "skip_visit" {
                     return Ok(Attr::SkipVisit);
                 }
-                return Err(Error::new(attr.span(), "unexpected attribute"));
+                Err(Error::new(attr.span(), "unexpected attribute"))
             }
         }
     }
@@ -144,7 +144,7 @@ impl Parse for WalrusVariantOpts {
                 if attr == "skip_builder" {
                     return Ok(Attr::SkipBuilder);
                 }
-                return Err(Error::new(attr.span(), "unexpected attribute"));
+                Err(Error::new(attr.span(), "unexpected attribute"))
             }
         }
     }
@@ -166,7 +166,7 @@ fn walrus_attrs(attrs: &mut Vec<syn::Attribute>) -> TokenStream {
         ret.extend(group);
         ret.extend(quote! { , });
     }
-    return ret.into();
+    ret.into()
 }
 
 fn create_types(attrs: &[syn::Attribute], variants: &[WalrusVariant]) -> impl quote::ToTokens {
@@ -328,10 +328,10 @@ fn create_types(attrs: &[syn::Attribute], variants: &[WalrusVariant]) -> impl qu
     }
 }
 
-fn visit_fields<'a>(
-    variant: &'a WalrusVariant,
+fn visit_fields(
+    variant: &WalrusVariant,
     allow_skip: bool,
-) -> impl Iterator<Item = (syn::Ident, proc_macro2::TokenStream, bool)> + 'a {
+) -> impl Iterator<Item = (syn::Ident, proc_macro2::TokenStream, bool)> + '_ {
     return variant
         .syn
         .fields
@@ -439,7 +439,7 @@ fn create_visit(variants: &[WalrusVariant]) -> impl quote::ToTokens {
             }
         });
 
-        let doc = format!("Visit `{}`.", name.to_string());
+        let doc = format!("Visit `{}`.", name);
         visitor_trait_methods.push(quote! {
             #[doc=#doc]
             #[inline]
@@ -723,13 +723,13 @@ fn create_builder(variants: &[WalrusVariant]) -> impl quote::ToTokens {
 
         let doc = format!(
             "Push a new `{}` instruction onto this builder's block.",
-            name.to_string()
+            name
         );
         let at_doc = format!(
             "Splice a new `{}` instruction into this builder's block at the given index.\n\n\
              # Panics\n\n\
              Panics if `position > self.instrs.len()`.",
-            name.to_string()
+            name
         );
 
         let arg_names = &arg_names;

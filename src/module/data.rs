@@ -64,10 +64,7 @@ impl Data {
 
     /// Is this a passive data segment?
     pub fn is_passive(&self) -> bool {
-        match self.kind {
-            DataKind::Passive => true,
-            _ => false,
-        }
+        matches!(self.kind, DataKind::Passive)
     }
 }
 
@@ -129,7 +126,7 @@ impl ModuleData {
         let mut any_passive = false;
 
         for data in self.iter() {
-            cx.indices.set_data_index(data.id(), count as u32);
+            cx.indices.set_data_index(data.id(), count);
             count += 1;
             any_passive |= data.is_passive();
         }

@@ -324,9 +324,9 @@ mod tests {
     use gimli::*;
     use std::cell::RefCell;
 
-    fn make_test_debug_line<'a>(
-        debug_line: &'a mut write::DebugLine<write::EndianVec<LittleEndian>>,
-    ) -> IncompleteLineProgram<EndianSlice<'a, LittleEndian>> {
+    fn make_test_debug_line(
+        debug_line: &mut write::DebugLine<write::EndianVec<LittleEndian>>,
+    ) -> IncompleteLineProgram<EndianSlice<'_, LittleEndian>> {
         let encoding = Encoding {
             format: Format::Dwarf32,
             version: 4,
@@ -368,11 +368,9 @@ mod tests {
             .unwrap();
 
         let debug_line = read::DebugLine::new(debug_line.slice(), LittleEndian);
-        let incomplete_debug_line = debug_line
+        debug_line
             .program(DebugLineOffset(0), 4, None, None)
-            .unwrap();
-
-        incomplete_debug_line
+            .unwrap()
     }
 
     #[test]
@@ -559,11 +557,11 @@ mod tests {
     #[test]
     fn test_convert_high_pc() {
         let sections = make_test_debug_info();
-        let mut read_dwarf = Dwarf::default();
-
-        read_dwarf.debug_info = read::DebugInfo::new(sections.debug_info.slice(), LittleEndian);
-        read_dwarf.debug_abbrev =
-            read::DebugAbbrev::new(sections.debug_abbrev.slice(), LittleEndian);
+        let read_dwarf = Dwarf {
+            debug_info: read::DebugInfo::new(sections.debug_info.slice(), LittleEndian),
+            debug_abbrev: read::DebugAbbrev::new(sections.debug_abbrev.slice(), LittleEndian),
+            ..Default::default()
+        };
 
         let read_first_unit_header = read_dwarf.units().next().unwrap().unwrap();
         let read_first_unit = read_dwarf.unit(read_first_unit_header).unwrap();

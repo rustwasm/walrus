@@ -48,7 +48,7 @@ impl ModuleTypes {
     /// preserve type names from the WAT.
     pub fn by_name(&self, name: &str) -> Option<TypeId> {
         self.arena.iter().find_map(|(id, ty)| {
-            if ty.name.as_ref().map(|s| s.as_str()) == Some(name) {
+            if ty.name.as_deref() == Some(name) {
                 Some(id)
             } else {
                 None

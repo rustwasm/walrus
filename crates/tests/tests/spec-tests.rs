@@ -19,8 +19,7 @@ fn run(wast: &Path) -> Result<(), anyhow::Error> {
     let proposal = wast
         .iter()
         .skip_while(|part| *part != "proposals")
-        .skip(1)
-        .next()
+        .nth(1)
         .map(|s| s.to_str().unwrap());
 
     let extra_args: &[&str] = match proposal {
@@ -168,7 +167,7 @@ fn run(wast: &Path) -> Result<(), anyhow::Error> {
         }
 
         let wasm = module.emit_wasm();
-        fs::write(&file, wasm)?;
+        fs::write(file, wasm)?;
     }
 
     run_spectest_interp(tempdir.path(), extra_args)?;

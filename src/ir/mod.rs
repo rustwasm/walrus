@@ -249,6 +249,7 @@ pub(crate) enum BlockKind {
 /// ```
 #[walrus_instr]
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub enum Instr {
     /// `block ... end`
     #[walrus(skip_builder)]

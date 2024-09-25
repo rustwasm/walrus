@@ -3,7 +3,7 @@
 extern crate proc_macro;
 
 use self::proc_macro::TokenStream;
-use heck::SnakeCase;
+use heck::ToSnakeCase;
 use proc_macro2::Span;
 use quote::quote;
 use syn::ext::IdentExt;

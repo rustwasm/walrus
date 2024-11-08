@@ -192,6 +192,7 @@ impl Emit for ModuleTables {
                     RefType::Externref => wasm_encoder::RefType::EXTERNREF,
                     RefType::Funcref => wasm_encoder::RefType::FUNCREF,
                 },
+                shared: false,
             });
         }
 

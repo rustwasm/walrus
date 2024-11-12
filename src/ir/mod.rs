@@ -605,6 +605,13 @@ pub enum Instr {
         /// The table which `func` below is indexing into
         table: TableId,
     },
+
+    /// Various relaxed SIMD instructions.
+    RelaxedSimd {
+        /// The relaxed SIMD operation being performed
+        #[walrus(skip_visit)]
+        op: RelaxedSimdOp,
+    },
 }
 
 /// Argument in `V128Shuffle` of lane indices to select
@@ -875,6 +882,14 @@ pub enum BinaryOp {
     I64x2ExtMulHighI32x4S,
     I64x2ExtMulLowI32x4U,
     I64x2ExtMulHighI32x4U,
+
+    I8x16RelaxedSwizzle,
+    F32x4RelaxedMin,
+    F32x4RelaxedMax,
+    F64x2RelaxedMin,
+    F64x2RelaxedMax,
+    I16x8RelaxedQ15mulrS,
+    I16x8RelaxedDotI8x16I7x16S,
 }
 
 /// Possible unary operations in wasm
@@ -1029,6 +1044,11 @@ pub enum UnaryOp {
     I32x4WidenLowI16x8U,
     I32x4WidenHighI16x8S,
     I32x4WidenHighI16x8U,
+
+    I32x4RelaxedTruncF32x4S,
+    I32x4RelaxedTruncF32x4U,
+    I32x4RelaxedTruncF64x2SZero,
+    I32x4RelaxedTruncF64x2UZero,
 }
 
 /// The different kinds of load instructions that are part of a `Load` IR node
@@ -1220,6 +1240,21 @@ impl AtomicWidth {
     }
 }
 
+/// The different kinds of atomic rmw operations
+#[derive(Debug, Copy, Clone)]
+#[allow(missing_docs)]
+pub enum RelaxedSimdOp {
+    F32x4RelaxedMadd,
+    F32x4RelaxedNmadd,
+    F64x2RelaxedMadd,
+    F64x2RelaxedNmadd,
+    I8x16RelaxedLaneselect,
+    I16x8RelaxedLaneselect,
+    I32x4RelaxedLaneselect,
+    I64x2RelaxedLaneselect,
+    I32x4RelaxedDotI8x16I7x16AddS,
+}
+
 impl Instr {
     /// Are any instructions that follow this instruction's instruction (within
     /// the current block) unreachable?
@@ -1281,7 +1316,8 @@ impl Instr {
             | Instr::TableInit(..)
             | Instr::TableCopy(..)
             | Instr::ElemDrop(..)
-            | Instr::Drop(..) => false,
+            | Instr::Drop(..)
+            | Instr::RelaxedSimd(..) => false,
         }
     }
 }

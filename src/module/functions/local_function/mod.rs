@@ -317,6 +317,9 @@ fn append_instruction(ctx: &mut ValidationContext, inst: Operator, loc: InstrLoc
     let binop = |ctx: &mut ValidationContext, op| {
         ctx.alloc_instr(Binop { op }, loc);
     };
+    let ternop = |ctx: &mut ValidationContext, op| {
+        ctx.alloc_instr(TernOp { op }, loc);
+    };
 
     let mem_arg = |ctx: &mut ValidationContext, arg: &wasmparser::MemArg| -> (MemoryId, MemArg) {
         (
@@ -359,10 +362,6 @@ fn append_instruction(ctx: &mut ValidationContext, inst: Operator, loc: InstrLoc
     let load_simd = |ctx: &mut ValidationContext, arg, kind| {
         let (memory, arg) = mem_arg(ctx, &arg);
         ctx.alloc_instr(LoadSimd { memory, arg, kind }, loc);
-    };
-
-    let relaxed_simd = |ctx: &mut ValidationContext, op| {
-        ctx.alloc_instr(RelaxedSimd { op }, loc);
     };
     match inst {
         Operator::Call { function_index } => {
@@ -1339,22 +1338,14 @@ fn append_instruction(ctx: &mut ValidationContext, inst: Operator, loc: InstrLoc
         Operator::I32x4RelaxedTruncF32x4U => unop(ctx, UnaryOp::I32x4RelaxedTruncF32x4U),
         Operator::I32x4RelaxedTruncF64x2SZero => unop(ctx, UnaryOp::I32x4RelaxedTruncF64x2SZero),
         Operator::I32x4RelaxedTruncF64x2UZero => unop(ctx, UnaryOp::I32x4RelaxedTruncF64x2UZero),
-        Operator::F32x4RelaxedMadd => relaxed_simd(ctx, RelaxedSimdOp::F32x4RelaxedMadd),
-        Operator::F32x4RelaxedNmadd => relaxed_simd(ctx, RelaxedSimdOp::F32x4RelaxedNmadd),
-        Operator::F64x2RelaxedMadd => relaxed_simd(ctx, RelaxedSimdOp::F64x2RelaxedMadd),
-        Operator::F64x2RelaxedNmadd => relaxed_simd(ctx, RelaxedSimdOp::F64x2RelaxedNmadd),
-        Operator::I8x16RelaxedLaneselect => {
-            relaxed_simd(ctx, RelaxedSimdOp::I8x16RelaxedLaneselect)
-        }
-        Operator::I16x8RelaxedLaneselect => {
-            relaxed_simd(ctx, RelaxedSimdOp::I16x8RelaxedLaneselect)
-        }
-        Operator::I32x4RelaxedLaneselect => {
-            relaxed_simd(ctx, RelaxedSimdOp::I32x4RelaxedLaneselect)
-        }
-        Operator::I64x2RelaxedLaneselect => {
-            relaxed_simd(ctx, RelaxedSimdOp::I64x2RelaxedLaneselect)
-        }
+        Operator::F32x4RelaxedMadd => ternop(ctx, TernaryOp::F32x4RelaxedMadd),
+        Operator::F32x4RelaxedNmadd => ternop(ctx, TernaryOp::F32x4RelaxedNmadd),
+        Operator::F64x2RelaxedMadd => ternop(ctx, TernaryOp::F64x2RelaxedMadd),
+        Operator::F64x2RelaxedNmadd => ternop(ctx, TernaryOp::F64x2RelaxedNmadd),
+        Operator::I8x16RelaxedLaneselect => ternop(ctx, TernaryOp::I8x16RelaxedLaneselect),
+        Operator::I16x8RelaxedLaneselect => ternop(ctx, TernaryOp::I16x8RelaxedLaneselect),
+        Operator::I32x4RelaxedLaneselect => ternop(ctx, TernaryOp::I32x4RelaxedLaneselect),
+        Operator::I64x2RelaxedLaneselect => ternop(ctx, TernaryOp::I64x2RelaxedLaneselect),
         Operator::F32x4RelaxedMin => binop(ctx, BinaryOp::F32x4RelaxedMin),
         Operator::F32x4RelaxedMax => binop(ctx, BinaryOp::F32x4RelaxedMax),
         Operator::F64x2RelaxedMin => binop(ctx, BinaryOp::F64x2RelaxedMin),
@@ -1362,7 +1353,7 @@ fn append_instruction(ctx: &mut ValidationContext, inst: Operator, loc: InstrLoc
         Operator::I16x8RelaxedQ15mulrS => binop(ctx, BinaryOp::I16x8RelaxedQ15mulrS),
         Operator::I16x8RelaxedDotI8x16I7x16S => binop(ctx, BinaryOp::I16x8RelaxedDotI8x16I7x16S),
         Operator::I32x4RelaxedDotI8x16I7x16AddS => {
-            relaxed_simd(ctx, RelaxedSimdOp::I32x4RelaxedDotI8x16I7x16AddS)
+            ternop(ctx, TernaryOp::I32x4RelaxedDotI8x16I7x16AddS)
         }
 
         // List all unimplmented operators instead of have a catch-all arm.

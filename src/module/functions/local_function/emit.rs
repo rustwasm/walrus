@@ -187,6 +187,22 @@ impl<'instr> Visitor<'instr> for Emit<'_> {
                 Instruction::MemoryFill(idx)
             }
 
+            TernOp(e) => {
+                use crate::ir::TernaryOp::*;
+
+                match e.op {
+                    F32x4RelaxedMadd => Instruction::F32x4RelaxedMadd,
+                    F32x4RelaxedNmadd => Instruction::F32x4RelaxedNmadd,
+                    F64x2RelaxedMadd => Instruction::F64x2RelaxedMadd,
+                    F64x2RelaxedNmadd => Instruction::F64x2RelaxedNmadd,
+                    I8x16RelaxedLaneselect => Instruction::I8x16RelaxedLaneselect,
+                    I16x8RelaxedLaneselect => Instruction::I16x8RelaxedLaneselect,
+                    I32x4RelaxedLaneselect => Instruction::I32x4RelaxedLaneselect,
+                    I64x2RelaxedLaneselect => Instruction::I64x2RelaxedLaneselect,
+                    I32x4RelaxedDotI8x16I7x16AddS => Instruction::I32x4RelaxedDotI8x16I7x16AddS,
+                }
+            }
+
             Binop(e) => {
                 use crate::ir::BinaryOp::*;
 
@@ -867,19 +883,6 @@ impl<'instr> Visitor<'instr> for Emit<'_> {
                     table_index,
                 }
             }
-            RelaxedSimd(e) => match e.op {
-                RelaxedSimdOp::F32x4RelaxedMadd => Instruction::F32x4RelaxedMadd,
-                RelaxedSimdOp::F32x4RelaxedNmadd => Instruction::F32x4RelaxedNmadd,
-                RelaxedSimdOp::F64x2RelaxedMadd => Instruction::F64x2RelaxedMadd,
-                RelaxedSimdOp::F64x2RelaxedNmadd => Instruction::F64x2RelaxedNmadd,
-                RelaxedSimdOp::I8x16RelaxedLaneselect => Instruction::I8x16RelaxedLaneselect,
-                RelaxedSimdOp::I16x8RelaxedLaneselect => Instruction::I16x8RelaxedLaneselect,
-                RelaxedSimdOp::I32x4RelaxedLaneselect => Instruction::I32x4RelaxedLaneselect,
-                RelaxedSimdOp::I64x2RelaxedLaneselect => Instruction::I64x2RelaxedLaneselect,
-                RelaxedSimdOp::I32x4RelaxedDotI8x16I7x16AddS => {
-                    Instruction::I32x4RelaxedDotI8x16I7x16AddS
-                }
-            },
         });
     }
 }

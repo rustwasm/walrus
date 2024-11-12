@@ -314,6 +314,13 @@ pub enum Instr {
         value: Value,
     },
 
+    /// Ternary operations, those requiring three operands
+    TernOp {
+        /// The operation being performed
+        #[walrus(skip_visit)]
+        op: TernaryOp,
+    },
+
     /// Binary operations, those requiring two operands
     Binop {
         /// The operation being performed
@@ -605,13 +612,6 @@ pub enum Instr {
         /// The table which `func` below is indexing into
         table: TableId,
     },
-
-    /// Various relaxed SIMD instructions.
-    RelaxedSimd {
-        /// The relaxed SIMD operation being performed
-        #[walrus(skip_visit)]
-        op: RelaxedSimdOp,
-    },
 }
 
 /// Argument in `V128Shuffle` of lane indices to select
@@ -642,6 +642,21 @@ impl fmt::Display for Value {
             Value::V128(i) => i.fmt(f),
         }
     }
+}
+
+/// Possible ternary operations in wasm
+#[allow(missing_docs)]
+#[derive(Copy, Clone, Debug)]
+pub enum TernaryOp {
+    F32x4RelaxedMadd,
+    F32x4RelaxedNmadd,
+    F64x2RelaxedMadd,
+    F64x2RelaxedNmadd,
+    I8x16RelaxedLaneselect,
+    I16x8RelaxedLaneselect,
+    I32x4RelaxedLaneselect,
+    I64x2RelaxedLaneselect,
+    I32x4RelaxedDotI8x16I7x16AddS,
 }
 
 /// Possible binary operations in wasm
@@ -1240,21 +1255,6 @@ impl AtomicWidth {
     }
 }
 
-/// The different kinds of atomic rmw operations
-#[derive(Debug, Copy, Clone)]
-#[allow(missing_docs)]
-pub enum RelaxedSimdOp {
-    F32x4RelaxedMadd,
-    F32x4RelaxedNmadd,
-    F64x2RelaxedMadd,
-    F64x2RelaxedNmadd,
-    I8x16RelaxedLaneselect,
-    I16x8RelaxedLaneselect,
-    I32x4RelaxedLaneselect,
-    I64x2RelaxedLaneselect,
-    I32x4RelaxedDotI8x16I7x16AddS,
-}
-
 impl Instr {
     /// Are any instructions that follow this instruction's instruction (within
     /// the current block) unreachable?
@@ -1282,6 +1282,7 @@ impl Instr {
             | Instr::GlobalGet(..)
             | Instr::GlobalSet(..)
             | Instr::Const(..)
+            | Instr::TernOp(..)
             | Instr::Binop(..)
             | Instr::Unop(..)
             | Instr::Select(..)
@@ -1316,8 +1317,7 @@ impl Instr {
             | Instr::TableInit(..)
             | Instr::TableCopy(..)
             | Instr::ElemDrop(..)
-            | Instr::Drop(..)
-            | Instr::RelaxedSimd(..) => false,
+            | Instr::Drop(..) => false,
         }
     }
 }

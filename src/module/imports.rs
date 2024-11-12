@@ -301,6 +301,7 @@ impl Emit for ModuleImports {
                             table64: table.table64,
                             minimum: table.initial,
                             maximum: table.maximum,
+                            shared: false,
                         })
                     }
                     ImportKind::Memory(id) => {

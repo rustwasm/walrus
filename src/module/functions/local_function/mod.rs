@@ -1465,6 +1465,122 @@ fn append_instruction(ctx: &mut ValidationContext, inst: Operator, loc: InstrLoc
             ordering: _,
             global_index: _,
         }
+        | Operator::TableAtomicGet {
+            ordering: _,
+            table_index: _,
+        }
+        | Operator::TableAtomicSet {
+            ordering: _,
+            table_index: _,
+        }
+        | Operator::TableAtomicRmwXchg {
+            ordering: _,
+            table_index: _,
+        }
+        | Operator::TableAtomicRmwCmpxchg {
+            ordering: _,
+            table_index: _,
+        }
+        | Operator::StructAtomicGet {
+            ordering: _,
+            struct_type_index: _,
+            field_index: _,
+        }
+        | Operator::StructAtomicGetS {
+            ordering: _,
+            struct_type_index: _,
+            field_index: _,
+        }
+        | Operator::StructAtomicGetU {
+            ordering: _,
+            struct_type_index: _,
+            field_index: _,
+        }
+        | Operator::StructAtomicSet {
+            ordering: _,
+            struct_type_index: _,
+            field_index: _,
+        }
+        | Operator::StructAtomicRmwAdd {
+            ordering: _,
+            struct_type_index: _,
+            field_index: _,
+        }
+        | Operator::StructAtomicRmwSub {
+            ordering: _,
+            struct_type_index: _,
+            field_index: _,
+        }
+        | Operator::StructAtomicRmwAnd {
+            ordering: _,
+            struct_type_index: _,
+            field_index: _,
+        }
+        | Operator::StructAtomicRmwOr {
+            ordering: _,
+            struct_type_index: _,
+            field_index: _,
+        }
+        | Operator::StructAtomicRmwXor {
+            ordering: _,
+            struct_type_index: _,
+            field_index: _,
+        }
+        | Operator::StructAtomicRmwXchg {
+            ordering: _,
+            struct_type_index: _,
+            field_index: _,
+        }
+        | Operator::StructAtomicRmwCmpxchg {
+            ordering: _,
+            struct_type_index: _,
+            field_index: _,
+        }
+        | Operator::ArrayAtomicGet {
+            ordering: _,
+            array_type_index: _,
+        }
+        | Operator::ArrayAtomicGetS {
+            ordering: _,
+            array_type_index: _,
+        }
+        | Operator::ArrayAtomicGetU {
+            ordering: _,
+            array_type_index: _,
+        }
+        | Operator::ArrayAtomicSet {
+            ordering: _,
+            array_type_index: _,
+        }
+        | Operator::ArrayAtomicRmwAdd {
+            ordering: _,
+            array_type_index: _,
+        }
+        | Operator::ArrayAtomicRmwSub {
+            ordering: _,
+            array_type_index: _,
+        }
+        | Operator::ArrayAtomicRmwAnd {
+            ordering: _,
+            array_type_index: _,
+        }
+        | Operator::ArrayAtomicRmwOr {
+            ordering: _,
+            array_type_index: _,
+        }
+        | Operator::ArrayAtomicRmwXor {
+            ordering: _,
+            array_type_index: _,
+        }
+        | Operator::ArrayAtomicRmwXchg {
+            ordering: _,
+            array_type_index: _,
+        }
+        | Operator::ArrayAtomicRmwCmpxchg {
+            ordering: _,
+            array_type_index: _,
+        }
+        | Operator::RefI31Shared
         | Operator::I8x16RelaxedSwizzle
         | Operator::I32x4RelaxedTruncF32x4S
         | Operator::I32x4RelaxedTruncF32x4U

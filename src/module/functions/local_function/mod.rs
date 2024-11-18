@@ -1607,26 +1607,6 @@ fn append_instruction(ctx: &mut ValidationContext, inst: Operator, loc: InstrLoc
             array_type_index: _,
         }
         | Operator::RefI31Shared
-        | Operator::I8x16RelaxedSwizzle
-        | Operator::I32x4RelaxedTruncF32x4S
-        | Operator::I32x4RelaxedTruncF32x4U
-        | Operator::I32x4RelaxedTruncF64x2SZero
-        | Operator::I32x4RelaxedTruncF64x2UZero
-        | Operator::F32x4RelaxedMadd
-        | Operator::F32x4RelaxedNmadd
-        | Operator::F64x2RelaxedMadd
-        | Operator::F64x2RelaxedNmadd
-        | Operator::I8x16RelaxedLaneselect
-        | Operator::I16x8RelaxedLaneselect
-        | Operator::I32x4RelaxedLaneselect
-        | Operator::I64x2RelaxedLaneselect
-        | Operator::F32x4RelaxedMin
-        | Operator::F32x4RelaxedMax
-        | Operator::F64x2RelaxedMin
-        | Operator::F64x2RelaxedMax
-        | Operator::I16x8RelaxedQ15mulrS
-        | Operator::I16x8RelaxedDotI8x16I7x16S
-        | Operator::I32x4RelaxedDotI8x16I7x16AddS
         | Operator::CallRef { type_index: _ }
         | Operator::ReturnCallRef { type_index: _ }
         | Operator::RefAsNonNull

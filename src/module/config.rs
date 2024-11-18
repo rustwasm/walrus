@@ -175,6 +175,7 @@ impl ModuleConfig {
         features.insert(WasmFeatures::REFERENCE_TYPES);
         features.insert(WasmFeatures::BULK_MEMORY);
         features.insert(WasmFeatures::SIMD);
+        features.insert(WasmFeatures::RELAXED_SIMD);
         features.insert(WasmFeatures::TAIL_CALL);
         // Enable supported active proposals.
         if !self.only_stable_features {

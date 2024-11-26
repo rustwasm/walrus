@@ -566,9 +566,75 @@ fn emit_name_section(cx: &mut EmitContext) {
         .collect::<Vec<_>>();
     locals.sort_by_key(|p| p.0); // sort by index
 
-    if cx.module.name.is_none() && funcs.is_empty() && locals.is_empty() {
+    let mut types = cx
+        .module
+        .types
+        .iter()
+        .filter_map(|typ| typ.name.as_ref().map(|name| (typ, name)))
+        .map(|(typ, name)| (cx.indices.get_type_index(typ.id()), name))
+        .collect::<Vec<_>>();
+    types.sort_by_key(|p| p.0); // sort by index
+
+    let mut tables = cx
+        .module
+        .tables
+        .iter()
+        .filter_map(|table| table.name.as_ref().map(|name| (table, name)))
+        .map(|(table, name)| (cx.indices.get_table_index(table.id()), name))
+        .collect::<Vec<_>>();
+    tables.sort_by_key(|p| p.0); // sort by index
+
+    let mut memories = cx
+        .module
+        .memories
+        .iter()
+        .filter_map(|memory| memory.name.as_ref().map(|name| (memory, name)))
+        .map(|(memory, name)| (cx.indices.get_memory_index(memory.id()), name))
+        .collect::<Vec<_>>();
+    memories.sort_by_key(|p| p.0); // sort by index
+
+    let mut globals = cx
+        .module
+        .globals
+        .iter()
+        .filter_map(|global| global.name.as_ref().map(|name| (global, name)))
+        .map(|(global, name)| (cx.indices.get_global_index(global.id()), name))
+        .collect::<Vec<_>>();
+    globals.sort_by_key(|p| p.0); // sort by index
+
+    let mut elements = cx
+        .module
+        .elements
+        .iter()
+        .filter_map(|element| element.name.as_ref().map(|name| (element, name)))
+        .map(|(element, name)| (cx.indices.get_element_index(element.id()), name))
+        .collect::<Vec<_>>();
+    elements.sort_by_key(|p| p.0); // sort by index
+
+    let mut data = cx
+        .module
+        .data
+        .iter()
+        .filter_map(|data| data.name.as_ref().map(|name| (data, name)))
+        .map(|(data, name)| (cx.indices.get_data_index(data.id()), name))
+        .collect::<Vec<_>>();
+    data.sort_by_key(|p| p.0); // sort by index
+
+    if cx.module.name.is_none()
+        && funcs.is_empty()
+        && locals.is_empty()
+        && types.is_empty()
+        && tables.is_empty()
+        && memories.is_empty()
+        && globals.is_empty()
+        && elements.is_empty()
+        && data.is_empty()
+    {
         return;
     }
+
+    // Order of written subsections must match order defined in
+    // `wasm_encorder::names::Subsection`.
 
     if let Some(name) = &cx.module.name {
         wasm_name_section.module(name);
@@ -593,6 +659,54 @@ fn emit_name_section(cx: &mut EmitContext) {
             indirect_name_map.append(index, &name_map);
         }
         wasm_name_section.locals(&indirect_name_map);
+    }
+
+    if !types.is_empty() {
+        let mut name_map = wasm_encoder::NameMap::new();
+        for (index, name) in types {
+            name_map.append(index, name);
+        }
+        wasm_name_section.types(&name_map);
+    }
+
+    if !tables.is_empty() {
+        let mut name_map = wasm_encoder::NameMap::new();
+        for (index, name) in tables {
+            name_map.append(index, name);
+        }
+        wasm_name_section.tables(&name_map);
+    }
+
+    if !memories.is_empty() {
+        let mut name_map = wasm_encoder::NameMap::new();
+        for (index, name) in memories {
+            name_map.append(index, name);
+        }
+        wasm_name_section.memories(&name_map);
+    }
+
+    if !globals.is_empty() {
+        let mut name_map = wasm_encoder::NameMap::new();
+        for (index, name) in globals {
+            name_map.append(index, name);
+        }
+        wasm_name_section.globals(&name_map);
+    }
+
+    if !elements.is_empty() {
+        let mut name_map = wasm_encoder::NameMap::new();
+        for (index, name) in elements {
+            name_map.append(index, name);
+        }
+        wasm_name_section.elements(&name_map);
+    }
+
+    if !data.is_empty() {
+        let mut name_map = wasm_encoder::NameMap::new();
+        for (index, name) in data {
+            name_map.append(index, name);
+        }
+        wasm_name_section.data(&name_map);
     }
 
     cx.wasm_module.section(&wasm_name_section);

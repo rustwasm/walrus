@@ -115,10 +115,12 @@ impl Emit for ModuleDebugData {
         sections
             .for_each(
                 |id: SectionId, data: &write::EndianVec<LittleEndian>| -> Result<()> {
-                    cx.wasm_module.section(&wasm_encoder::CustomSection {
-                        name: id.name().into(),
-                        data: data.slice().into(),
-                    });
+                    if !data.slice().is_empty() {
+                        cx.wasm_module.section(&wasm_encoder::CustomSection {
+                            name: id.name().into(),
+                            data: data.slice().into(),
+                        });
+                    }
                     Ok(())
                 },
             )

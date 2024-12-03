@@ -129,6 +129,11 @@ impl Module {
         ModuleConfig::new().parse(wasm)
     }
 
+    /// Construct a new module from the in-memory wasm buffer and configuration.
+    pub fn from_buffer_with_config(wasm: &[u8], config: &ModuleConfig) -> Result<Module> {
+        config.parse(wasm)
+    }
+
     fn parse(wasm: &[u8], config: &ModuleConfig) -> Result<Module> {
         let mut ret = Module {
             config: config.clone(),

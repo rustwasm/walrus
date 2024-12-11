@@ -177,7 +177,7 @@ impl Module {
     pub(crate) fn parse_data(
         &mut self,
         section: wasmparser::DataSectionReader,
-        ids: &IndicesToIds,
+        ids: &mut IndicesToIds,
     ) -> Result<()> {
         log::debug!("parse data section");
         let preallocated = self.data.arena.len() > 0;
@@ -189,12 +189,16 @@ impl Module {
             let id = if preallocated {
                 ids.get_data(i as u32)?
             } else {
-                self.data.arena.alloc_with_id(|id| Data {
+                let id = self.data.arena.alloc_with_id(|id| Data {
                     id,
                     value: Vec::new(),
                     kind: DataKind::Passive,
                     name: None,
-                })
+                });
+
+                ids.push_data(id);
+
+                id
             };
             let data = self.data.get_mut(id);
 

@@ -167,7 +167,7 @@ impl Module {
                     validator
                         .data_section(&s)
                         .context("failed to parse data section")?;
-                    ret.parse_data(s, &indices)?;
+                    ret.parse_data(s, &mut indices)?;
                 }
                 Payload::TypeSection(s) => {
                     validator
